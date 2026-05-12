@@ -1,0 +1,1 @@
+`bun x shadcn-svelte init --preset b4vgpZQ3oY`
