@@ -1,0 +1,73 @@
+package com.keenti.finances.application.service;
+
+import com.keenti.finances.domain.model.Transaction;
+import com.keenti.finances.domain.port.in.TransactionUseCase;
+import com.keenti.finances.domain.port.out.TransactionRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.NotFoundException;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import org.jboss.logging.Logger;
+
+@ApplicationScoped
+public class TransactionService implements TransactionUseCase {
+
+    private static final Logger LOG = Logger.getLogger(TransactionService.class);
+    private static final Set<String> VALID_DIRECTIONS = Set.of("INGRESS", "EGRESS");
+
+    @Inject
+    TransactionRepository transactionRepository;
+
+    @Override
+    public List<Transaction> list() {
+        List<Transaction> transactions = transactionRepository.findAll();
+        LOG.infof("transaction.list count=%d", transactions.size());
+        return transactions;
+    }
+
+    @Override
+    public Optional<Transaction> getById(Long id) {
+        Optional<Transaction> result = transactionRepository.findById(id);
+        LOG.infof("transaction.get id=%d found=%b", id, result.isPresent());
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public Transaction create(Transaction transaction) {
+        if (!VALID_DIRECTIONS.contains(transaction.getDirection())) {
+            throw new BadRequestException("Invalid direction: " + transaction.getDirection() + ". Must be INGRESS or EGRESS");
+        }
+        Transaction created = transactionRepository.save(transaction);
+        LOG.infof("transaction.create id=%d amount=%s direction=%s", created.getId(), created.getAmount(), created.getDirection());
+        return created;
+    }
+
+    @Override
+    @Transactional
+    public Transaction update(Long id, Transaction transaction) {
+        if (!VALID_DIRECTIONS.contains(transaction.getDirection())) {
+            throw new BadRequestException("Invalid direction: " + transaction.getDirection() + ". Must be INGRESS or EGRESS");
+        }
+        transactionRepository.findById(id).orElseThrow(() ->
+            new NotFoundException("Transaction not found: " + id));
+        Transaction updated = transactionRepository.update(new Transaction(
+            id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
+            transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId()));
+        LOG.infof("transaction.update id=%d", id);
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        transactionRepository.findById(id).orElseThrow(() ->
+            new NotFoundException("Transaction not found: " + id));
+        transactionRepository.deleteById(id);
+        LOG.infof("transaction.delete id=%d", id);
+    }
+}

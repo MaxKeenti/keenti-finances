@@ -3,7 +3,7 @@
 	"version": "0.0.1",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && npm run prepack",
+		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"prepack": "svelte-kit sync && svelte-package && publint",
@@ -31,15 +31,19 @@
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@fontsource-variable/fraunces": "^5.2.9",
 		"@fontsource-variable/geist": "^5.2.8",
 		"@fontsource-variable/playfair-display": "^5.2.8",
 		"@internationalized/date": "^3.12.0",
 		"@lucide/svelte": "^1.14.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
+		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.57.0",
 		"@sveltejs/package": "^2.5.7",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/vite": "^4.2.2",
+		"@types/d3-scale": "^4.0.9",
+		"@types/node": "^25.7.0",
 		"bits-ui": "^2.16.3",
 		"clsx": "^2.1.1",
 		"formsnap": "^2.0.1",
@@ -59,5 +63,10 @@
 	},
 	"keywords": [
 		"svelte"
-	]
+	],
+	"dependencies": {
+		"d3-scale": "^4.0.2",
+		"layerchart": "^1.0.13",
+		"zod": "^4.4.3"
+	}
 }

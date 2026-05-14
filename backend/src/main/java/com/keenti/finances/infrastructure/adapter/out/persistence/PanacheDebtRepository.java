@@ -1,0 +1,67 @@
+package com.keenti.finances.infrastructure.adapter.out.persistence;
+
+import com.keenti.finances.domain.model.Debt;
+import com.keenti.finances.domain.port.out.DebtRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@ApplicationScoped
+public class PanacheDebtRepository implements DebtRepository {
+
+    @Override
+    public List<Debt> findAll() {
+        return DebtEntity.<DebtEntity>find("ORDER BY createdAt DESC")
+                .stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<Debt> findById(Long id) {
+        return DebtEntity.<DebtEntity>findByIdOptional(id).map(this::toDomain);
+    }
+
+    @Override
+    public Debt save(Debt debt) {
+        DebtEntity entity = toEntity(debt);
+        entity.persist();
+        return toDomain(entity);
+    }
+
+    @Override
+    public Debt update(Debt debt) {
+        DebtEntity entity = DebtEntity.findById(debt.getId());
+        entity.contact = ContactEntity.findById(debt.getContactId());
+        entity.description = debt.getDescription();
+        entity.totalAmount = debt.getTotalAmount();
+        entity.status = debt.getStatus();
+        return toDomain(entity);
+    }
+
+    @Override
+    public void deleteById(Long id) {
+        DebtEntity.deleteById(id);
+    }
+
+    private DebtEntity toEntity(Debt d) {
+        DebtEntity e = new DebtEntity();
+        e.contact = ContactEntity.findById(d.getContactId());
+        e.description = d.getDescription();
+        e.totalAmount = d.getTotalAmount();
+        e.status = d.getStatus() != null ? d.getStatus() : "ACTIVE";
+        return e;
+    }
+
+    private Debt toDomain(DebtEntity e) {
+        return new Debt(
+            e.id,
+            e.contact != null ? e.contact.id : null,
+            e.description,
+            e.totalAmount,
+            e.status,
+            e.createdAt
+        );
+    }
+}

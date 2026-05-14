@@ -1,0 +1,133 @@
+package com.keenti.finances.application.service;
+
+import com.keenti.finances.domain.model.Debt;
+import com.keenti.finances.domain.model.DebtPayment;
+import com.keenti.finances.domain.model.Transaction;
+import com.keenti.finances.domain.port.in.DebtUseCase;
+import com.keenti.finances.domain.port.in.TransactionUseCase;
+import com.keenti.finances.domain.port.out.DebtPaymentRepository;
+import com.keenti.finances.domain.port.out.DebtRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.NotFoundException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import org.jboss.logging.Logger;
+
+@ApplicationScoped
+public class DebtService implements DebtUseCase {
+
+    private static final Logger LOG = Logger.getLogger(DebtService.class);
+
+    @Inject
+    DebtRepository debtRepository;
+
+    @Inject
+    DebtPaymentRepository debtPaymentRepository;
+
+    @Inject
+    TransactionUseCase transactionUseCase;
+
+    @Override
+    public List<Debt> list() {
+        List<Debt> debts = debtRepository.findAll();
+        LOG.infof("debt.list count=%d", debts.size());
+        return debts;
+    }
+
+    @Override
+    public Optional<Debt> getById(Long id) {
+        Optional<Debt> result = debtRepository.findById(id);
+        LOG.infof("debt.get id=%d found=%b", id, result.isPresent());
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public Debt create(Debt debt) {
+        Debt created = debtRepository.save(debt);
+        LOG.infof("debt.create id=%d contactId=%d amount=%s", created.getId(), created.getContactId(), created.getTotalAmount());
+        return created;
+    }
+
+    @Override
+    @Transactional
+    public Debt update(Long id, Debt debt) {
+        debtRepository.findById(id).orElseThrow(() ->
+            new NotFoundException("Debt not found: " + id));
+        Debt updated = debtRepository.update(new Debt(
+            id, debt.getContactId(), debt.getDescription(), debt.getTotalAmount(),
+            debt.getStatus(), debt.getCreatedAt()));
+        LOG.infof("debt.update id=%d", id);
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        debtRepository.findById(id).orElseThrow(() ->
+            new NotFoundException("Debt not found: " + id));
+        debtRepository.deleteById(id);
+        LOG.infof("debt.delete id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate,
+                                     Long categoryId, String notes) {
+        Debt debt = debtRepository.findById(debtId).orElseThrow(() ->
+            new NotFoundException("Debt not found: " + debtId));
+
+        if (!"ACTIVE".equals(debt.getStatus())) {
+            throw new BadRequestException("Cannot record payment on a PAID debt: " + debtId);
+        }
+
+        BigDecimal paid = debtPaymentRepository.sumByDebtId(debtId);
+        BigDecimal remaining = debt.getTotalAmount().subtract(paid);
+
+        if (amount.compareTo(remaining) > 0) {
+            throw new BadRequestException(
+                String.format("Payment amount %s exceeds remaining balance %s for debt %d",
+                    amount, remaining, debtId));
+        }
+
+        Transaction tx = transactionUseCase.create(new Transaction(
+            null, amount, "INGRESS",
+            "Debt payment: " + debt.getDescription(),
+            paymentDate, categoryId, debt.getContactId()));
+
+        DebtPayment payment = debtPaymentRepository.save(new DebtPayment(
+            null, debtId, amount, paymentDate, tx.getId(), notes, null));
+
+        BigDecimal newRemaining = remaining.subtract(amount);
+        if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
+            debtRepository.update(new Debt(
+                debt.getId(), debt.getContactId(), debt.getDescription(),
+                debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
+            LOG.infof("debt.status.paid id=%d", debtId);
+        }
+
+        LOG.infof("debt.payment.record debtId=%d paymentId=%d amount=%s remaining=%s transactionId=%d",
+            debtId, payment.getId(), amount, newRemaining, tx.getId());
+
+        return payment;
+    }
+
+    @Override
+    public List<DebtPayment> listPayments(Long debtId) {
+        debtRepository.findById(debtId).orElseThrow(() ->
+            new NotFoundException("Debt not found: " + debtId));
+        return debtPaymentRepository.findByDebtId(debtId);
+    }
+
+    public BigDecimal getRemainingBalance(Long debtId) {
+        Debt debt = debtRepository.findById(debtId).orElseThrow(() ->
+            new NotFoundException("Debt not found: " + debtId));
+        BigDecimal paid = debtPaymentRepository.sumByDebtId(debtId);
+        return debt.getTotalAmount().subtract(paid);
+    }
+}
