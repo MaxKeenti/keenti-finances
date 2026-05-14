@@ -2,7 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { COOKIE_NAME, validateSessionCookieValue } from '$lib/server/session';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/logout', '/public'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/logout', '/public', '/health'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const cookieValue = event.cookies.get(COOKIE_NAME);

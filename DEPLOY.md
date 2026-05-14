@@ -93,5 +93,9 @@ Browser → frontend (public HTTPS) → backend (private HTTP) → PostgreSQL (p
 | backend | `/q/health` | `{"status":"UP"}` |
 | backend | `/q/health/live` | `{"status":"UP"}` |
 | backend | `/q/health/ready` | `{"status":"UP"}` |
+| frontend | `/health` | `{"status":"UP"}` |
 
-Configure Railway health probes to use `/q/health/live` for liveness and `/q/health/ready` for readiness.
+Configure Railway health probes to use `/q/health/live` for backend liveness and `/q/health/ready` for readiness.
+
+**Frontend healthcheck path:** Set the Railway healthcheck path to `/health` for the frontend service. The default `/` path will return a 303 redirect (to `/login`), which Railway interprets as unhealthy.
+

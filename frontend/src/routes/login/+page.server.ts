@@ -25,7 +25,7 @@ export const actions: Actions = {
 
 		let response: Response;
 		try {
-			response = await fetch('http://localhost:8080/api/auth/login', {
+			response = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ username: form.data.username, password: form.data.password }),

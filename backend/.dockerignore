@@ -1,5 +1,15 @@
-*
-!target/*-runner
-!target/*-runner.jar
-!target/lib/*
-!target/quarkus-app/*
+# Build output (rebuilt inside Docker)
+target/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Docker-in-Docker
+Dockerfile
+.dockerignore
+
+# Docs
+README.md
