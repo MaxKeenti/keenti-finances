@@ -4,6 +4,8 @@ FROM registry.access.redhat.com/ubi9/openjdk-21:1.24 AS build
 USER root
 WORKDIR /build
 
+RUN microdnf install -y gzip tar && microdnf clean all
+
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN ./mvnw dependency:go-offline -q
