@@ -11,7 +11,7 @@ const contactSchema = z.object({
 	email: z.string().email('Invalid email format').optional().or(z.literal('')),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	let contacts: Array<{ id: number; name: string; phone: string | null; email: string | null }> =

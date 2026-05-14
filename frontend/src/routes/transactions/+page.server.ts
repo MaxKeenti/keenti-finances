@@ -14,7 +14,7 @@ const transactionSchema = z.object({
 	contactId: z.union([z.coerce.number(), z.literal('')]).optional(),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Category = { id: number; name: string; type: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };

@@ -14,7 +14,7 @@ const subscriptionSchema = z.object({
 	nextBillingDate: z.string().min(1, 'Next billing date is required'),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Category = { id: number; name: string; type: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };

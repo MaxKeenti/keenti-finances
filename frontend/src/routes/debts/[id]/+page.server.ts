@@ -11,7 +11,7 @@ const paymentSchema = z.object({
 	notes: z.string().optional(),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Debt = {
 	id: number;
