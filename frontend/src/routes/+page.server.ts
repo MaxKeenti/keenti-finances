@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type MonthSummary = {
 	month: number;

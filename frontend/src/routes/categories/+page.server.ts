@@ -10,7 +10,7 @@ const categorySchema = z.object({
 	type: z.enum(['INGRESS', 'EGRESS', 'BOTH']),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	let categories: Array<{ id: number; name: string; type: string }> = [];

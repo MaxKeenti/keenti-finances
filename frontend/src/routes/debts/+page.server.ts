@@ -11,7 +11,7 @@ const debtSchema = z.object({
 	totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
 });
 
-const BACKEND = 'http://localhost:8080';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
 type Debt = {
