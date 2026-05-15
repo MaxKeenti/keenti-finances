@@ -4,19 +4,16 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
-	import { parseDate } from '@internationalized/date';
 	import * as Form from '$lib/components/ui/form';
-	import * as Select from '$lib/components/ui/select';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import * as Popover from '$lib/components/ui/popover';
-	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Progress } from '$lib/components/ui/progress';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import { NativeSelect } from '$lib/components/native-select';
+	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import type { PageData } from './$types';
 
 	const paymentSchema = z.object({
@@ -79,10 +76,6 @@
 			.sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
-	let payCalDate = $derived.by(() => {
-		try { return $form.paymentDate ? parseDate($form.paymentDate) : undefined; }
-		catch { return undefined; }
-	});
 </script>
 
 <div class="space-y-6 max-w-3xl">
@@ -216,22 +209,12 @@
 								{#snippet children({ props })}
 									{@const { name: fieldName, ...triggerProps } = props}
 									<Form.Label>Payment Date</Form.Label>
-									<Popover.Root>
-										<Popover.Trigger
-											{...triggerProps}
-											class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {!$form.paymentDate ? 'text-muted-foreground' : ''}"
-										>
-											<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
-											{$form.paymentDate || 'Pick a date'}
-										</Popover.Trigger>
-										<Popover.Content class="w-auto p-0" align="start">
-											<Calendar
-												value={payCalDate as never}
-												onValueChange={(v: import('@internationalized/date').DateValue | undefined) => { if (v) $form.paymentDate = v.toString(); }}
-											/>
-										</Popover.Content>
-									</Popover.Root>
-									<input type="hidden" name={fieldName} value={$form.paymentDate} />
+									<NativeDatePicker
+										name={fieldName}
+										value={$form.paymentDate}
+										onValueChange={(v) => { $form.paymentDate = v; }}
+										{...triggerProps}
+									/>
 								{/snippet}
 							</Form.Control>
 							<Form.FieldErrors />
@@ -243,21 +226,14 @@
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
 								<Form.Label>Ingress Category</Form.Label>
-								<Select.Root
+								<NativeSelect
 									name={fieldName}
 									value={$form.categoryId > 0 ? String($form.categoryId) : ''}
 									onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
+									placeholder="Select a category…"
 									items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
-								>
-									<Select.Trigger {...triggerProps}>
-										<Select.Value placeholder="Select a category…" />
-									</Select.Trigger>
-									<Select.Content>
-										{#each ingressCategories as cat (cat.id)}
-											<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
-										{/each}
-									</Select.Content>
-								</Select.Root>
+									{...triggerProps}
+								/>
 							{/snippet}
 						</Form.Control>
 						{#if $errors.categoryId}

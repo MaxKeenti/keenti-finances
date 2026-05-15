@@ -4,19 +4,16 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
-	import { parseDate } from '@internationalized/date';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
-	import * as Select from '$lib/components/ui/select';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Empty from '$lib/components/ui/empty';
 	import * as Card from '$lib/components/ui/card';
-	import * as Popover from '$lib/components/ui/popover';
-	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import { NativeSelect } from '$lib/components/native-select';
+	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import type { PageData } from './$types';
 
 	const subscriptionSchema = z.object({
@@ -139,10 +136,6 @@
 		SHARED: 'warning',
 	};
 
-	let billingCalDate = $derived.by(() => {
-		try { return $form.nextBillingDate ? parseDate($form.nextBillingDate) : undefined; }
-		catch { return undefined; }
-	});
 </script>
 
 <div class="space-y-6">
@@ -257,15 +250,17 @@
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>Billing Cycle</Form.Label>
-							<Select.Root name={fieldName} bind:value={$form.billingCycle}>
-								<Select.Trigger {...triggerProps}>
-									<Select.Value placeholder="Select cycle…" />
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="MONTHLY">Monthly</Select.Item>
-									<Select.Item value="YEARLY">Yearly</Select.Item>
-								</Select.Content>
-							</Select.Root>
+							<NativeSelect
+								name={fieldName}
+								value={$form.billingCycle}
+								onValueChange={(v) => { $form.billingCycle = v as 'MONTHLY' | 'YEARLY'; }}
+								placeholder="Select cycle…"
+								items={[
+									{ value: 'MONTHLY', label: 'Monthly' },
+									{ value: 'YEARLY', label: 'Yearly' },
+								]}
+								{...triggerProps}
+							/>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -276,15 +271,17 @@
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>Type</Form.Label>
-							<Select.Root name={fieldName} bind:value={$form.type}>
-								<Select.Trigger {...triggerProps}>
-									<Select.Value placeholder="Select type…" />
-								</Select.Trigger>
-								<Select.Content>
-									<Select.Item value="PERSONAL">Personal</Select.Item>
-									<Select.Item value="SHARED">Shared</Select.Item>
-								</Select.Content>
-							</Select.Root>
+							<NativeSelect
+								name={fieldName}
+								value={$form.type}
+								onValueChange={(v) => { $form.type = v as 'PERSONAL' | 'SHARED'; }}
+								placeholder="Select type…"
+								items={[
+									{ value: 'PERSONAL', label: 'Personal' },
+									{ value: 'SHARED', label: 'Shared' },
+								]}
+								{...triggerProps}
+							/>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -296,21 +293,14 @@
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Category (optional)</Form.Label>
-						<Select.Root
+						<NativeSelect
 							name={fieldName}
-							value={$form.categoryId !== '' ? String($form.categoryId) : undefined}
+							value={$form.categoryId !== '' ? String($form.categoryId) : ''}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : ''; }}
+							placeholder="— None —"
 							items={data.categories.map(c => ({ value: String(c.id), label: c.name }))}
-						>
-							<Select.Trigger {...triggerProps}>
-								<Select.Value placeholder="— None —" />
-							</Select.Trigger>
-							<Select.Content>
-								{#each data.categories as cat}
-									<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
+							{...triggerProps}
+						/>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -321,22 +311,12 @@
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Next Billing Date</Form.Label>
-						<Popover.Root>
-							<Popover.Trigger
-								{...triggerProps}
-								class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring {!$form.nextBillingDate ? 'text-muted-foreground' : ''}"
-							>
-								<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
-								{$form.nextBillingDate || 'Pick a date'}
-							</Popover.Trigger>
-							<Popover.Content class="w-auto p-0" align="start">
-								<Calendar
-									value={billingCalDate as never}
-									onValueChange={(v) => { if (v) $form.nextBillingDate = v.toString(); }}
-								/>
-							</Popover.Content>
-						</Popover.Root>
-						<input type="hidden" name={fieldName} value={$form.nextBillingDate} />
+						<NativeDatePicker
+							name={fieldName}
+							value={$form.nextBillingDate}
+							onValueChange={(v) => { $form.nextBillingDate = v; }}
+							{...triggerProps}
+						/>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />

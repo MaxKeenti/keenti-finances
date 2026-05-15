@@ -7,8 +7,8 @@
   import * as Table from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Form from "$lib/components/ui/form";
-  import * as Select from "$lib/components/ui/select";
   import * as Alert from "$lib/components/ui/alert";
+  import { NativeSelect } from "$lib/components/native-select";
   import * as Empty from "$lib/components/ui/empty";
   import { Input } from "$lib/components/ui/input";
   import { Button } from "$lib/components/ui/button";
@@ -171,16 +171,18 @@
           {#snippet children({ props })}
             {@const { name: fieldName, ...triggerProps } = props}
             <Form.Label>Type</Form.Label>
-            <Select.Root name={fieldName} bind:value={$form.type}>
-              <Select.Trigger {...triggerProps}>
-                <Select.Value placeholder="Select type…" />
-              </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="INGRESS">Ingress (income)</Select.Item>
-                <Select.Item value="EGRESS">Egress (expense)</Select.Item>
-                <Select.Item value="BOTH">Both</Select.Item>
-              </Select.Content>
-            </Select.Root>
+            <NativeSelect
+              name={fieldName}
+              value={$form.type}
+              onValueChange={(v) => { $form.type = v as 'INGRESS' | 'EGRESS' | 'BOTH'; }}
+              placeholder="Select type…"
+              items={[
+                { value: 'INGRESS', label: 'Ingress (income)' },
+                { value: 'EGRESS', label: 'Egress (expense)' },
+                { value: 'BOTH', label: 'Both' },
+              ]}
+              {...triggerProps}
+            />
           {/snippet}
         </Form.Control>
         <Form.FieldErrors />
