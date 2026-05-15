@@ -32,6 +32,7 @@
 	const today = new Date().toISOString().split('T')[0];
 
 	const sf = superForm(data.form, {
+		dataType: 'json',
 		validators: zod4Client(transactionSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
