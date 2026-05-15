@@ -292,6 +292,7 @@
 							name={fieldName}
 							value={$form.categoryId ? String($form.categoryId) : ''}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
+							items={filteredCategories.map(c => ({ value: String(c.id), label: c.name }))}
 						>
 							<Select.Trigger {...triggerProps}>
 								<Select.Value placeholder="Select category…" />
@@ -316,6 +317,7 @@
 							name={fieldName}
 							value={$form.contactId !== '' ? String($form.contactId) : undefined}
 							onValueChange={(v) => { $form.contactId = v ? Number(v) : ''; }}
+							items={sortedContacts.map(c => ({ value: String(c.id), label: c.name }))}
 						>
 							<Select.Trigger {...triggerProps}>
 								<Select.Value placeholder="— None —" />

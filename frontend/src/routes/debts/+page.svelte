@@ -295,6 +295,7 @@
 							name={fieldName}
 							value={$form.contactId > 0 ? String($form.contactId) : ''}
 							onValueChange={(v) => { $form.contactId = v ? Number(v) : 0; }}
+							items={data.contacts.map(c => ({ value: String(c.id), label: c.name }))}
 						>
 							<Select.Trigger {...triggerProps}>
 								<Select.Value placeholder="— Select contact —" />
@@ -447,6 +448,7 @@
 								name={fieldName}
 								value={$bulkForm.contactId > 0 ? String($bulkForm.contactId) : ''}
 								onValueChange={(v) => { $bulkForm.contactId = v ? Number(v) : 0; }}
+								items={data.contacts.map(c => ({ value: String(c.id), label: c.name }))}
 							>
 								<Select.Trigger {...triggerProps}>
 									<Select.Value placeholder="— Select contact —" />
@@ -509,6 +511,7 @@
 								name={fieldName}
 								value={$bulkForm.categoryId > 0 ? String($bulkForm.categoryId) : ''}
 								onValueChange={(v) => { $bulkForm.categoryId = v ? Number(v) : 0; }}
+								items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
 							>
 								<Select.Trigger {...triggerProps}>
 									<Select.Value placeholder="Select a category…" />

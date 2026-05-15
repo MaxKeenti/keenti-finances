@@ -300,13 +300,14 @@
 							name={fieldName}
 							value={$form.categoryId !== '' ? String($form.categoryId) : undefined}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : ''; }}
+							items={data.categories.map(c => ({ value: String(c.id), label: c.name }))}
 						>
 							<Select.Trigger {...triggerProps}>
 								<Select.Value placeholder="— None —" />
 							</Select.Trigger>
 							<Select.Content>
 								{#each data.categories as cat}
-									<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+									<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>

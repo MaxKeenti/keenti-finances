@@ -247,6 +247,7 @@
 									name={fieldName}
 									value={$form.categoryId > 0 ? String($form.categoryId) : ''}
 									onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
+									items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
 								>
 									<Select.Trigger {...triggerProps}>
 										<Select.Value placeholder="Select a category…" />
