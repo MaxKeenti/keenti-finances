@@ -68,7 +68,7 @@ export const actions: Actions = {
 		const form = await superValidate(request, zod4(transactionSchema));
 		if (!form.valid) return fail(400, { form });
 
-		const contactId = form.data.contactId === '' || form.data.contactId === undefined ? null : form.data.contactId;
+		const contactId = !form.data.contactId ? null : form.data.contactId;
 
 		let res: Response;
 		try {
@@ -109,7 +109,7 @@ export const actions: Actions = {
 		const id = form.data.id;
 		if (!id) return fail(400, { form: { ...form, message: 'Missing transaction id for update.' } });
 
-		const contactId = form.data.contactId === '' || form.data.contactId === undefined ? null : form.data.contactId;
+		const contactId = !form.data.contactId ? null : form.data.contactId;
 
 		let res: Response;
 		try {

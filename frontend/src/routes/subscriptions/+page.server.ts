@@ -100,10 +100,7 @@ export const actions: Actions = {
 		const form = await superValidate(request, zod4(subscriptionSchema));
 		if (!form.valid) return fail(400, { form });
 
-		const categoryId =
-			form.data.categoryId === '' || form.data.categoryId === undefined
-				? null
-				: form.data.categoryId;
+		const categoryId = !form.data.categoryId ? null : form.data.categoryId;
 
 		let res: Response;
 		try {
@@ -146,10 +143,7 @@ export const actions: Actions = {
 		const id = form.data.id;
 		if (!id) return fail(400, { form: { ...form, message: 'Missing subscription id for update.' } });
 
-		const categoryId =
-			form.data.categoryId === '' || form.data.categoryId === undefined
-				? null
-				: form.data.categoryId;
+		const categoryId = !form.data.categoryId ? null : form.data.categoryId;
 
 		let res: Response;
 		try {
