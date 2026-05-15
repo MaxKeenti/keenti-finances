@@ -29,6 +29,7 @@
 	let deleteTargetName = $state('');
 
 	const sf = superForm(data.form, {
+		dataType: 'json',
 		validators: zod4Client(contactSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
