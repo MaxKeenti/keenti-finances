@@ -4,10 +4,19 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
+	import { parseDate } from '@internationalized/date';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
+	import * as Select from '$lib/components/ui/select';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Empty from '$lib/components/ui/empty';
+	import * as Card from '$lib/components/ui/card';
+	import * as Popover from '$lib/components/ui/popover';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import type { PageData } from './$types';
 
 	const subscriptionSchema = z.object({
@@ -70,7 +79,7 @@
 			}
 		},
 	});
-	const { form, errors, enhance, submitting, message } = sf;
+	const { form, enhance, submitting, message } = sf;
 
 	function openCreate() {
 		editMode = false;
@@ -120,15 +129,20 @@
 		return data.contacts.filter((c) => !memberContactIds.has(c.id));
 	}
 
-	const cycleBadgeClass: Record<string, string> = {
-		MONTHLY: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-		YEARLY: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
+		MONTHLY: 'info',
+		YEARLY: 'purple',
 	};
 
-	const typeBadgeClass: Record<string, string> = {
-		PERSONAL: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-		SHARED: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+	const typeBadgeVariant: Record<string, 'secondary' | 'warning'> = {
+		PERSONAL: 'secondary',
+		SHARED: 'warning',
 	};
+
+	let billingCalDate = $derived.by(() => {
+		try { return $form.nextBillingDate ? parseDate($form.nextBillingDate) : undefined; }
+		catch { return undefined; }
+	});
 </script>
 
 <div class="space-y-6">
@@ -141,49 +155,48 @@
 	</div>
 
 	{#if data.subscriptions.length === 0}
-		<div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-			No subscriptions yet. Create one to get started.
-		</div>
+		<Empty.Root class="border">
+			<Empty.Title>No subscriptions yet.</Empty.Title>
+			<Empty.Description>Create one to get started.</Empty.Description>
+		</Empty.Root>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.subscriptions as sub (sub.id)}
-				<div class="rounded-lg border bg-card p-5 space-y-3 flex flex-col">
-					<div class="flex items-start justify-between gap-2">
-						<div class="min-w-0">
-							<a href="/subscriptions/{sub.id}" class="hover:underline">
-								<p class="font-semibold text-base truncate">{sub.name}</p>
-							</a>
-							<p class="text-xl font-bold text-foreground mt-0.5">{fmt.format(sub.cost)}</p>
+				<Card.Root class="flex flex-col">
+					<Card.Content class="flex flex-1 flex-col space-y-3">
+						<div class="flex items-start justify-between gap-2">
+							<div class="min-w-0">
+								<a href="/subscriptions/{sub.id}" class="hover:underline">
+									<p class="font-semibold text-base truncate">{sub.name}</p>
+								</a>
+								<p class="text-xl font-bold text-foreground mt-0.5">{fmt.format(sub.cost)}</p>
+							</div>
+							<div class="flex flex-col items-end gap-1 shrink-0">
+								<Badge variant={typeBadgeVariant[sub.type]}>
+									{sub.type === 'PERSONAL' ? 'Personal' : 'Shared'}
+								</Badge>
+								<Badge variant={cycleBadgeVariant[sub.billingCycle]}>
+									{sub.billingCycle === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+								</Badge>
+							</div>
 						</div>
-						<div class="flex flex-col items-end gap-1 shrink-0">
-							<span
-								class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {typeBadgeClass[sub.type] ?? ''}"
-							>
-								{sub.type === 'PERSONAL' ? 'Personal' : 'Shared'}
-							</span>
-							<span
-								class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {cycleBadgeClass[sub.billingCycle] ?? ''}"
-							>
-								{sub.billingCycle === 'MONTHLY' ? 'Monthly' : 'Yearly'}
-							</span>
+
+						<div class="text-xs text-muted-foreground space-y-0.5">
+							<p>Next billing: <span class="font-medium text-foreground">{sub.nextBillingDate}</span></p>
+							{#if sub.type === 'SHARED'}
+								<p>Members: <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
+							{/if}
 						</div>
-					</div>
 
-					<div class="text-xs text-muted-foreground space-y-0.5">
-						<p>Next billing: <span class="font-medium text-foreground">{sub.nextBillingDate}</span></p>
-						{#if sub.type === 'SHARED'}
-							<p>Members: <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
-						{/if}
-					</div>
-
-					<div class="flex gap-2 mt-auto pt-1">
-						<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
-						{#if sub.type === 'SHARED'}
-							<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>Members</Button>
-						{/if}
-						<Button variant="destructive" size="sm" onclick={() => openDelete(sub)}>Delete</Button>
-					</div>
-				</div>
+						<div class="flex gap-2 mt-auto pt-1">
+							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
+							{#if sub.type === 'SHARED'}
+								<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>Members</Button>
+							{/if}
+							<Button variant="destructive" size="sm" onclick={() => openDelete(sub)}>Delete</Button>
+						</div>
+					</Card.Content>
+				</Card.Root>
 			{/each}
 		</div>
 	{/if}
@@ -202,9 +215,9 @@
 		</Dialog.Header>
 
 		{#if $message}
-			<div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-				{$message}
-			</div>
+			<Alert.Root variant="destructive">
+				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
 		{/if}
 
 		<form
@@ -241,15 +254,17 @@
 				<Form.Field form={sf} name="billingCycle">
 					<Form.Control>
 						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>Billing Cycle</Form.Label>
-							<select
-								{...props}
-								bind:value={$form.billingCycle}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-							>
-								<option value="MONTHLY">Monthly</option>
-								<option value="YEARLY">Yearly</option>
-							</select>
+							<Select.Root name={fieldName} bind:value={$form.billingCycle}>
+								<Select.Trigger {...triggerProps}>
+									<Select.Value placeholder="Select cycle…" />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="MONTHLY">Monthly</Select.Item>
+									<Select.Item value="YEARLY">Yearly</Select.Item>
+								</Select.Content>
+							</Select.Root>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -258,15 +273,17 @@
 				<Form.Field form={sf} name="type">
 					<Form.Control>
 						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>Type</Form.Label>
-							<select
-								{...props}
-								bind:value={$form.type}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-							>
-								<option value="PERSONAL">Personal</option>
-								<option value="SHARED">Shared</option>
-							</select>
+							<Select.Root name={fieldName} bind:value={$form.type}>
+								<Select.Trigger {...triggerProps}>
+									<Select.Value placeholder="Select type…" />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="PERSONAL">Personal</Select.Item>
+									<Select.Item value="SHARED">Shared</Select.Item>
+								</Select.Content>
+							</Select.Root>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -276,17 +293,22 @@
 			<Form.Field form={sf} name="categoryId">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Category (optional)</Form.Label>
-						<select
-							{...props}
-							bind:value={$form.categoryId}
-							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						<Select.Root
+							name={fieldName}
+							value={$form.categoryId !== '' ? String($form.categoryId) : undefined}
+							onValueChange={(v) => { $form.categoryId = v ? Number(v) : ''; }}
 						>
-							<option value="">— None —</option>
-							{#each data.categories as cat}
-								<option value={cat.id}>{cat.name}</option>
-							{/each}
-						</select>
+							<Select.Trigger {...triggerProps}>
+								<Select.Value placeholder="— None —" />
+							</Select.Trigger>
+							<Select.Content>
+								{#each data.categories as cat}
+									<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -295,8 +317,24 @@
 			<Form.Field form={sf} name="nextBillingDate">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Next Billing Date</Form.Label>
-						<Input {...props} type="date" bind:value={$form.nextBillingDate} />
+						<Popover.Root>
+							<Popover.Trigger
+								{...triggerProps}
+								class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring {!$form.nextBillingDate ? 'text-muted-foreground' : ''}"
+							>
+								<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
+								{$form.nextBillingDate || 'Pick a date'}
+							</Popover.Trigger>
+							<Popover.Content class="w-auto p-0" align="start">
+								<Calendar
+									value={billingCalDate as never}
+									onValueChange={(v) => { if (v) $form.nextBillingDate = v.toString(); }}
+								/>
+							</Popover.Content>
+						</Popover.Root>
+						<input type="hidden" name={fieldName} value={$form.nextBillingDate} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -419,16 +457,16 @@
 						class="flex gap-2"
 					>
 						<input type="hidden" name="subscriptionId" value={memberTargetSub.id} />
-						<select
-							name="contactId"
-							bind:value={selectedContactId}
-							class="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-						>
-							<option value="">Select contact…</option>
-							{#each availableContacts(memberTargetSub) as c}
-								<option value={c.id}>{c.name}</option>
-							{/each}
-						</select>
+						<Select.Root name="contactId" bind:value={selectedContactId}>
+							<Select.Trigger class="flex-1">
+								<Select.Value placeholder="Select contact…" />
+							</Select.Trigger>
+							<Select.Content>
+								{#each availableContacts(memberTargetSub) as c}
+									<Select.Item value={String(c.id)}>{c.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
 						<Button type="submit" disabled={!selectedContactId}>Add</Button>
 					</form>
 				{:else}

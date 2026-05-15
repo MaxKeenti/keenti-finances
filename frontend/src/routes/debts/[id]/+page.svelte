@@ -4,10 +4,19 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll } from '$app/navigation';
+	import { parseDate } from '@internationalized/date';
 	import * as Form from '$lib/components/ui/form';
+	import * as Select from '$lib/components/ui/select';
+	import * as Card from '$lib/components/ui/card';
+	import * as Table from '$lib/components/ui/table';
+	import * as Popover from '$lib/components/ui/popover';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
-
+	import { Badge } from '$lib/components/ui/badge';
+	import { Progress } from '$lib/components/ui/progress';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import type { PageData } from './$types';
 
 	const paymentSchema = z.object({
@@ -33,9 +42,9 @@
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-	const statusBadgeClass: Record<string, string> = {
-		ACTIVE: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-		PAID: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
+		ACTIVE: 'warning',
+		PAID: 'success',
 	};
 
 	const paidPercent = $derived(
@@ -67,192 +76,212 @@
 	const ingressCategories = $derived(
 		(data.categories as Category[]).filter((c) => c.type === 'INGRESS'),
 	);
+
+	let payCalDate = $derived.by(() => {
+		try { return $form.paymentDate ? parseDate($form.paymentDate) : undefined; }
+		catch { return undefined; }
+	});
 </script>
 
 <div class="space-y-6 max-w-3xl">
 	<!-- Back link -->
-	<a
-		href="/debts"
-		class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-	>
+	<Button variant="link" href="/debts" class="h-auto p-0 text-muted-foreground hover:text-foreground">
 		← Back to Debts
-	</a>
+	</Button>
 
-	<!-- Header -->
-	<div class="rounded-lg border bg-card p-6 space-y-4">
-		<div class="flex flex-wrap items-start justify-between gap-3">
-			<div class="min-w-0">
-				<h1 class="text-2xl font-semibold tracking-tight">
-					{data.debt.contactName ?? `Contact #${data.debt.contactId}`}
-				</h1>
-				<p class="text-sm text-muted-foreground mt-0.5">{data.debt.description}</p>
+	<!-- Header card -->
+	<Card.Root>
+		<Card.Content class="space-y-4">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div class="min-w-0">
+					<h1 class="text-2xl font-semibold tracking-tight">
+						{data.debt.contactName ?? `Contact #${data.debt.contactId}`}
+					</h1>
+					<p class="text-sm text-muted-foreground mt-0.5">{data.debt.description}</p>
+				</div>
+				<Badge variant={statusBadgeVariant[data.debt.status]}>{data.debt.status}</Badge>
 			</div>
-			<span
-				class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {statusBadgeClass[data.debt.status] ?? ''}"
-			>
-				{data.debt.status}
-			</span>
-		</div>
 
-		<!-- Balance breakdown -->
-		<div class="grid grid-cols-3 gap-4 text-sm">
-			<div>
-				<p class="text-muted-foreground">Total</p>
-				<p class="text-lg font-semibold">{fmt.format(data.debt.totalAmount)}</p>
+			<!-- Balance breakdown -->
+			<div class="grid grid-cols-3 gap-4 text-sm">
+				<div>
+					<p class="text-muted-foreground">Total</p>
+					<p class="text-lg font-semibold">{fmt.format(data.debt.totalAmount)}</p>
+				</div>
+				<div>
+					<p class="text-muted-foreground">Paid</p>
+					<p class="text-lg font-semibold text-green-600 dark:text-green-400">
+						{fmt.format(data.debt.totalPaid)}
+					</p>
+				</div>
+				<div>
+					<p class="text-muted-foreground">Remaining</p>
+					<p class="text-lg font-semibold text-amber-600 dark:text-amber-400">
+						{fmt.format(data.debt.remaining)}
+					</p>
+				</div>
 			</div>
-			<div>
-				<p class="text-muted-foreground">Paid</p>
-				<p class="text-lg font-semibold text-green-600 dark:text-green-400">
-					{fmt.format(data.debt.totalPaid)}
-				</p>
-			</div>
-			<div>
-				<p class="text-muted-foreground">Remaining</p>
-				<p class="text-lg font-semibold text-amber-600 dark:text-amber-400">
-					{fmt.format(data.debt.remaining)}
-				</p>
-			</div>
-		</div>
 
-		<!-- Progress bar -->
-		<div class="space-y-1">
-			<div class="flex justify-between text-xs text-muted-foreground">
-				<span>Progress</span>
-				<span>{paidPercent}%</span>
+			<!-- Progress bar -->
+			<div class="space-y-1">
+				<div class="flex justify-between text-xs text-muted-foreground">
+					<span>Progress</span>
+					<span>{paidPercent}%</span>
+				</div>
+				<Progress value={paidPercent} class="h-2 bg-green-500" />
 			</div>
-			<div class="h-2 rounded-full bg-muted overflow-hidden">
-				<div
-					class="h-full rounded-full bg-green-500 transition-all"
-					style="width: {paidPercent}%"
-				></div>
-			</div>
-		</div>
-	</div>
+		</Card.Content>
+	</Card.Root>
 
-	<!-- Payment history -->
-	<div class="rounded-lg border bg-card p-5 space-y-4">
-		<h2 class="font-semibold text-base">Payment History</h2>
+	<!-- Payment history card -->
+	<Card.Root>
+		<Card.Content class="space-y-4">
+			<h2 class="font-semibold text-base">Payment History</h2>
 
-		{#if data.payments.length === 0}
-			<p class="text-sm text-muted-foreground">No payments recorded yet.</p>
-		{:else}
-			<div class="rounded-md border overflow-hidden">
-				<table class="w-full text-sm">
-					<thead class="bg-muted/50">
-						<tr>
-							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Date</th>
-							<th class="px-4 py-2 text-right font-medium text-muted-foreground">Amount</th>
-							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Notes</th>
-							<th class="px-4 py-2 text-right font-medium text-muted-foreground">Transaction</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y">
-						{#each data.payments as payment (payment.id)}
-							<tr class="hover:bg-muted/30 transition-colors">
-								<td class="px-4 py-2.5 tabular-nums">{(payment as DebtPayment).paymentDate}</td>
-								<td class="px-4 py-2.5 text-right font-medium tabular-nums">
-									{fmt.format((payment as DebtPayment).amount)}
-								</td>
-								<td class="px-4 py-2.5 text-muted-foreground">
-									{(payment as DebtPayment).notes ?? '—'}
-								</td>
-								<td class="px-4 py-2.5 text-right">
-									{#if (payment as DebtPayment).transactionId}
-										<span class="text-xs text-muted-foreground font-mono">
-											#{(payment as DebtPayment).transactionId}
-										</span>
-									{:else}
-										<span class="text-xs text-muted-foreground">—</span>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</div>
-
-	<!-- Record payment form -->
-	<div class="rounded-lg border bg-card p-5 space-y-4">
-		<div class="flex items-center justify-between">
-			<h2 class="font-semibold text-base">Record Payment</h2>
-			{#if isPaid}
-				<span class="text-xs text-muted-foreground">Debt is fully paid</span>
+			{#if data.payments.length === 0}
+				<p class="text-sm text-muted-foreground">No payments recorded yet.</p>
+			{:else}
+				<div class="rounded-md border overflow-hidden">
+					<Table.Root>
+						<Table.Header class="bg-muted/50">
+							<Table.Row>
+								<Table.Head>Date</Table.Head>
+								<Table.Head class="text-right">Amount</Table.Head>
+								<Table.Head>Notes</Table.Head>
+								<Table.Head class="text-right">Transaction</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each data.payments as payment (payment.id)}
+								<Table.Row>
+									<Table.Cell class="tabular-nums">{(payment as DebtPayment).paymentDate}</Table.Cell>
+									<Table.Cell class="text-right font-medium tabular-nums">
+										{fmt.format((payment as DebtPayment).amount)}
+									</Table.Cell>
+									<Table.Cell class="text-muted-foreground">
+										{(payment as DebtPayment).notes ?? '—'}
+									</Table.Cell>
+									<Table.Cell class="text-right">
+										{#if (payment as DebtPayment).transactionId}
+											<span class="text-xs text-muted-foreground font-mono">
+												#{(payment as DebtPayment).transactionId}
+											</span>
+										{:else}
+											<span class="text-xs text-muted-foreground">—</span>
+										{/if}
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
 			{/if}
-		</div>
+		</Card.Content>
+	</Card.Root>
 
-		<form method="POST" action="?/recordPayment" use:enhance class="space-y-4">
-			<fieldset disabled={isPaid || $submitting} class="contents">
-				<div class="grid gap-4 sm:grid-cols-2">
-					<Form.Field form={sf} name="amount">
+	<!-- Record payment card -->
+	<Card.Root>
+		<Card.Content class="space-y-4">
+			<div class="flex items-center justify-between">
+				<h2 class="font-semibold text-base">Record Payment</h2>
+				{#if isPaid}
+					<span class="text-xs text-muted-foreground">Debt is fully paid</span>
+				{/if}
+			</div>
+
+			<form method="POST" action="?/recordPayment" use:enhance class="space-y-4">
+				<fieldset disabled={isPaid || $submitting} class="contents">
+					<div class="grid gap-4 sm:grid-cols-2">
+						<Form.Field form={sf} name="amount">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Amount (MXN)</Form.Label>
+									<Input
+										{...props}
+										type="number"
+										step="0.01"
+										min="0.01"
+										max={data.debt.remaining}
+										bind:value={$form.amount}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<Form.Field form={sf} name="paymentDate">
+							<Form.Control>
+								{#snippet children({ props })}
+									{@const { name: fieldName, ...triggerProps } = props}
+									<Form.Label>Payment Date</Form.Label>
+									<Popover.Root>
+										<Popover.Trigger
+											{...triggerProps}
+											class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {!$form.paymentDate ? 'text-muted-foreground' : ''}"
+										>
+											<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
+											{$form.paymentDate || 'Pick a date'}
+										</Popover.Trigger>
+										<Popover.Content class="w-auto p-0" align="start">
+											<Calendar
+												value={payCalDate as never}
+												onValueChange={(v: import('@internationalized/date').DateValue | undefined) => { if (v) $form.paymentDate = v.toString(); }}
+											/>
+										</Popover.Content>
+									</Popover.Root>
+									<input type="hidden" name={fieldName} value={$form.paymentDate} />
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
+
+					<Form.Field form={sf} name="categoryId">
 						<Form.Control>
 							{#snippet children({ props })}
-								<Form.Label>Amount (MXN)</Form.Label>
-								<Input
+								{@const { name: fieldName, ...triggerProps } = props}
+								<Form.Label>Ingress Category</Form.Label>
+								<Select.Root
+									name={fieldName}
+									value={$form.categoryId > 0 ? String($form.categoryId) : ''}
+									onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
+								>
+									<Select.Trigger {...triggerProps}>
+										<Select.Value placeholder="Select a category…" />
+									</Select.Trigger>
+									<Select.Content>
+										{#each ingressCategories as cat (cat.id)}
+											<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							{/snippet}
+						</Form.Control>
+						{#if $errors.categoryId}
+							<p class="text-destructive text-sm">{$errors.categoryId}</p>
+						{/if}
+					</Form.Field>
+
+					<Form.Field form={sf} name="notes">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Notes <span class="text-muted-foreground">(optional)</span></Form.Label>
+								<Textarea
 									{...props}
-									type="number"
-									step="0.01"
-									min="0.01"
-									max={data.debt.remaining}
-									bind:value={$form.amount}
+									bind:value={$form.notes}
+									rows={2}
+									placeholder="Optional payment notes"
 								/>
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<Form.Field form={sf} name="paymentDate">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Form.Label>Payment Date</Form.Label>
-								<Input {...props} type="date" bind:value={$form.paymentDate} />
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
-				</div>
-
-				<Form.Field form={sf} name="categoryId">
-					<Form.Control>
-						{#snippet children({ props })}
-							<Form.Label>Ingress Category</Form.Label>
-							<select
-								{...props}
-								bind:value={$form.categoryId}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-							>
-								<option value={0} disabled>Select a category…</option>
-								{#each ingressCategories as cat (cat.id)}
-									<option value={cat.id}>{cat.name}</option>
-								{/each}
-							</select>
-						{/snippet}
-					</Form.Control>
-					{#if $errors.categoryId}
-						<p class="text-destructive text-sm">{$errors.categoryId}</p>
-					{/if}
-				</Form.Field>
-
-				<Form.Field form={sf} name="notes">
-					<Form.Control>
-						{#snippet children({ props })}
-							<Form.Label>Notes <span class="text-muted-foreground">(optional)</span></Form.Label>
-							<textarea
-								{...props}
-								bind:value={$form.notes}
-								rows={2}
-								class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 resize-none"
-							></textarea>
-						{/snippet}
-					</Form.Control>
-					<Form.FieldErrors />
-				</Form.Field>
-
-				<Button type="submit" disabled={isPaid || $submitting} class="w-full sm:w-auto">
-					{$submitting ? 'Recording…' : 'Record Payment'}
-				</Button>
-			</fieldset>
-		</form>
-	</div>
+					<Button type="submit" disabled={isPaid || $submitting} class="w-full sm:w-auto">
+						{$submitting ? 'Recording…' : 'Record Payment'}
+					</Button>
+				</fieldset>
+			</form>
+		</Card.Content>
+	</Card.Root>
 </div>

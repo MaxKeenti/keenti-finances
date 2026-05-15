@@ -6,8 +6,14 @@
 	import { enhance as kitEnhance } from '$app/forms';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
+	import * as Select from '$lib/components/ui/select';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Empty from '$lib/components/ui/empty';
+	import * as Card from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '$lib/components/ui/badge';
 	import type { PageData } from './$types';
 
 	const debtSchema = z.object({
@@ -51,7 +57,7 @@
 			}
 		},
 	});
-	const { form, errors, enhance, submitting, message } = sf;
+	const { form, enhance, submitting, message } = sf;
 
 	function openCreate() {
 		editMode = false;
@@ -80,9 +86,9 @@
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
-	const statusBadgeClass: Record<string, string> = {
-		ACTIVE: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-		PAID: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
+		ACTIVE: 'warning',
+		PAID: 'success',
 	};
 </script>
 
@@ -96,59 +102,58 @@
 	</div>
 
 	{#if data.debts.length === 0}
-		<div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-			No debts yet. Create one to get started.
-		</div>
+		<Empty.Root class="border">
+			<Empty.Title>No debts yet.</Empty.Title>
+			<Empty.Description>Create one to get started.</Empty.Description>
+		</Empty.Root>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.debts as debt (debt.id)}
-				<div class="rounded-lg border bg-card p-5 space-y-3 flex flex-col">
-					<div class="flex items-start justify-between gap-2">
-						<div class="min-w-0">
-							<a href="/debts/{debt.id}" class="hover:underline">
-								<p class="font-semibold text-base truncate">
-									{debt.contactName ?? `Contact #${debt.contactId}`}
-								</p>
-							</a>
-							<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
+				<Card.Root class="flex flex-col">
+					<Card.Content class="flex flex-1 flex-col space-y-3">
+						<div class="flex items-start justify-between gap-2">
+							<div class="min-w-0">
+								<a href="/debts/{debt.id}" class="hover:underline">
+									<p class="font-semibold text-base truncate">
+										{debt.contactName ?? `Contact #${debt.contactId}`}
+									</p>
+								</a>
+								<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
+							</div>
+							<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debt.status}</Badge>
 						</div>
-						<span
-							class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0 {statusBadgeClass[debt.status] ?? ''}"
-						>
-							{debt.status}
-						</span>
-					</div>
 
-					<div class="space-y-1 text-sm">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">Total</span>
-							<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
+						<div class="space-y-1 text-sm">
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">Total</span>
+								<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">Paid</span>
+								<span class="font-medium text-green-600 dark:text-green-400">
+									{fmt.format(debt.totalPaid)}
+								</span>
+							</div>
+							<div class="flex justify-between border-t pt-1">
+								<span class="text-muted-foreground font-medium">Remaining</span>
+								<span
+									class="font-bold {debt.status === 'PAID'
+										? 'text-green-600 dark:text-green-400'
+										: 'text-amber-600 dark:text-amber-400'}"
+								>
+									{fmt.format(debt.remaining)}
+								</span>
+							</div>
 						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">Paid</span>
-							<span class="font-medium text-green-600 dark:text-green-400">
-								{fmt.format(debt.totalPaid)}
-							</span>
-						</div>
-						<div class="flex justify-between border-t pt-1">
-							<span class="text-muted-foreground font-medium">Remaining</span>
-							<span
-								class="font-bold {debt.status === 'PAID'
-									? 'text-green-600 dark:text-green-400'
-									: 'text-amber-600 dark:text-amber-400'}"
-							>
-								{fmt.format(debt.remaining)}
-							</span>
-						</div>
-					</div>
 
-					<div class="flex gap-2 mt-auto pt-1">
-						<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(debt)}>
-							Edit
-						</Button>
-						<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>Delete</Button>
-					</div>
-				</div>
+						<div class="flex gap-2 mt-auto pt-1">
+							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(debt)}>
+								Edit
+							</Button>
+							<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>Delete</Button>
+						</div>
+					</Card.Content>
+				</Card.Root>
 			{/each}
 		</div>
 	{/if}
@@ -165,9 +170,9 @@
 		</Dialog.Header>
 
 		{#if $message}
-			<div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-				{$message}
-			</div>
+			<Alert.Root variant="destructive">
+				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
 		{/if}
 
 		<form
@@ -183,17 +188,22 @@
 			<Form.Field form={sf} name="contactId">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Debtor (Contact)</Form.Label>
-						<select
-							{...props}
-							bind:value={$form.contactId}
-							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						<Select.Root
+							name={fieldName}
+							value={$form.contactId > 0 ? String($form.contactId) : ''}
+							onValueChange={(v) => { $form.contactId = v ? Number(v) : 0; }}
 						>
-							<option value={0}>— Select contact —</option>
-							{#each data.contacts as c}
-								<option value={c.id}>{c.name}</option>
-							{/each}
-						</select>
+							<Select.Trigger {...triggerProps}>
+								<Select.Value placeholder="— Select contact —" />
+							</Select.Trigger>
+							<Select.Content>
+								{#each data.contacts as c}
+									<Select.Item value={String(c.id)}>{c.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -203,13 +213,12 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label>Description</Form.Label>
-						<textarea
+						<Textarea
 							{...props}
 							bind:value={$form.description}
 							rows={3}
 							placeholder="e.g. Embroidery job — 5 polo shirts"
-							class="flex min-h-[72px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-						></textarea>
+						/>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />

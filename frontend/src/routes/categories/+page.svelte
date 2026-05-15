@@ -7,8 +7,12 @@
   import * as Table from "$lib/components/ui/table";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Form from "$lib/components/ui/form";
+  import * as Select from "$lib/components/ui/select";
+  import * as Alert from "$lib/components/ui/alert";
+  import * as Empty from "$lib/components/ui/empty";
   import { Input } from "$lib/components/ui/input";
   import { Button } from "$lib/components/ui/button";
+  import { Badge } from "$lib/components/ui/badge";
   import type { PageData } from "./$types";
 
   const categorySchema = z.object({
@@ -38,7 +42,7 @@
       }
     },
   });
-  const { form, errors, enhance, submitting, message } = sf;
+  const { form, enhance, submitting, message } = sf;
 
   function openCreate() {
     editMode = false;
@@ -68,11 +72,10 @@
     BOTH: "Both",
   };
 
-  const typeBadgeClass: Record<string, string> = {
-    INGRESS:
-      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-    EGRESS: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    BOTH: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  const typeBadgeVariant: Record<string, 'success' | 'destructive' | 'info'> = {
+    INGRESS: 'success',
+    EGRESS: 'destructive',
+    BOTH: 'info',
   };
 </script>
 
@@ -88,11 +91,10 @@
   </div>
 
   {#if data.categories.length === 0}
-    <div
-      class="rounded-lg border border-dashed p-8 text-center text-muted-foreground"
-    >
-      No categories yet. Create one to get started.
-    </div>
+    <Empty.Root class="border">
+      <Empty.Title>No categories yet.</Empty.Title>
+      <Empty.Description>Create one to get started.</Empty.Description>
+    </Empty.Root>
   {:else}
     <div class="rounded-lg border">
       <Table.Root>
@@ -108,26 +110,14 @@
             <Table.Row>
               <Table.Cell class="font-medium">{cat.name}</Table.Cell>
               <Table.Cell>
-                <span
-                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {typeBadgeClass[
-                    cat.type
-                  ] ?? ''}"
-                >
+                <Badge variant={typeBadgeVariant[cat.type]}>
                   {typeLabel[cat.type] ?? cat.type}
-                </span>
+                </Badge>
               </Table.Cell>
               <Table.Cell class="text-right">
                 <div class="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onclick={() => openEdit(cat)}>Edit</Button
-                  >
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onclick={() => openDelete(cat)}>Delete</Button
-                  >
+                  <Button variant="outline" size="sm" onclick={() => openEdit(cat)}>Edit</Button>
+                  <Button variant="destructive" size="sm" onclick={() => openDelete(cat)}>Delete</Button>
                 </div>
               </Table.Cell>
             </Table.Row>
@@ -151,11 +141,9 @@
     </Dialog.Header>
 
     {#if $message}
-      <div
-        class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
-      >
-        {$message}
-      </div>
+      <Alert.Root variant="destructive">
+        <Alert.Description>{$message}</Alert.Description>
+      </Alert.Root>
     {/if}
 
     <form
@@ -172,11 +160,7 @@
         <Form.Control>
           {#snippet children({ props })}
             <Form.Label>Name</Form.Label>
-            <Input
-              {...props}
-              bind:value={$form.name}
-              placeholder="e.g. Salary"
-            />
+            <Input {...props} bind:value={$form.name} placeholder="e.g. Salary" />
           {/snippet}
         </Form.Control>
         <Form.FieldErrors />
@@ -185,27 +169,25 @@
       <Form.Field form={sf} name="type">
         <Form.Control>
           {#snippet children({ props })}
+            {@const { name: fieldName, ...triggerProps } = props}
             <Form.Label>Type</Form.Label>
-            <select
-              {...props}
-              bind:value={$form.type}
-              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="INGRESS">Ingress (income)</option>
-              <option value="EGRESS">Egress (expense)</option>
-              <option value="BOTH">Both</option>
-            </select>
+            <Select.Root name={fieldName} bind:value={$form.type}>
+              <Select.Trigger {...triggerProps}>
+                <Select.Value placeholder="Select type…" />
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Item value="INGRESS">Ingress (income)</Select.Item>
+                <Select.Item value="EGRESS">Egress (expense)</Select.Item>
+                <Select.Item value="BOTH">Both</Select.Item>
+              </Select.Content>
+            </Select.Root>
           {/snippet}
         </Form.Control>
         <Form.FieldErrors />
       </Form.Field>
 
       <Dialog.Footer>
-        <Button
-          type="button"
-          variant="outline"
-          onclick={() => (dialogOpen = false)}>Cancel</Button
-        >
+        <Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
         <Button type="submit" disabled={$submitting}>
           {$submitting ? "Saving…" : editMode ? "Update" : "Create"}
         </Button>
@@ -244,11 +226,7 @@
     >
       <input type="hidden" name="id" value={deleteTargetId} />
       <Dialog.Footer>
-        <Button
-          type="button"
-          variant="outline"
-          onclick={() => (deleteDialogOpen = false)}
-        >
+        <Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
           Cancel
         </Button>
         <Button type="submit" variant="destructive">Delete</Button>
