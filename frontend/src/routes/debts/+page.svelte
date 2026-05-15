@@ -147,9 +147,10 @@
 						</div>
 
 						<div class="flex gap-2 mt-auto pt-1">
-							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(debt)}>
-								Edit
+							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
+								Payments
 							</Button>
+							<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>Edit</Button>
 							<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>Delete</Button>
 						</div>
 					</Card.Content>
