@@ -20,6 +20,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -62,8 +63,11 @@ public class DebtResource {
                     Response.status(Response.Status.NOT_FOUND)
                         .entity("{\"error\":\"Contact not found: " + request.contactId() + "\"}")
                         .build()));
+        LocalDateTime createdAtTs = request.createdAt() != null
+            ? request.createdAt().atStartOfDay()
+            : null;
         Debt created = debtUseCase.create(new Debt(
-            null, request.contactId(), request.description(), request.totalAmount(), "ACTIVE", null));
+            null, request.contactId(), request.description(), request.totalAmount(), "ACTIVE", createdAtTs));
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
@@ -80,9 +84,12 @@ public class DebtResource {
                 Response.status(Response.Status.NOT_FOUND)
                     .entity("{\"error\":\"Debt not found: " + id + "\"}")
                     .build()));
+        LocalDateTime updatedCreatedAt = request.createdAt() != null
+            ? request.createdAt().atStartOfDay()
+            : debt.getCreatedAt();
         Debt updated = debtUseCase.update(id, new Debt(
             id, request.contactId(), request.description(), request.totalAmount(),
-            debt.getStatus(), debt.getCreatedAt()));
+            debt.getStatus(), updatedCreatedAt));
         return Response.ok(toResponse(updated)).build();
     }
 

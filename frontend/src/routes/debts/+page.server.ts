@@ -9,6 +9,7 @@ const debtSchema = z.object({
 	contactId: z.coerce.number().positive('Contact is required'),
 	description: z.string().min(1, 'Description is required'),
 	totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
+	createdAt: z.string().min(1, 'Date is required'),
 });
 
 const bulkPaymentSchema = z.object({
@@ -61,7 +62,7 @@ export const load: PageServerLoad = async ({ fetch }) => {
 
 	const today = new Date().toISOString().split('T')[0];
 	const [form, bulkForm] = await Promise.all([
-		superValidate({ contactId: 0, description: '', totalAmount: 0 }, zod4(debtSchema)),
+		superValidate({ contactId: 0, description: '', totalAmount: 0, createdAt: today }, zod4(debtSchema)),
 		superValidate(
 			{ contactId: 0, totalAmount: 0, paymentDate: today, categoryId: 0, notes: '' },
 			zod4(bulkPaymentSchema),
@@ -85,6 +86,7 @@ export const actions: Actions = {
 					contactId: form.data.contactId,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
+					createdAt: form.data.createdAt || null,
 				}),
 			});
 		} catch {
@@ -126,6 +128,7 @@ export const actions: Actions = {
 					contactId: form.data.contactId,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
+					createdAt: form.data.createdAt || null,
 				}),
 			});
 		} catch {

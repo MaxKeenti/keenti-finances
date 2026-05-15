@@ -27,6 +27,7 @@
 		contactId: z.coerce.number().positive('Contact is required'),
 		description: z.string().min(1, 'Description is required'),
 		totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
+		createdAt: z.string().min(1, 'Date is required'),
 	});
 
 	const bulkPaymentSchema = z.object({
@@ -46,7 +47,7 @@
 		totalPaid: number;
 		remaining: number;
 		status: string;
-		createdAt: string;
+		createdAt: string | null;
 	};
 
 	type BulkPaymentItem = {
@@ -121,6 +122,11 @@
 			.sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
+	let debtCalDate = $derived.by(() => {
+		try { return $form.createdAt ? parseDate($form.createdAt) : undefined; }
+		catch { return undefined; }
+	});
+
 	let bulkCalDate = $derived.by(() => {
 		try { return $bulkForm.paymentDate ? parseDate($bulkForm.paymentDate) : undefined; }
 		catch { return undefined; }
@@ -129,7 +135,7 @@
 	function openCreate() {
 		editMode = false;
 		sf.reset({
-			data: { contactId: 0, description: '', totalAmount: 0 },
+			data: { contactId: 0, description: '', totalAmount: 0, createdAt: new Date().toISOString().split('T')[0] },
 		});
 		dialogOpen = true;
 	}
@@ -150,11 +156,13 @@
 
 	function openEdit(debt: Debt) {
 		editMode = true;
+		const existing = debt.createdAt ? debt.createdAt.split('T')[0] : new Date().toISOString().split('T')[0];
 		form.set({
 			id: debt.id,
 			contactId: debt.contactId ?? 0,
 			description: debt.description,
 			totalAmount: debt.totalAmount,
+			createdAt: existing,
 		});
 		dialogOpen = true;
 	}
@@ -208,6 +216,14 @@
 						</div>
 
 						<div class="space-y-1 text-sm">
+							{#if debt.createdAt}
+								<div class="flex justify-between">
+									<span class="text-muted-foreground">Date</span>
+									<span class="font-medium tabular-nums">
+										{new Date(debt.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+									</span>
+								</div>
+							{/if}
 							<div class="flex justify-between">
 								<span class="text-muted-foreground">Total</span>
 								<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
@@ -314,6 +330,33 @@
 					{#snippet children({ props })}
 						<Form.Label>Total Amount (MXN)</Form.Label>
 						<Input {...props} type="number" step="0.01" min="0.01" bind:value={$form.totalAmount} />
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={sf} name="createdAt">
+				<Form.Control>
+					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
+						<Form.Label>Debt Date</Form.Label>
+						<Popover.Root>
+							<Popover.Trigger
+								{...triggerProps}
+								class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {!$form.createdAt ? 'text-muted-foreground' : ''}"
+							>
+								<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
+								{$form.createdAt || 'Pick a date'}
+							</Popover.Trigger>
+							<Popover.Content class="w-auto p-0" align="start">
+								<Calendar
+									type="single"
+									value={debtCalDate as never}
+									onValueChange={(v: import('@internationalized/date').DateValue | undefined) => { if (v) $form.createdAt = v.toString(); }}
+								/>
+							</Popover.Content>
+						</Popover.Root>
+						<input type="hidden" name={fieldName} value={$form.createdAt} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />

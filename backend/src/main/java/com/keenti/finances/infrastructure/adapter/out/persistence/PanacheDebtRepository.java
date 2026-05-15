@@ -46,6 +46,9 @@ public class PanacheDebtRepository implements DebtRepository {
         entity.description = debt.getDescription();
         entity.totalAmount = debt.getTotalAmount();
         entity.status = debt.getStatus();
+        if (debt.getCreatedAt() != null) {
+            entity.createdAt = debt.getCreatedAt();
+        }
         return toDomain(entity);
     }
 
@@ -60,6 +63,7 @@ public class PanacheDebtRepository implements DebtRepository {
         e.description = d.getDescription();
         e.totalAmount = d.getTotalAmount();
         e.status = d.getStatus() != null ? d.getStatus() : "ACTIVE";
+        e.createdAt = d.getCreatedAt();
         return e;
     }
 
