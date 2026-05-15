@@ -9,6 +9,7 @@
 	let {
 		ref = $bindable(null),
 		value = $bindable(),
+		onValueChange,
 		placeholder = $bindable(),
 		class: className,
 		weekdayFormat = "short",
@@ -21,8 +22,10 @@
 		yearFormat = "numeric",
 		day,
 		disableDaysOutsideMonth = false,
+		type: _type,
 		...restProps
 	}: WithoutChildrenOrChild<CalendarPrimitive.RootProps> & {
+		onValueChange?: (value: DateValue | undefined) => void;
 		buttonVariant?: ButtonVariant;
 		captionLayout?: "dropdown" | "dropdown-months" | "dropdown-years" | "label";
 		months?: CalendarPrimitive.MonthSelectProps["months"];
@@ -39,12 +42,10 @@
 	});
 </script>
 
-<!--
-Discriminated Unions + Destructing (required for bindable) do not
-get along, so we shut typescript up by casting `value` to `never`.
--->
 <CalendarPrimitive.Root
+	type="single"
 	bind:value={value as never}
+	onValueChange={onValueChange as never}
 	bind:ref
 	bind:placeholder
 	{weekdayFormat}

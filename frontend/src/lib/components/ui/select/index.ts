@@ -2,6 +2,7 @@ import Root from "./select.svelte";
 import Group from "./select-group.svelte";
 import Label from "./select-label.svelte";
 import Item from "./select-item.svelte";
+import Value from "./select-value.svelte";
 import Content from "./select-content.svelte";
 import Trigger from "./select-trigger.svelte";
 import Separator from "./select-separator.svelte";
@@ -15,6 +16,7 @@ export {
 	Group,
 	Label,
 	Item,
+	Value,
 	Content,
 	Trigger,
 	Separator,
@@ -27,6 +29,7 @@ export {
 	Group as SelectGroup,
 	Label as SelectLabel,
 	Item as SelectItem,
+	Value as SelectValue,
 	Content as SelectContent,
 	Trigger as SelectTrigger,
 	Separator as SelectSeparator,

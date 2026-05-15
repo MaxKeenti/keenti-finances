@@ -4,6 +4,7 @@
 	import { z } from 'zod';
 	import * as Card from '$lib/components/ui/card';
 	import * as Form from '$lib/components/ui/form';
+	import * as Alert from '$lib/components/ui/alert';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import type { PageData } from './$types';
@@ -29,9 +30,9 @@
 		</Card.Header>
 		<Card.Content>
 			{#if $message}
-				<div class="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-					{$message}
-				</div>
+				<Alert.Root variant="destructive" class="mb-4">
+					<Alert.Description>{$message}</Alert.Description>
+				</Alert.Root>
 			{/if}
 			<form method="POST" use:enhance class="grid gap-4">
 				<Form.Field form={sf} name="username">

@@ -4,11 +4,18 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
+	import { parseDate } from '@internationalized/date';
 	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
+	import * as Select from '$lib/components/ui/select';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Empty from '$lib/components/ui/empty';
+	import * as Popover from '$lib/components/ui/popover';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import type { PageData } from './$types';
 
 	const transactionSchema = z.object({
@@ -32,7 +39,6 @@
 	const today = new Date().toISOString().split('T')[0];
 
 	const sf = superForm(data.form, {
-		dataType: 'json',
 		validators: zod4Client(transactionSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
@@ -46,7 +52,7 @@
 			}
 		},
 	});
-	const { form, errors, enhance, submitting, message } = sf;
+	const { form, enhance, submitting, message } = sf;
 
 	function openCreate() {
 		editMode = false;
@@ -97,6 +103,11 @@
 		const prefix = direction === 'INGRESS' ? '+' : '-';
 		return `${prefix}${fmt.format(amount)}`;
 	}
+
+	let txCalDate = $derived.by(() => {
+		try { return $form.transactionDate ? parseDate($form.transactionDate) : undefined; }
+		catch { return undefined; }
+	});
 </script>
 
 <div class="space-y-6">
@@ -109,9 +120,10 @@
 	</div>
 
 	{#if data.transactions.length === 0}
-		<div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-			No transactions yet. Create one to get started.
-		</div>
+		<Empty.Root class="border">
+			<Empty.Title>No transactions yet.</Empty.Title>
+			<Empty.Description>Create one to get started.</Empty.Description>
+		</Empty.Root>
 	{:else}
 		<div class="rounded-lg border">
 			<Table.Root>
@@ -164,9 +176,9 @@
 		</Dialog.Header>
 
 		{#if $message}
-			<div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-				{$message}
-			</div>
+			<Alert.Root variant="destructive">
+				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
 		{/if}
 
 		<form
@@ -200,15 +212,17 @@
 				<Form.Field form={sf} name="direction">
 					<Form.Control>
 						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>Direction</Form.Label>
-							<select
-								{...props}
-								bind:value={$form.direction}
-								class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-							>
-								<option value="INGRESS">Ingress (income)</option>
-								<option value="EGRESS">Egress (expense)</option>
-							</select>
+							<Select.Root name={fieldName} bind:value={$form.direction}>
+								<Select.Trigger {...triggerProps}>
+									<Select.Value placeholder="Select direction…" />
+								</Select.Trigger>
+								<Select.Content>
+									<Select.Item value="INGRESS">Ingress (income)</Select.Item>
+									<Select.Item value="EGRESS">Egress (expense)</Select.Item>
+								</Select.Content>
+							</Select.Root>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -228,8 +242,24 @@
 			<Form.Field form={sf} name="transactionDate">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Date</Form.Label>
-						<Input {...props} type="date" bind:value={$form.transactionDate} />
+						<Popover.Root>
+							<Popover.Trigger
+								{...triggerProps}
+								class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring {!$form.transactionDate ? 'text-muted-foreground' : ''}"
+							>
+								<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
+								{$form.transactionDate || 'Pick a date'}
+							</Popover.Trigger>
+							<Popover.Content class="w-auto p-0" align="start">
+								<Calendar
+									value={txCalDate as never}
+									onValueChange={(v) => { if (v) $form.transactionDate = v.toString(); }}
+								/>
+							</Popover.Content>
+						</Popover.Root>
+						<input type="hidden" name={fieldName} value={$form.transactionDate} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -238,16 +268,22 @@
 			<Form.Field form={sf} name="categoryId">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Category</Form.Label>
-						<select
-							{...props}
-							bind:value={$form.categoryId}
-							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						<Select.Root
+							name={fieldName}
+							value={$form.categoryId ? String($form.categoryId) : ''}
+							onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
 						>
-							{#each data.categories as cat (cat.id)}
-								<option value={cat.id}>{cat.name}</option>
-							{/each}
-						</select>
+							<Select.Trigger {...triggerProps}>
+								<Select.Value placeholder="Select category…" />
+							</Select.Trigger>
+							<Select.Content>
+								{#each data.categories as cat (cat.id)}
+									<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -256,17 +292,23 @@
 			<Form.Field form={sf} name="contactId">
 				<Form.Control>
 					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>Contact (optional)</Form.Label>
-						<select
-							{...props}
-							bind:value={$form.contactId}
-							class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						<Select.Root
+							name={fieldName}
+							value={$form.contactId !== '' ? String($form.contactId) : undefined}
+							onValueChange={(v) => { $form.contactId = v ? Number(v) : ''; }}
 						>
-							<option value="">— None —</option>
-							{#each data.contacts as con (con.id)}
-								<option value={con.id}>{con.name}</option>
-							{/each}
-						</select>
+							<Select.Trigger {...triggerProps}>
+								<Select.Value placeholder="— None —" />
+							</Select.Trigger>
+							<Select.Content>
+								{#each data.contacts as con (con.id)}
+									<Select.Item value={String(con.id)}>{con.name}</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+						<input type="hidden" name={fieldName} value={$form.contactId} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />

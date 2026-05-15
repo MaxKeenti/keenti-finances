@@ -7,6 +7,8 @@
 	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
+	import * as Alert from '$lib/components/ui/alert';
+	import * as Empty from '$lib/components/ui/empty';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import type { PageData } from './$types';
@@ -81,9 +83,10 @@
 	</div>
 
 	{#if data.contacts.length === 0}
-		<div class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-			No contacts yet. Create one to get started.
-		</div>
+		<Empty.Root class="border">
+			<Empty.Title>No contacts yet.</Empty.Title>
+			<Empty.Description>Create one to get started.</Empty.Description>
+		</Empty.Root>
 	{:else}
 		<div class="rounded-lg border">
 			<Table.Root>
@@ -128,9 +131,9 @@
 		</Dialog.Header>
 
 		{#if $message}
-			<div class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-				{$message}
-			</div>
+			<Alert.Root variant="destructive">
+				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
 		{/if}
 
 		<form

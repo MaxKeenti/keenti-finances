@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { scaleBand, scaleLinear } from 'd3-scale';
 	import * as Card from '$lib/components/ui/card';
+	import { Button } from '$lib/components/ui/button';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -144,21 +145,16 @@
 
 	<!-- Year Selector -->
 	<div class="flex items-center gap-3">
-		<a
-			href="?year={prevYear}"
-			class="hover:bg-accent rounded-md border px-3 py-1.5 text-sm transition-colors"
-		>
-			← {prevYear}
-		</a>
+		<Button variant="outline" size="sm" href="?year={prevYear}">← {prevYear}</Button>
 		<span class="text-lg font-semibold">{data.year}</span>
-		<a
-			href="?year={nextYear}"
-			class="hover:bg-accent rounded-md border px-3 py-1.5 text-sm transition-colors"
-			class:pointer-events-none={nextYear > currentYear}
-			class:opacity-40={nextYear > currentYear}
+		<Button
+			variant="outline"
+			size="sm"
+			href={nextYear > currentYear ? undefined : `?year=${nextYear}`}
+			class={nextYear > currentYear ? 'pointer-events-none opacity-40' : ''}
 		>
 			{nextYear} →
-		</a>
+		</Button>
 	</div>
 
 	<!-- Monthly Bar Chart -->
