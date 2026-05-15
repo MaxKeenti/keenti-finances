@@ -74,7 +74,7 @@
 	const { form, errors, enhance, submitting } = sf;
 
 	const ingressCategories = $derived(
-		(data.categories as Category[]).filter((c) => c.type === 'INGRESS'),
+		(data.categories as Category[]).filter((c) => c.type === 'INGRESS' || c.type === 'BOTH'),
 	);
 
 	let payCalDate = $derived.by(() => {

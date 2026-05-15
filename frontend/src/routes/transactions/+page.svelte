@@ -105,6 +105,17 @@
 		return `${prefix}${fmt.format(amount)}`;
 	}
 
+	const filteredCategories = $derived(
+		data.categories.filter((c) => c.type === $form.direction || c.type === 'BOTH'),
+	);
+
+	$effect(() => {
+		const ids = filteredCategories.map((c) => c.id);
+		if ($form.categoryId && !ids.includes($form.categoryId)) {
+			$form.categoryId = ids[0] ?? 0;
+		}
+	});
+
 	let txCalDate = $derived.by(() => {
 		try { return $form.transactionDate ? parseDate($form.transactionDate) : undefined; }
 		catch { return undefined; }
@@ -280,7 +291,7 @@
 								<Select.Value placeholder="Select category…" />
 							</Select.Trigger>
 							<Select.Content>
-								{#each data.categories as cat (cat.id)}
+								{#each filteredCategories as cat (cat.id)}
 									<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
 								{/each}
 							</Select.Content>
