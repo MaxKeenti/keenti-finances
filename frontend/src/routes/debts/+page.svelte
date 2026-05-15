@@ -4,16 +4,22 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { parseDate } from '@internationalized/date';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Empty from '$lib/components/ui/empty';
 	import * as Card from '$lib/components/ui/card';
+	import * as Popover from '$lib/components/ui/popover';
+	import * as Table from '$lib/components/ui/table';
+	import { Calendar } from '$lib/components/ui/calendar';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import type { PageData } from './$types';
 
 	const debtSchema = z.object({
@@ -21,6 +27,14 @@
 		contactId: z.coerce.number().positive('Contact is required'),
 		description: z.string().min(1, 'Description is required'),
 		totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
+	});
+
+	const bulkPaymentSchema = z.object({
+		contactId: z.coerce.number().positive('Contact is required'),
+		totalAmount: z.coerce.number().positive('Amount must be greater than 0'),
+		paymentDate: z.string().min(1, 'Payment date is required'),
+		categoryId: z.coerce.number().positive('Category is required'),
+		notes: z.string().optional(),
 	});
 
 	type Debt = {
@@ -35,10 +49,31 @@
 		createdAt: string;
 	};
 
+	type BulkPaymentItem = {
+		debtId: number;
+		description: string;
+		applied: number;
+		remaining: number;
+		debtStatus: string;
+	};
+
+	type BulkResult = {
+		contactId: number;
+		contactName: string | null;
+		totalAmount: number;
+		totalApplied: number;
+		totalUnused: number;
+		payments: BulkPaymentItem[];
+	};
+
+	type Category = { id: number; name: string; type: string };
+
 	let { data }: { data: PageData } = $props();
 
 	let dialogOpen = $state(false);
 	let deleteDialogOpen = $state(false);
+	let bulkDialogOpen = $state(false);
+	let bulkResult = $state<BulkResult | null>(null);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
 	let deleteTargetDescription = $state('');
@@ -59,12 +94,58 @@
 	});
 	const { form, enhance, submitting, message } = sf;
 
+	const bulkSf = superForm(data.bulkForm, {
+		validators: zod4Client(bulkPaymentSchema),
+		onResult({ result }) {
+			if (result.type === 'success') {
+				const r = (result.data as Record<string, unknown> | undefined)?.bulkResult as BulkResult | undefined;
+				if (r) {
+					bulkResult = r;
+					toast.success(`Bulk payment applied: ${fmt.format(r.totalApplied)} across ${r.payments.length} debt(s).`);
+					invalidateAll();
+				}
+			} else if (result.type === 'failure') {
+				const msg = (result.data as Record<string, unknown> | undefined)?.bulkForm as
+					| { message?: string }
+					| undefined;
+				if (msg?.message) toast.error(msg.message);
+				else toast.error('Failed to process bulk payment.');
+			}
+		},
+	});
+	const { form: bulkForm, enhance: bulkEnhance, submitting: bulkSubmitting } = bulkSf;
+
+	const ingressCategories = $derived(
+		(data.categories as Category[])
+			.filter((c) => c.type === 'INGRESS' || c.type === 'BOTH')
+			.sort((a, b) => a.name.localeCompare(b.name)),
+	);
+
+	let bulkCalDate = $derived.by(() => {
+		try { return $bulkForm.paymentDate ? parseDate($bulkForm.paymentDate) : undefined; }
+		catch { return undefined; }
+	});
+
 	function openCreate() {
 		editMode = false;
 		sf.reset({
 			data: { contactId: 0, description: '', totalAmount: 0 },
 		});
 		dialogOpen = true;
+	}
+
+	function openBulkPayment() {
+		bulkResult = null;
+		bulkSf.reset({
+			data: {
+				contactId: 0,
+				totalAmount: 0,
+				paymentDate: new Date().toISOString().split('T')[0],
+				categoryId: 0,
+				notes: '',
+			},
+		});
+		bulkDialogOpen = true;
 	}
 
 	function openEdit(debt: Debt) {
@@ -98,7 +179,10 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Debts</h1>
 			<p class="text-sm text-muted-foreground">Track embroidery job debts and payments per debtor.</p>
 		</div>
-		<Button onclick={openCreate}>New Debt</Button>
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={openBulkPayment}>Bulk Payment</Button>
+			<Button onclick={openCreate}>New Debt</Button>
+		</div>
 	</div>
 
 	{#if data.debts.length === 0}
@@ -242,6 +326,184 @@
 				</Button>
 			</Dialog.Footer>
 		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Bulk payment dialog -->
+<Dialog.Root bind:open={bulkDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Bulk Payment</Dialog.Title>
+			<Dialog.Description>
+				Apply a lump sum to a contact's oldest active debts first, including partial payments.
+			</Dialog.Description>
+		</Dialog.Header>
+
+		{#if bulkResult}
+			<!-- Result summary -->
+			<div class="space-y-4">
+				<div class="grid grid-cols-3 gap-3 text-sm">
+					<div>
+						<p class="text-muted-foreground">Total</p>
+						<p class="font-semibold">{fmt.format(bulkResult.totalAmount)}</p>
+					</div>
+					<div>
+						<p class="text-muted-foreground">Applied</p>
+						<p class="font-semibold text-green-600 dark:text-green-400">{fmt.format(bulkResult.totalApplied)}</p>
+					</div>
+					<div>
+						<p class="text-muted-foreground">Unused</p>
+						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-amber-600 dark:text-amber-400' : ''}">{fmt.format(bulkResult.totalUnused)}</p>
+					</div>
+				</div>
+
+				<div class="rounded-md border overflow-hidden">
+					<Table.Root>
+						<Table.Header class="bg-muted/50">
+							<Table.Row>
+								<Table.Head>Debt</Table.Head>
+								<Table.Head class="text-right">Applied</Table.Head>
+								<Table.Head class="text-right">Remaining</Table.Head>
+								<Table.Head>Status</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each bulkResult.payments as item (item.debtId)}
+								<Table.Row>
+									<Table.Cell class="text-sm max-w-[180px] truncate">{item.description}</Table.Cell>
+									<Table.Cell class="text-right tabular-nums text-green-600 dark:text-green-400 font-medium">
+										{fmt.format(item.applied)}
+									</Table.Cell>
+									<Table.Cell class="text-right tabular-nums">
+										{fmt.format(item.remaining)}
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant={item.debtStatus === 'PAID' ? 'success' : 'warning'} class="text-xs">
+											{item.debtStatus}
+										</Badge>
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+
+				<Dialog.Footer>
+					<Button onclick={() => (bulkDialogOpen = false)}>Close</Button>
+					<Button variant="outline" onclick={openBulkPayment}>New Bulk Payment</Button>
+				</Dialog.Footer>
+			</div>
+		{:else}
+			<form method="POST" action="?/bulkPayment" use:bulkEnhance class="grid gap-4">
+				<Form.Field form={bulkSf} name="contactId">
+					<Form.Control>
+						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
+							<Form.Label>Contact (Debtor)</Form.Label>
+							<Select.Root
+								name={fieldName}
+								value={$bulkForm.contactId > 0 ? String($bulkForm.contactId) : ''}
+								onValueChange={(v) => { $bulkForm.contactId = v ? Number(v) : 0; }}
+							>
+								<Select.Trigger {...triggerProps}>
+									<Select.Value placeholder="— Select contact —" />
+								</Select.Trigger>
+								<Select.Content>
+									{#each [...data.contacts].sort((a, b) => a.name.localeCompare(b.name)) as c (c.id)}
+										<Select.Item value={String(c.id)} label={c.name}>{c.name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<div class="grid gap-4 sm:grid-cols-2">
+					<Form.Field form={bulkSf} name="totalAmount">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Total Amount (MXN)</Form.Label>
+								<Input {...props} type="number" step="0.01" min="0.01" bind:value={$bulkForm.totalAmount} />
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+
+					<Form.Field form={bulkSf} name="paymentDate">
+						<Form.Control>
+							{#snippet children({ props })}
+								{@const { name: fieldName, ...triggerProps } = props}
+								<Form.Label>Payment Date</Form.Label>
+								<Popover.Root>
+									<Popover.Trigger
+										{...triggerProps}
+										class="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {!$bulkForm.paymentDate ? 'text-muted-foreground' : ''}"
+									>
+										<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
+										{$bulkForm.paymentDate || 'Pick a date'}
+									</Popover.Trigger>
+									<Popover.Content class="w-auto p-0" align="start">
+										<Calendar
+											value={bulkCalDate as never}
+											onValueChange={(v: import('@internationalized/date').DateValue | undefined) => { if (v) $bulkForm.paymentDate = v.toString(); }}
+										/>
+									</Popover.Content>
+								</Popover.Root>
+								<input type="hidden" name={fieldName} value={$bulkForm.paymentDate} />
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+				</div>
+
+				<Form.Field form={bulkSf} name="categoryId">
+					<Form.Control>
+						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
+							<Form.Label>Ingress Category</Form.Label>
+							<Select.Root
+								name={fieldName}
+								value={$bulkForm.categoryId > 0 ? String($bulkForm.categoryId) : ''}
+								onValueChange={(v) => { $bulkForm.categoryId = v ? Number(v) : 0; }}
+							>
+								<Select.Trigger {...triggerProps}>
+									<Select.Value placeholder="Select a category…" />
+								</Select.Trigger>
+								<Select.Content>
+									{#each ingressCategories as cat (cat.id)}
+										<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<Form.Field form={bulkSf} name="notes">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Form.Label>Notes <span class="text-muted-foreground">(optional)</span></Form.Label>
+							<Textarea
+								{...props}
+								bind:value={$bulkForm.notes}
+								rows={2}
+								placeholder="Optional notes applied to each sub-payment"
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<Dialog.Footer>
+					<Button type="button" variant="outline" onclick={() => (bulkDialogOpen = false)}>Cancel</Button>
+					<Button type="submit" disabled={$bulkSubmitting}>
+						{$bulkSubmitting ? 'Processing…' : 'Apply Bulk Payment'}
+					</Button>
+				</Dialog.Footer>
+			</form>
+		{/if}
 	</Dialog.Content>
 </Dialog.Root>
 

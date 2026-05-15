@@ -11,6 +11,14 @@ const debtSchema = z.object({
 	totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
 });
 
+const bulkPaymentSchema = z.object({
+	contactId: z.coerce.number().positive('Contact is required'),
+	totalAmount: z.coerce.number().positive('Amount must be greater than 0'),
+	paymentDate: z.string().min(1, 'Payment date is required'),
+	categoryId: z.coerce.number().positive('Category is required'),
+	notes: z.string().optional(),
+});
+
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
@@ -25,15 +33,18 @@ type Debt = {
 	status: string;
 	createdAt: string;
 };
+type Category = { id: number; name: string; type: string };
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	let debts: Debt[] = [];
 	let contacts: Contact[] = [];
+	let categories: Category[] = [];
 
 	try {
-		const [debtRes, conRes] = await Promise.all([
+		const [debtRes, conRes, catRes] = await Promise.all([
 			fetch(`${BACKEND}/api/debts`),
 			fetch(`${BACKEND}/api/contacts`),
+			fetch(`${BACKEND}/api/categories`),
 		]);
 
 		if (debtRes.ok) debts = await debtRes.json();
@@ -41,16 +52,23 @@ export const load: PageServerLoad = async ({ fetch }) => {
 
 		if (conRes.ok) contacts = await conRes.json();
 		else console.error(`[debts] load: backend returned ${conRes.status} for contacts`);
+
+		if (catRes.ok) categories = await catRes.json();
+		else console.error(`[debts] load: backend returned ${catRes.status} for categories`);
 	} catch {
 		console.error('[debts] load: backend unreachable');
 	}
 
-	const form = await superValidate(
-		{ contactId: 0, description: '', totalAmount: 0 },
-		zod4(debtSchema),
-	);
+	const today = new Date().toISOString().split('T')[0];
+	const [form, bulkForm] = await Promise.all([
+		superValidate({ contactId: 0, description: '', totalAmount: 0 }, zod4(debtSchema)),
+		superValidate(
+			{ contactId: 0, totalAmount: 0, paymentDate: today, categoryId: 0, notes: '' },
+			zod4(bulkPaymentSchema),
+		),
+	]);
 
-	return { debts, contacts, form };
+	return { debts, contacts, categories, form, bulkForm };
 };
 
 export const actions: Actions = {
@@ -127,6 +145,49 @@ export const actions: Actions = {
 
 		console.log(`[debts] update: success — id: ${id} contactId: ${form.data.contactId}`);
 		return { form };
+	},
+
+	bulkPayment: async ({ request, fetch }) => {
+		const form = await superValidate(request, zod4(bulkPaymentSchema));
+		if (!form.valid) return fail(400, { bulkForm: form });
+
+		let res: Response;
+		try {
+			res = await fetch(`${BACKEND}/api/debts/bulk-payment`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					contactId: form.data.contactId,
+					totalAmount: form.data.totalAmount,
+					paymentDate: form.data.paymentDate,
+					categoryId: form.data.categoryId,
+					notes: form.data.notes || null,
+				}),
+			});
+		} catch {
+			console.error('[debts] bulkPayment: backend unreachable');
+			return fail(502, { bulkForm: { ...form, message: 'Could not reach backend service.' } });
+		}
+
+		if (res.status === 400) {
+			const body = await res.json().catch(() => ({}));
+			const msg = body?.error ?? 'Invalid bulk payment data.';
+			console.error(`[debts] bulkPayment: validation error — ${msg}`);
+			return fail(400, { bulkForm: { ...form, message: msg } });
+		}
+		if (res.status === 404) {
+			return fail(404, { bulkForm: { ...form, message: 'Contact not found.' } });
+		}
+		if (!res.ok) {
+			console.error(`[debts] bulkPayment: backend error ${res.status}`);
+			return fail(502, { bulkForm: { ...form, message: 'Unexpected error processing bulk payment.' } });
+		}
+
+		const result = await res.json();
+		console.log(
+			`[debts] bulkPayment: success — contactId: ${form.data.contactId} applied: ${result.totalApplied} unused: ${result.totalUnused} debts: ${result.payments?.length}`,
+		);
+		return { bulkForm: form, bulkResult: result };
 	},
 
 	delete: async ({ request, fetch }) => {

@@ -6,6 +6,7 @@ import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
 import com.keenti.finances.domain.port.in.ContactUseCase;
 import com.keenti.finances.domain.port.in.DebtUseCase;
+import com.keenti.finances.domain.port.in.DebtUseCase.BulkPaymentResult;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
@@ -107,6 +108,36 @@ public class DebtResource {
                 .map(this::toPaymentResponse)
                 .collect(Collectors.toList());
         return Response.ok(body).build();
+    }
+
+    @POST
+    @Path("/bulk-payment")
+    public Response bulkPayment(@Valid BulkPaymentRequest request) {
+        contactUseCase.getById(request.contactId())
+                .orElseThrow(() -> new jakarta.ws.rs.NotFoundException(
+                    Response.status(Response.Status.NOT_FOUND)
+                        .entity("{\"error\":\"Contact not found: " + request.contactId() + "\"}")
+                        .build()));
+
+        BulkPaymentResult result = debtUseCase.bulkPayment(
+            request.contactId(), request.totalAmount(),
+            request.paymentDate(), request.categoryId(), request.notes());
+
+        String contactName = contactUseCase.getById(request.contactId())
+                .map(Contact::getName).orElse(null);
+
+        BulkPaymentResponse response = new BulkPaymentResponse(
+            result.contactId(),
+            contactName,
+            result.totalAmount(),
+            result.totalApplied(),
+            result.totalUnused(),
+            result.payments().stream()
+                .map(p -> new BulkPaymentItemResponse(
+                    p.debtId(), p.description(), p.applied(), p.remaining(), p.debtStatus()))
+                .collect(Collectors.toList()));
+
+        return Response.ok(response).build();
     }
 
     private DebtResponse toResponse(Debt d) {

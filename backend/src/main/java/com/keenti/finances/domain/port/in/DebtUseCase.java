@@ -15,4 +15,21 @@ public interface DebtUseCase {
     void delete(Long id);
     DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate, Long categoryId, String notes);
     List<DebtPayment> listPayments(Long debtId);
+    BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount, LocalDate paymentDate, Long categoryId, String notes);
+
+    record BulkPaymentResult(
+        Long contactId,
+        BigDecimal totalAmount,
+        BigDecimal totalApplied,
+        BigDecimal totalUnused,
+        List<BulkPaymentItem> payments
+    ) {}
+
+    record BulkPaymentItem(
+        Long debtId,
+        String description,
+        BigDecimal applied,
+        BigDecimal remaining,
+        String debtStatus
+    ) {}
 }

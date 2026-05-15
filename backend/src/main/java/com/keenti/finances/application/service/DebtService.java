@@ -14,6 +14,7 @@ import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.jboss.logging.Logger;
@@ -129,5 +130,55 @@ public class DebtService implements DebtUseCase {
             new NotFoundException("Debt not found: " + debtId));
         BigDecimal paid = debtPaymentRepository.sumByDebtId(debtId);
         return debt.getTotalAmount().subtract(paid);
+    }
+
+    @Override
+    @Transactional
+    public BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount,
+                                          LocalDate paymentDate, Long categoryId, String notes) {
+        List<Debt> activeDebts = debtRepository.findActiveByContactIdOrderByCreatedAt(contactId);
+
+        if (activeDebts.isEmpty()) {
+            throw new BadRequestException("No active debts found for contact: " + contactId);
+        }
+
+        BigDecimal remaining = totalAmount;
+        List<BulkPaymentItem> items = new ArrayList<>();
+
+        for (Debt debt : activeDebts) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+
+            BigDecimal debtRemaining = debt.getTotalAmount().subtract(debtPaymentRepository.sumByDebtId(debt.getId()));
+            if (debtRemaining.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            BigDecimal apply = remaining.min(debtRemaining);
+
+            Transaction tx = transactionUseCase.create(new Transaction(
+                null, apply, "INGRESS",
+                "Bulk payment: " + debt.getDescription(),
+                paymentDate, categoryId, contactId));
+
+            debtPaymentRepository.save(new DebtPayment(
+                null, debt.getId(), apply, paymentDate, tx.getId(), notes, null));
+
+            BigDecimal newRemaining = debtRemaining.subtract(apply);
+            String newStatus = debt.getStatus();
+            if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
+                newStatus = "PAID";
+                debtRepository.update(new Debt(
+                    debt.getId(), debt.getContactId(), debt.getDescription(),
+                    debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
+                LOG.infof("bulk.payment.debt.paid debtId=%d", debt.getId());
+            }
+
+            items.add(new BulkPaymentItem(debt.getId(), debt.getDescription(), apply, newRemaining, newStatus));
+            remaining = remaining.subtract(apply);
+        }
+
+        BigDecimal totalApplied = totalAmount.subtract(remaining);
+        LOG.infof("bulk.payment contactId=%d totalAmount=%s applied=%s unused=%s debtsProcessed=%d",
+            contactId, totalAmount, totalApplied, remaining, items.size());
+
+        return new BulkPaymentResult(contactId, totalAmount, totalApplied, remaining, items);
     }
 }

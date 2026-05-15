@@ -24,6 +24,15 @@ public class PanacheDebtRepository implements DebtRepository {
     }
 
     @Override
+    public List<Debt> findActiveByContactIdOrderByCreatedAt(Long contactId) {
+        return DebtEntity.<DebtEntity>find(
+                "contact.id = ?1 AND status = 'ACTIVE' ORDER BY createdAt ASC", contactId)
+                .stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public Debt save(Debt debt) {
         DebtEntity entity = toEntity(debt);
         entity.persist();
