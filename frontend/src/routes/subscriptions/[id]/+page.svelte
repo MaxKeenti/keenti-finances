@@ -65,9 +65,10 @@
 
 	let copyFeedback = $state(false);
 
-	async function copyToken() {
+	async function copyShareLink() {
 		if (!data.subscription.tokenUuid) return;
-		await navigator.clipboard.writeText(data.subscription.tokenUuid);
+		const url = `${window.location.origin}/public/subscription/${data.subscription.tokenUuid}`;
+		await navigator.clipboard.writeText(url);
 		copyFeedback = true;
 		setTimeout(() => (copyFeedback = false), 1500);
 	}
@@ -106,10 +107,13 @@
 			{#if data.subscription.type === 'SHARED' && data.subscription.tokenUuid}
 				<div class="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
 					<span class="text-xs text-muted-foreground font-mono flex-1 truncate">
-						Token: {data.subscription.tokenUuid}
+						/public/subscription/{data.subscription.tokenUuid}
 					</span>
-					<Button variant="ghost" size="sm" onclick={copyToken} class="shrink-0 text-xs h-7 px-2">
-						{copyFeedback ? 'Copied!' : 'Copy'}
+					<Button variant="ghost" size="sm" onclick={copyShareLink} class="shrink-0 text-xs h-7 px-2">
+						{copyFeedback ? 'Copied!' : 'Copy link'}
+					</Button>
+					<Button variant="ghost" size="sm" href="/public/subscription/{data.subscription.tokenUuid}" target="_blank" class="shrink-0 text-xs h-7 px-2">
+						Preview
 					</Button>
 				</div>
 			{/if}
