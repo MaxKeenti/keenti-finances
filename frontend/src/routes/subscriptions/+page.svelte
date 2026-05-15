@@ -189,6 +189,7 @@
 						</div>
 
 						<div class="flex gap-2 mt-auto pt-1">
+							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">View</Button>
 							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
 							{#if sub.type === 'SHARED'}
 								<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>Members</Button>
