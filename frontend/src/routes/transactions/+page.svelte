@@ -106,7 +106,13 @@
 	}
 
 	const filteredCategories = $derived(
-		data.categories.filter((c) => c.type === $form.direction || c.type === 'BOTH'),
+		data.categories
+			.filter((c) => c.type === $form.direction || c.type === 'BOTH')
+			.sort((a, b) => a.name.localeCompare(b.name)),
+	);
+
+	const sortedContacts = $derived(
+		[...data.contacts].sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
 	$effect(() => {
@@ -292,7 +298,7 @@
 							</Select.Trigger>
 							<Select.Content>
 								{#each filteredCategories as cat (cat.id)}
-									<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+									<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>
@@ -315,8 +321,8 @@
 								<Select.Value placeholder="— None —" />
 							</Select.Trigger>
 							<Select.Content>
-								{#each data.contacts as con (con.id)}
-									<Select.Item value={String(con.id)}>{con.name}</Select.Item>
+								{#each sortedContacts as con (con.id)}
+									<Select.Item value={String(con.id)} label={con.name}>{con.name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>

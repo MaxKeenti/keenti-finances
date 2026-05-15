@@ -200,8 +200,8 @@
 								<Select.Value placeholder="— Select contact —" />
 							</Select.Trigger>
 							<Select.Content>
-								{#each data.contacts as c}
-									<Select.Item value={String(c.id)}>{c.name}</Select.Item>
+								{#each [...data.contacts].sort((a, b) => a.name.localeCompare(b.name)) as c (c.id)}
+									<Select.Item value={String(c.id)} label={c.name}>{c.name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>

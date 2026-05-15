@@ -74,7 +74,9 @@
 	const { form, errors, enhance, submitting } = sf;
 
 	const ingressCategories = $derived(
-		(data.categories as Category[]).filter((c) => c.type === 'INGRESS' || c.type === 'BOTH'),
+		(data.categories as Category[])
+			.filter((c) => c.type === 'INGRESS' || c.type === 'BOTH')
+			.sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
 	let payCalDate = $derived.by(() => {
@@ -251,7 +253,7 @@
 									</Select.Trigger>
 									<Select.Content>
 										{#each ingressCategories as cat (cat.id)}
-											<Select.Item value={String(cat.id)}>{cat.name}</Select.Item>
+											<Select.Item value={String(cat.id)} label={cat.name}>{cat.name}</Select.Item>
 										{/each}
 									</Select.Content>
 								</Select.Root>
