@@ -1,13 +1,12 @@
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import { COOKIE_NAME, validateSessionCookieValue } from '$lib/server/session';
+import { getSession } from '$lib/server/workos-session';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/logout', '/public', '/health'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/callback', '/logout', '/public', '/health'];
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const cookieValue = event.cookies.get(COOKIE_NAME);
-	const username = cookieValue ? validateSessionCookieValue(cookieValue) : null;
-	event.locals.session = username ? { username } : null;
+	const session = getSession(event.cookies);
+	event.locals.session = session ? { user: session.user } : null;
 
 	const path = event.url.pathname;
 	const isPublic =
