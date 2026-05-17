@@ -13,6 +13,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { CategoryBadge } from '$lib/components/ui/category-badge';
 	import type { PageData } from './$types';
 
 	const transactionSchema = z.object({
@@ -160,7 +161,13 @@
 							>
 								{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
 							</Table.Cell>
-							<Table.Cell>{tx.categoryName ?? '—'}</Table.Cell>
+							<Table.Cell>
+								{#if tx.categoryName}
+									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+								{:else}
+									—
+								{/if}
+							</Table.Cell>
 							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
 							<Table.Cell class="text-right">
 								<div class="flex justify-end gap-2">

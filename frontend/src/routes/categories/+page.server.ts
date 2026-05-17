@@ -14,7 +14,7 @@ const categorySchema = z.object({
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-	let categories: Array<{ id: number; name: string; type: string }> = [];
+	let categories: Array<{ id: number; name: string; type: string; color?: string }> = [];
 	try {
 		const res = await fetch(`${BACKEND}/api/categories`);
 		if (res.ok) {

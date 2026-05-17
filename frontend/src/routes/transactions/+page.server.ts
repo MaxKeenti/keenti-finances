@@ -16,7 +16,7 @@ const transactionSchema = z.object({
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
-type Category = { id: number; name: string; type: string };
+type Category = { id: number; name: string; type: string; color?: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
 type Transaction = {
 	id: number;
@@ -26,6 +26,7 @@ type Transaction = {
 	transactionDate: string;
 	categoryId: number;
 	categoryName: string | null;
+	categoryColor: string | null;
 	contactId: number | null;
 	contactName: string | null;
 };
