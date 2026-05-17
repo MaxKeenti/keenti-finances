@@ -21,4 +21,6 @@ public class CategoryEntity extends PanacheEntityBase {
 
     @Column(nullable = false)
     public String type;
+
+    public String color;
 }

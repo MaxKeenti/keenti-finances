@@ -106,15 +106,17 @@ public class TransactionResource {
     }
 
     private TransactionResponse toResponse(Transaction t) {
-        String categoryName = t.getCategoryId() != null
-                ? categoryUseCase.getById(t.getCategoryId()).map(Category::getName).orElse(null)
-                : null;
+        Optional<Category> category = t.getCategoryId() != null
+                ? categoryUseCase.getById(t.getCategoryId())
+                : Optional.empty();
+        String categoryName = category.map(Category::getName).orElse(null);
+        String categoryColor = category.map(Category::getColor).orElse(null);
         String contactName = t.getContactId() != null
                 ? contactUseCase.getById(t.getContactId()).map(Contact::getName).orElse(null)
                 : null;
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
-            t.getTransactionDate(), t.getCategoryId(), categoryName,
+            t.getTransactionDate(), t.getCategoryId(), categoryName, categoryColor,
             t.getContactId(), contactName
         );
     }
