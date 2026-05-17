@@ -4,17 +4,16 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
-	import * as Table from '$lib/components/ui/table';
+	import { goto } from '$app/navigation';
+	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
 	import * as Alert from '$lib/components/ui/alert';
-	import * as Empty from '$lib/components/ui/empty';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
-	import * as Card from '$lib/components/ui/card';
 	import type { PageData } from './$types';
 
 	const transactionSchema = z.object({
@@ -29,73 +28,8 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let dialogOpen = $state(false);
+	let editDialogOpen = $state(false);
 	let deleteDialogOpen = $state(false);
-	let editMode = $state(false);
-	let deleteTargetId = $state<number | null>(null);
-	let deleteTargetDesc = $state('');
-
-	const today = new Date().toISOString().split('T')[0];
-
-	const sf = superForm(data.form, {
-		dataType: 'json',
-		validators: zod4Client(transactionSchema),
-		onResult({ result }) {
-			if (result.type === 'success') {
-				dialogOpen = false;
-				toast.success(editMode ? 'Transaction updated.' : 'Transaction created.');
-			} else if (result.type === 'failure') {
-				const msg = (result.data as Record<string, unknown> | undefined)?.form as
-					| { message?: string }
-					| undefined;
-				if (msg?.message) toast.error(msg.message);
-			}
-		},
-	});
-	const { form, enhance, submitting, message } = sf;
-
-	function openCreate() {
-		editMode = false;
-		sf.reset({
-			data: {
-				amount: 0,
-				direction: 'INGRESS',
-				description: '',
-				transactionDate: today,
-				categoryId: data.categories[0]?.id ?? 0,
-				contactId: '',
-			},
-		});
-		dialogOpen = true;
-	}
-
-	function openEdit(tx: {
-		id: number;
-		amount: number;
-		direction: string;
-		description: string | null;
-		transactionDate: string;
-		categoryId: number;
-		contactId: number | null;
-	}) {
-		editMode = true;
-		form.set({
-			id: tx.id,
-			amount: tx.amount,
-			direction: tx.direction as 'INGRESS' | 'EGRESS',
-			description: tx.description ?? '',
-			transactionDate: tx.transactionDate,
-			categoryId: tx.categoryId,
-			contactId: tx.contactId ?? '',
-		});
-		dialogOpen = true;
-	}
-
-	function openDelete(tx: { id: number; description: string | null; amount: number; direction: string }) {
-		deleteTargetId = tx.id;
-		deleteTargetDesc = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS');
-		deleteDialogOpen = true;
-	}
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
@@ -103,6 +37,24 @@
 		const prefix = direction === 'INGRESS' ? '+' : '-';
 		return `${prefix}${fmt.format(amount)}`;
 	}
+
+	const sf = superForm(data.form, {
+		dataType: 'json',
+		validators: zod4Client(transactionSchema),
+		onResult({ result }) {
+			if (result.type === 'success') {
+				editDialogOpen = false;
+				toast.success('Transaction updated.');
+			} else if (result.type === 'failure') {
+				const msg = (result.data as Record<string, unknown> | undefined)?.form as
+					| { message?: string }
+					| undefined;
+				if (msg?.message) toast.error(msg.message);
+				else toast.error('Failed to update transaction.');
+			}
+		},
+	});
+	const { form, enhance, submitting, message } = sf;
 
 	const filteredCategories = $derived(
 		data.categories
@@ -121,111 +73,85 @@
 		}
 	});
 
+	const tx = $derived(data.transaction);
+	const amountClass = $derived(
+		tx.direction === 'INGRESS'
+			? 'text-green-600 dark:text-green-400'
+			: 'text-red-600 dark:text-red-400',
+	);
 </script>
 
-<div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Transactions</h1>
-			<p class="text-sm text-muted-foreground">Track your income and expenses.</p>
-		</div>
-		<Button onclick={openCreate} disabled={data.categories.length === 0}>New Transaction</Button>
-	</div>
+<div class="space-y-6 max-w-2xl">
+	<!-- Back link -->
+	<Button variant="link" href="/transactions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
+		← Back to Transactions
+	</Button>
 
-	{#if data.transactions.length === 0}
-		<Empty.Root class="border">
-			<Empty.Title>No transactions yet.</Empty.Title>
-			<Empty.Description>Create one to get started.</Empty.Description>
-		</Empty.Root>
-	{:else}
-		<!-- Mobile card grid (< md) -->
-		<div class="grid gap-4 md:hidden">
-			{#each data.transactions as tx (tx.id)}
-				<a href="/transactions/{tx.id}" class="block">
-					<Card.Root class="transition-colors hover:bg-muted/50">
-						<Card.Content class="pt-4">
-							<div class="flex items-start justify-between gap-2">
-								<div class="flex-1 min-w-0">
-									<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
-									<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
-								</div>
-								<span
-									class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
-										? 'text-green-600 dark:text-green-400'
-										: 'text-red-600 dark:text-red-400'}"
-								>
-									{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-								</span>
-							</div>
-							<div class="flex items-center gap-2 mt-2">
-								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
-								{/if}
-								{#if tx.contactName}
-									<span class="text-xs text-muted-foreground">{tx.contactName}</span>
-								{/if}
-							</div>
-						</Card.Content>
-					</Card.Root>
-				</a>
-			{/each}
-		</div>
+	<!-- Detail card -->
+	<Card.Root>
+		<Card.Content class="space-y-5 pt-6">
+			<!-- Amount + direction -->
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<p class="text-sm text-muted-foreground">Amount</p>
+					<p class="text-3xl font-bold tabular-nums {amountClass}">
+						{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
+					</p>
+				</div>
+				<span
+					class="text-xs font-medium rounded-full px-2.5 py-0.5 border {tx.direction === 'INGRESS'
+						? 'border-green-500 text-green-700 dark:text-green-400'
+						: 'border-red-500 text-red-700 dark:text-red-400'}"
+				>
+					{tx.direction}
+				</span>
+			</div>
 
-		<!-- Desktop table (>= md) -->
-		<div class="hidden md:block rounded-lg border">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Date</Table.Head>
-						<Table.Head>Description</Table.Head>
-						<Table.Head>Amount</Table.Head>
-						<Table.Head>Category</Table.Head>
-						<Table.Head>Contact</Table.Head>
-						<Table.Head class="w-[120px] text-right">Actions</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each data.transactions as tx (tx.id)}
-						<Table.Row>
-							<Table.Cell class="whitespace-nowrap">{tx.transactionDate}</Table.Cell>
-							<Table.Cell class="text-muted-foreground">{tx.description ?? '—'}</Table.Cell>
-							<Table.Cell
-								class="font-mono font-medium {tx.direction === 'INGRESS'
-									? 'text-green-600 dark:text-green-400'
-									: 'text-red-600 dark:text-red-400'}"
-							>
-								{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-							</Table.Cell>
-							<Table.Cell>
-								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
-								{:else}
-									—
-								{/if}
-							</Table.Cell>
-							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
-							<Table.Cell class="text-right">
-								<div class="flex justify-end gap-2">
-									<Button variant="outline" size="sm" onclick={() => openEdit(tx)}>Edit</Button>
-									<Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>Delete</Button>
-								</div>
-							</Table.Cell>
-						</Table.Row>
-					{/each}
-				</Table.Body>
-			</Table.Root>
-		</div>
-	{/if}
+			<!-- Description -->
+			<div>
+				<p class="text-sm text-muted-foreground">Description</p>
+				<p class="text-base">{tx.description ?? '—'}</p>
+			</div>
+
+			<!-- Date -->
+			<div>
+				<p class="text-sm text-muted-foreground">Date</p>
+				<p class="text-base tabular-nums">{tx.transactionDate}</p>
+			</div>
+
+			<!-- Category -->
+			<div>
+				<p class="text-sm text-muted-foreground">Category</p>
+				<div class="mt-1">
+					{#if tx.categoryName}
+						<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+					{:else}
+						<span class="text-muted-foreground">—</span>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Contact -->
+			<div>
+				<p class="text-sm text-muted-foreground">Contact</p>
+				<p class="text-base">{tx.contactName ?? '—'}</p>
+			</div>
+
+			<!-- Actions -->
+			<div class="flex gap-3 pt-2">
+				<Button onclick={() => (editDialogOpen = true)}>Edit</Button>
+				<Button variant="destructive" onclick={() => (deleteDialogOpen = true)}>Delete</Button>
+			</div>
+		</Card.Content>
+	</Card.Root>
 </div>
 
-<!-- Create / Edit dialog -->
-<Dialog.Root bind:open={dialogOpen}>
+<!-- Edit dialog -->
+<Dialog.Root bind:open={editDialogOpen}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>{editMode ? 'Edit Transaction' : 'New Transaction'}</Dialog.Title>
-			<Dialog.Description>
-				{editMode ? 'Update the transaction details below.' : 'Fill in the details for the new transaction.'}
-			</Dialog.Description>
+			<Dialog.Title>Edit Transaction</Dialog.Title>
+			<Dialog.Description>Update the transaction details below.</Dialog.Description>
 		</Dialog.Header>
 
 		{#if $message}
@@ -234,15 +160,8 @@
 			</Alert.Root>
 		{/if}
 
-		<form
-			method="POST"
-			action={editMode ? '?/update' : '?/create'}
-			use:enhance
-			class="grid gap-4"
-		>
-			{#if editMode && $form.id}
-				<input type="hidden" name="id" value={$form.id} />
-			{/if}
+		<form method="POST" action="?/update" use:enhance class="grid gap-4">
+			<input type="hidden" name="id" value={$form.id} />
 
 			<div class="grid grid-cols-2 gap-4">
 				<Form.Field form={sf} name="amount">
@@ -347,9 +266,9 @@
 			</Form.Field>
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="outline" onclick={() => (editDialogOpen = false)}>Cancel</Button>
 				<Button type="submit" disabled={$submitting}>
-					{$submitting ? 'Saving…' : editMode ? 'Update' : 'Create'}
+					{$submitting ? 'Saving…' : 'Update'}
 				</Button>
 			</Dialog.Footer>
 		</form>
@@ -362,20 +281,19 @@
 		<Dialog.Header>
 			<Dialog.Title>Delete Transaction</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to delete <strong>{deleteTargetDesc}</strong>? This action cannot be
-				undone.
+				Are you sure you want to delete <strong>{tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</strong>?
+				This action cannot be undone.
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
 			method="POST"
 			action="?/delete"
 			use:kitEnhance={async () => {
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						deleteDialogOpen = false;
+				return async ({ result }) => {
+					if (result.type === 'redirect') {
 						toast.success('Transaction deleted.');
-						await update();
-					} else {
+						goto(result.location);
+					} else if (result.type === 'failure') {
 						const msg =
 							(result as { data?: { message?: string } }).data?.message ??
 							'Failed to delete transaction.';
@@ -384,7 +302,6 @@
 				};
 			}}
 		>
-			<input type="hidden" name="id" value={deleteTargetId} />
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
 					Cancel

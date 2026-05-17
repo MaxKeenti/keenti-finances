@@ -188,15 +188,18 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.debts as debt (debt.id)}
-				<Card.Root class="flex flex-col">
+				<Card.Root class="flex flex-col relative">
+					<a
+						href="/debts/{debt.id}"
+						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						aria-label="View debt for {debt.contactName ?? `Contact #${debt.contactId}`}"
+					></a>
 					<Card.Content class="flex flex-1 flex-col space-y-3">
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
-								<a href="/debts/{debt.id}" class="hover:underline">
-									<p class="font-semibold text-base truncate">
-										{debt.contactName ?? `Contact #${debt.contactId}`}
-									</p>
-								</a>
+								<p class="font-semibold text-base truncate">
+									{debt.contactName ?? `Contact #${debt.contactId}`}
+								</p>
 								<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
 							</div>
 							<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debt.status}</Badge>
@@ -233,7 +236,7 @@
 							</div>
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1">
+						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
 							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
 								Payments
 							</Button>

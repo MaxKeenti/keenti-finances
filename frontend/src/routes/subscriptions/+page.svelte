@@ -182,13 +182,16 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.subscriptions as sub (sub.id)}
-				<Card.Root class="flex flex-col">
+				<Card.Root class="flex flex-col relative">
+					<a
+						href="/subscriptions/{sub.id}"
+						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						aria-label="View {sub.name}"
+					></a>
 					<Card.Content class="flex flex-1 flex-col space-y-3">
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
-								<a href="/subscriptions/{sub.id}" class="hover:underline">
-									<p class="font-semibold text-base truncate">{sub.name}</p>
-								</a>
+								<p class="font-semibold text-base truncate">{sub.name}</p>
 								<p class="text-xl font-bold text-foreground mt-0.5">{fmt.format(sub.cost)}</p>
 							</div>
 							<div class="flex flex-col items-end gap-1 shrink-0">
@@ -208,7 +211,7 @@
 							{/if}
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1">
+						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
 							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">View</Button>
 							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
 							{#if sub.type === 'SHARED'}
