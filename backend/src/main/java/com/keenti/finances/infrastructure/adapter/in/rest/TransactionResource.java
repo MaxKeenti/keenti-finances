@@ -100,6 +100,13 @@ public class TransactionResource {
         return Response.noContent().build();
     }
 
+    @PUT
+    @Path("/{id}/link-subscription")
+    public Response linkSubscription(@PathParam("id") Long id, LinkSubscriptionRequest request) {
+        Transaction updated = transactionUseCase.linkSubscription(id, request != null ? request.subscriptionId() : null);
+        return Response.ok(toResponse(updated)).build();
+    }
+
     private Transaction toTransaction(Long id, TransactionRequest r) {
         return new Transaction(id, r.amount(), r.direction(), r.description(),
                 r.transactionDate(), r.categoryId(), r.contactId(), null);

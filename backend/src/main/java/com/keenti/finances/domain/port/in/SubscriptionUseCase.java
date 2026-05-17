@@ -15,4 +15,5 @@ public interface SubscriptionUseCase {
     void removeMember(Long subscriptionId, Long memberId);
     List<SubscriptionMember> listMembers(Long subscriptionId);
     Optional<Subscription> getByToken(String tokenUuid);
+    void recalculateShares(Long subscriptionId);
 }

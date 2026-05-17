@@ -105,6 +105,15 @@ public class PanacheTransactionRepository implements TransactionRepository {
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }
 
+    @Override
+    public List<Transaction> findBySubscriptionId(Long subscriptionId) {
+        return TransactionEntity.<TransactionEntity>find(
+                "subscription.id = ?1 ORDER BY transactionDate DESC, createdAt DESC", subscriptionId)
+                .stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+    }
+
     private TransactionEntity toEntity(Transaction t) {
         TransactionEntity e = new TransactionEntity();
         e.amount = t.getAmount();
