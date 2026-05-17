@@ -8,20 +8,19 @@ function getEnv(key: string): string {
 	return value;
 }
 
-function createClient(): WorkOS {
-	const apiKey = process.env.WORKOS_API_KEY;
-	if (!apiKey) {
-		throw new Error('Missing required environment variable: WORKOS_API_KEY');
-	}
-	return new WorkOS(apiKey);
-}
+// Lazy singleton — deferred until first call so build-time evaluation doesn't throw
+let _client: WorkOS | null = null;
 
-// Singleton — module is server-only so this is safe
-export const workos = createClient();
+export function getWorkOS(): WorkOS {
+	if (!_client) {
+		_client = new WorkOS(getEnv('WORKOS_API_KEY'));
+	}
+	return _client;
+}
 
 export function getAuthorizationUrl(redirectUri: string): string {
 	const clientId = getEnv('WORKOS_CLIENT_ID');
-	return workos.userManagement.getAuthorizationUrl({
+	return getWorkOS().userManagement.getAuthorizationUrl({
 		provider: 'authkit',
 		redirectUri,
 		clientId,

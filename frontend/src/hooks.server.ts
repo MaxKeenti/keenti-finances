@@ -1,23 +1,83 @@
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import { getSession } from '$lib/server/workos-session';
+import { getWorkOS, getAuthorizationUrl } from '$lib/server/workos';
+import {
+	getSession,
+	setSession,
+	clearSession,
+	type WorkOSSession,
+} from '$lib/server/workos-session';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/callback', '/logout', '/public', '/health'];
+const PUBLIC_PATHS = ['/callback', '/logout', '/public', '/health'];
+
+function isTokenExpired(accessToken: string): boolean {
+	try {
+		const [, payload] = accessToken.split('.');
+		const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+		// Refresh 60 seconds before actual expiry to avoid clock skew
+		return typeof decoded.exp === 'number' && decoded.exp < Math.floor(Date.now() / 1000) + 60;
+	} catch {
+		return true;
+	}
+}
+
+async function refreshSession(session: WorkOSSession): Promise<WorkOSSession | null> {
+	try {
+		const clientId = process.env.WORKOS_CLIENT_ID;
+		if (!clientId) return null;
+		const result = await getWorkOS().userManagement.authenticateWithRefreshToken({
+			clientId,
+			refreshToken: session.refreshToken,
+		});
+		return {
+			accessToken: result.accessToken,
+			refreshToken: result.refreshToken,
+			user: {
+				id: result.user.id,
+				email: result.user.email,
+				firstName: result.user.firstName,
+				lastName: result.user.lastName,
+			},
+		};
+	} catch (err) {
+		console.error('[workos-auth] session-refresh failed', err instanceof Error ? err.message : err);
+		return null;
+	}
+}
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const session = getSession(event.cookies);
-	event.locals.session = session ? { user: session.user } : null;
-
 	const path = event.url.pathname;
 	const isPublic =
 		PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/')) ||
 		path.startsWith('/_app/') ||
 		path.startsWith('/static/');
 
-	if (!event.locals.session && !isPublic) {
-		console.log(`[auth] redirect to /login — unauthenticated request to ${path}`);
-		redirect(303, '/login');
+	if (isPublic) {
+		event.locals.session = null;
+		return resolve(event);
 	}
 
-	return resolve(event);
+	let session = getSession(event.cookies);
+
+	if (session && isTokenExpired(session.accessToken)) {
+		const refreshed = await refreshSession(session);
+		if (refreshed) {
+			setSession(event.cookies, refreshed);
+			console.log(`[workos-auth] session-refresh — user: ${refreshed.user.email}`);
+			session = refreshed;
+		} else {
+			clearSession(event.cookies);
+			session = null;
+		}
+	}
+
+	if (session) {
+		event.locals.session = { user: session.user };
+		return resolve(event);
+	}
+
+	const redirectUri = `${event.url.origin}/callback`;
+	const authUrl = getAuthorizationUrl(redirectUri);
+	console.log(`[workos-auth] redirect — unauthenticated request to ${path}`);
+	redirect(303, authUrl);
 };
