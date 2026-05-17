@@ -67,7 +67,8 @@
 		</Popover.Trigger>
 		<Popover.Content class="w-auto p-0" align="start">
 			<Calendar
-				value={calDate as never}
+				type="single"
+				value={calDate}
 				onValueChange={(v) => {
 					if (v) onValueChange(v.toString());
 				}}

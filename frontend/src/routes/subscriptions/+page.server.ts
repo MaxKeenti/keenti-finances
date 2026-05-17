@@ -12,6 +12,7 @@ const subscriptionSchema = z.object({
 	type: z.enum(['PERSONAL', 'SHARED']),
 	categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
 	nextBillingDate: z.string().min(1, 'Next billing date is required'),
+	ownerParticipates: z.boolean().optional(),
 });
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -35,6 +36,7 @@ type Subscription = {
 	categoryId: number | null;
 	nextBillingDate: string;
 	tokenUuid: string | null;
+	ownerParticipates: boolean | null;
 	createdAt: string;
 	members?: MemberResponse[];
 };
@@ -88,6 +90,7 @@ export const load: PageServerLoad = async ({ fetch }) => {
 			type: 'PERSONAL' as const,
 			categoryId: '' as '',
 			nextBillingDate: today,
+			ownerParticipates: true,
 		},
 		zod4(subscriptionSchema),
 	);
@@ -114,6 +117,7 @@ export const actions: Actions = {
 					type: form.data.type,
 					categoryId,
 					nextBillingDate: form.data.nextBillingDate,
+					ownerParticipates: form.data.ownerParticipates ?? true,
 				}),
 			});
 		} catch {
@@ -157,6 +161,7 @@ export const actions: Actions = {
 					type: form.data.type,
 					categoryId,
 					nextBillingDate: form.data.nextBillingDate,
+					ownerParticipates: form.data.ownerParticipates ?? true,
 				}),
 			});
 		} catch {
@@ -265,5 +270,27 @@ export const actions: Actions = {
 			`[subscriptions] removeMember: success — subscriptionId: ${subscriptionId} memberId: ${memberId}`,
 		);
 		return {};
+	},
+
+	generateBilling: async ({ fetch }) => {
+		let res: Response;
+		try {
+			res = await fetch(`${BACKEND}/api/subscriptions/generate-billing`, {
+				method: 'POST',
+			});
+		} catch {
+			console.error('[subscriptions] generateBilling: backend unreachable');
+			return fail(502, { message: 'Could not reach backend service.' });
+		}
+
+		if (!res.ok) {
+			console.error(`[subscriptions] generateBilling: backend error ${res.status}`);
+			return fail(502, { message: 'Unexpected error generating billing.' });
+		}
+
+		const result = await res.json();
+		const count: number = result.generated ?? 0;
+		console.log(`[billing.generate] generated=${count}`);
+		return { generated: count };
 	},
 };

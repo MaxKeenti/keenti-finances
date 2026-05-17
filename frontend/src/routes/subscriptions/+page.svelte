@@ -14,6 +14,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import * as Select from '$lib/components/ui/select';
 	import type { PageData } from './$types';
 
 	const subscriptionSchema = z.object({
@@ -24,6 +25,7 @@
 		type: z.enum(['PERSONAL', 'SHARED']),
 		categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
 		nextBillingDate: z.string().min(1, 'Next billing date is required'),
+		ownerParticipates: z.boolean().optional(),
 	});
 
 	type MemberResponse = {
@@ -44,6 +46,7 @@
 		categoryId: number | null;
 		nextBillingDate: string;
 		tokenUuid: string | null;
+		ownerParticipates: boolean | null;
 		createdAt: string;
 		members?: MemberResponse[];
 	};
@@ -88,6 +91,7 @@
 				type: 'PERSONAL',
 				categoryId: '',
 				nextBillingDate: today,
+				ownerParticipates: true,
 			},
 		});
 		dialogOpen = true;
@@ -103,6 +107,7 @@
 			type: sub.type as 'PERSONAL' | 'SHARED',
 			categoryId: sub.categoryId ?? '',
 			nextBillingDate: sub.nextBillingDate,
+			ownerParticipates: sub.ownerParticipates ?? true,
 		});
 		dialogOpen = true;
 	}
@@ -144,7 +149,29 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Subscriptions</h1>
 			<p class="text-sm text-muted-foreground">Manage your recurring subscriptions and members.</p>
 		</div>
-		<Button onclick={openCreate}>New Subscription</Button>
+		<div class="flex gap-2">
+			<form
+				method="POST"
+				action="?/generateBilling"
+				use:kitEnhance={async () => {
+					return async ({ result, update }) => {
+						if (result.type === 'success') {
+							const count = (result.data as { generated?: number })?.generated ?? 0;
+							toast.success(`Billing generated: ${count} record${count === 1 ? '' : 's'} created.`);
+							await update();
+						} else {
+							const msg =
+								(result as { data?: { message?: string } }).data?.message ??
+								'Failed to generate billing.';
+							toast.error(msg);
+						}
+					};
+				}}
+			>
+				<Button type="submit" variant="outline">Generate Billing</Button>
+			</form>
+			<Button onclick={openCreate}>New Subscription</Button>
+		</div>
 	</div>
 
 	{#if data.subscriptions.length === 0}
@@ -321,6 +348,24 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			{#if $form.type === 'SHARED'}
+				<Form.Field form={sf} name="ownerParticipates">
+					<Form.Control>
+						{#snippet children({ props })}
+							<div class="flex items-center gap-2">
+								<input
+									type="checkbox"
+									id={props.id}
+									bind:checked={$form.ownerParticipates}
+									class="h-4 w-4 rounded border border-input"
+								/>
+								<Form.Label>I participate in this subscription</Form.Label>
+							</div>
+						{/snippet}
+					</Form.Control>
+				</Form.Field>
+			{/if}
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
