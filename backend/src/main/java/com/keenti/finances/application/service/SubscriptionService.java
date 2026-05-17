@@ -55,7 +55,7 @@ public class SubscriptionService implements SubscriptionUseCase {
             null, subscription.getName(), subscription.getCost(),
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
-            token, LocalDateTime.now()
+            token, LocalDateTime.now(), subscription.isOwnerParticipates()
         );
         Subscription created = subscriptionRepository.save(toSave);
         LOG.infof("subscription.create id=%d name=%s type=%s", created.getId(), created.getName(), created.getType());
@@ -79,7 +79,7 @@ public class SubscriptionService implements SubscriptionUseCase {
             id, subscription.getName(), subscription.getCost(),
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
-            token, existing.getCreatedAt()
+            token, existing.getCreatedAt(), subscription.isOwnerParticipates()
         ));
         LOG.infof("subscription.update id=%d", id);
         return updated;

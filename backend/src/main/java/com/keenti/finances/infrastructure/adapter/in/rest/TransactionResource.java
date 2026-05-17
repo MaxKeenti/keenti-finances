@@ -102,7 +102,7 @@ public class TransactionResource {
 
     private Transaction toTransaction(Long id, TransactionRequest r) {
         return new Transaction(id, r.amount(), r.direction(), r.description(),
-                r.transactionDate(), r.categoryId(), r.contactId());
+                r.transactionDate(), r.categoryId(), r.contactId(), null);
     }
 
     private TransactionResponse toResponse(Transaction t) {
@@ -117,7 +117,7 @@ public class TransactionResource {
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
             t.getTransactionDate(), t.getCategoryId(), categoryName, categoryColor,
-            t.getContactId(), contactName
+            t.getContactId(), contactName, t.getSubscriptionId()
         );
     }
 }

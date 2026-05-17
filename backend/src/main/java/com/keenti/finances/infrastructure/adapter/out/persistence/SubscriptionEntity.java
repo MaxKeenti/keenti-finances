@@ -46,4 +46,7 @@ public class SubscriptionEntity extends PanacheEntityBase {
 
     @Column(name = "created_at")
     public LocalDateTime createdAt;
+
+    @Column(name = "owner_participates", nullable = false)
+    public boolean ownerParticipates = true;
 }

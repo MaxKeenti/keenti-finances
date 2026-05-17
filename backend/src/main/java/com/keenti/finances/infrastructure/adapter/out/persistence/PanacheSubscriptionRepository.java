@@ -40,6 +40,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
             ? CategoryEntity.findById(subscription.getCategoryId()) : null;
         entity.nextBillingDate = subscription.getNextBillingDate();
         entity.tokenUuid = subscription.getTokenUuid();
+        entity.ownerParticipates = subscription.isOwnerParticipates();
         return toDomain(entity);
     }
 
@@ -70,6 +71,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         e.nextBillingDate = s.getNextBillingDate();
         e.tokenUuid = s.getTokenUuid();
         e.createdAt = s.getCreatedAt();
+        e.ownerParticipates = s.isOwnerParticipates();
         return e;
     }
 
@@ -77,7 +79,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         return new Subscription(
             e.id, e.name, e.cost, e.billingCycle, e.type,
             e.category != null ? e.category.id : null,
-            e.nextBillingDate, e.tokenUuid, e.createdAt
+            e.nextBillingDate, e.tokenUuid, e.createdAt, e.ownerParticipates
         );
     }
 }

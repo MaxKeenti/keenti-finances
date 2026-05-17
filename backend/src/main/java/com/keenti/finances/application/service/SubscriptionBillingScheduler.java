@@ -68,7 +68,8 @@ public class SubscriptionBillingScheduler {
                 : billingDate.plusYears(1);
             subscriptionRepository.update(new Subscription(
                 sub.getId(), sub.getName(), sub.getCost(), sub.getBillingCycle(), sub.getType(),
-                sub.getCategoryId(), nextDate, sub.getTokenUuid(), sub.getCreatedAt()
+                sub.getCategoryId(), nextDate, sub.getTokenUuid(), sub.getCreatedAt(),
+                sub.isOwnerParticipates()
             ));
         }
         LOG.infof("scheduler.billing.run cutoff=%s subscriptions=%d recordsCreated=%d",

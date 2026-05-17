@@ -12,5 +12,10 @@ public record SubscriptionRequest(
     @NotBlank String billingCycle,
     @NotBlank String type,
     Long categoryId,
-    @NotNull LocalDate nextBillingDate
-) {}
+    @NotNull LocalDate nextBillingDate,
+    Boolean ownerParticipates
+) {
+    public boolean ownerParticipatesOrDefault() {
+        return ownerParticipates == null || ownerParticipates;
+    }
+}

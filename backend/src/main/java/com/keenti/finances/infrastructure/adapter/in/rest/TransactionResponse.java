@@ -13,5 +13,6 @@ public record TransactionResponse(
     String categoryName,
     String categoryColor,
     Long contactId,
-    String contactName
+    String contactName,
+    Long subscriptionId
 ) {}

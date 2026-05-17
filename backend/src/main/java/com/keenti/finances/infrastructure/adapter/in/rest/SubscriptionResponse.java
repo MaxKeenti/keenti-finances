@@ -13,5 +13,6 @@ public record SubscriptionResponse(
     Long categoryId,
     LocalDate nextBillingDate,
     String tokenUuid,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    boolean ownerParticipates
 ) {}

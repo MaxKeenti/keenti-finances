@@ -53,6 +53,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.contact = transaction.getContactId() != null
                 ? ContactEntity.findById(transaction.getContactId())
                 : null;
+        entity.subscription = transaction.getSubscriptionId() != null
+                ? SubscriptionEntity.findById(transaction.getSubscriptionId())
+                : null;
         return toDomain(entity);
     }
 
@@ -112,6 +115,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         e.contact = t.getContactId() != null
                 ? ContactEntity.findById(t.getContactId())
                 : null;
+        e.subscription = t.getSubscriptionId() != null
+                ? SubscriptionEntity.findById(t.getSubscriptionId())
+                : null;
         return e;
     }
 
@@ -123,7 +129,8 @@ public class PanacheTransactionRepository implements TransactionRepository {
             e.description,
             e.transactionDate,
             e.category != null ? e.category.id : null,
-            e.contact != null ? e.contact.id : null
+            e.contact != null ? e.contact.id : null,
+            e.subscription != null ? e.subscription.id : null
         );
     }
 }

@@ -57,7 +57,8 @@ public class TransactionService implements TransactionUseCase {
             new NotFoundException("Transaction not found: " + id));
         Transaction updated = transactionRepository.update(new Transaction(
             id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
-            transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId()));
+            transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId(),
+            transaction.getSubscriptionId()));
         LOG.infof("transaction.update id=%d", id);
         return updated;
     }

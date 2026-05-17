@@ -97,13 +97,14 @@ public class SubscriptionResource {
 
     private Subscription toSubscription(Long id, SubscriptionRequest r) {
         return new Subscription(id, r.name(), r.cost(), r.billingCycle(), r.type(),
-            r.categoryId(), r.nextBillingDate(), null, null);
+            r.categoryId(), r.nextBillingDate(), null, null, r.ownerParticipatesOrDefault());
     }
 
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(
             s.getId(), s.getName(), s.getCost(), s.getBillingCycle(), s.getType(),
-            s.getCategoryId(), s.getNextBillingDate(), s.getTokenUuid(), s.getCreatedAt()
+            s.getCategoryId(), s.getNextBillingDate(), s.getTokenUuid(), s.getCreatedAt(),
+            s.isOwnerParticipates()
         );
     }
 
