@@ -5,13 +5,14 @@
 	const { children } = $props();
 </script>
 
-<div class="min-h-screen bg-background">
-	<Dock />
+<div class="flex flex-col bg-background h-dvh">
 	<Toaster />
 
-	<main class="pb-20">
+	<main class="flex-1 overflow-y-auto">
 		<div class="p-4 sm:p-6">
 			{@render children()}
 		</div>
 	</main>
+
+	<Dock />
 </div>

@@ -35,7 +35,7 @@
 </script>
 
 <nav
-	class="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-center border-t border-sidebar-border bg-sidebar/80 backdrop-blur-md px-2"
+	class="flex items-center justify-center border-t border-sidebar-border bg-sidebar px-2 shrink-0"
 	aria-label="Main navigation"
 >
 	<!-- Desktop: all items centered -->
