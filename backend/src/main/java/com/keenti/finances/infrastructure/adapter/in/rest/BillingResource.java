@@ -19,7 +19,7 @@ public class BillingResource {
 
     @POST
     public Response generateBilling() {
-        int generated = billingService.generateBilling();
+        int generated = billingService.generateBillingManual();
         return Response.ok("{\"generated\":" + generated + "}").build();
     }
 }

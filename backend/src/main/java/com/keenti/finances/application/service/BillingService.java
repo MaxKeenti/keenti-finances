@@ -34,9 +34,23 @@ public class BillingService {
     public int generateBilling() {
         LocalDate cutoff = LocalDate.now().plusDays(LEAD_DAYS);
         List<Subscription> upcoming = subscriptionRepository.findWithNextBillingDateBefore(cutoff);
+        int count = generateForSubscriptions(upcoming);
+        LOG.infof("billing.generate cutoff=%s subscriptions=%d recordsCreated=%d", cutoff, upcoming.size(), count);
+        return count;
+    }
+
+    @Transactional
+    public int generateBillingManual() {
+        List<Subscription> all = subscriptionRepository.findAll();
+        int count = generateForSubscriptions(all);
+        LOG.infof("billing.generate.manual subscriptions=%d recordsCreated=%d", all.size(), count);
+        return count;
+    }
+
+    private int generateForSubscriptions(List<Subscription> subscriptions) {
         AtomicInteger created = new AtomicInteger(0);
 
-        for (Subscription sub : upcoming) {
+        for (Subscription sub : subscriptions) {
             LocalDate billingDate = sub.getNextBillingDate();
             if ("SHARED".equals(sub.getType())) {
                 List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(sub.getId());
@@ -71,8 +85,6 @@ public class BillingService {
             ));
         }
 
-        int count = created.get();
-        LOG.infof("billing.generate cutoff=%s subscriptions=%d recordsCreated=%d", cutoff, upcoming.size(), count);
-        return count;
+        return created.get();
     }
 }
