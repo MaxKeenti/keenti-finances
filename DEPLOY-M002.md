@@ -76,13 +76,13 @@ All three are additive `ALTER TABLE` statements. They do not modify or delete ex
 
 After deploying both services:
 
-- [ ] **Backend health:** `GET https://<backend-public-url>/q/health` returns `{"status":"UP"}`
-- [ ] **Frontend health:** `GET https://<frontend-url>/health` returns `{"status":"UP"}`
-- [ ] **Auth flow:** Navigate to the app → redirected to WorkOS AuthKit → sign in or register passkey → redirected back to dashboard
-- [ ] **Theme detection:** App respects system light/dark preference on first load (no flash)
-- [ ] **Dock navigation:** Bottom dock visible on desktop; mobile shows 3 pinned items + overflow menu
-- [ ] **Categories:** Category badges show assigned colors
-- [ ] **Subscriptions:** Shared subscriptions show member list and public payment link
+- [ x ] **Backend health:** `GET https://<backend-public-url>/q/health` returns `{"status":"UP"}`
+- [ x ] **Frontend health:** `GET https://<frontend-url>/health` returns `{"status":"UP"}`
+- [ x ] **Auth flow:** Navigate to the app → redirected to WorkOS AuthKit → sign in or register passkey → redirected back to dashboard
+- [ x ] **Theme detection:** App respects system light/dark preference on first load (no flash)
+- [ x ] **Dock navigation:** Bottom dock visible on desktop; mobile shows 3 pinned items + overflow menu
+- [ x ] **Categories:** Category badges show assigned colors
+- [ x ] **Subscriptions:** Shared subscriptions show member list and public payment link
 - [ ] **Billing trigger:** In a shared subscription, the "Generate Bills" action creates payment records for members
 - [ ] **Debt tracking:** Create a debt, record a payment, verify balance updates
 
