@@ -13,6 +13,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { CategoryBadge } from '$lib/components/ui/category-badge';
+	import * as Card from '$lib/components/ui/card';
 	import type { PageData } from './$types';
 
 	const transactionSchema = z.object({
@@ -136,7 +138,41 @@
 			<Empty.Description>Create one to get started.</Empty.Description>
 		</Empty.Root>
 	{:else}
-		<div class="rounded-lg border">
+		<!-- Mobile card grid (< md) -->
+		<div class="grid gap-4 md:hidden">
+			{#each data.transactions as tx (tx.id)}
+				<a href="/transactions/{tx.id}" class="block">
+					<Card.Root class="transition-colors hover:bg-muted/50">
+						<Card.Content class="pt-4">
+							<div class="flex items-start justify-between gap-2">
+								<div class="flex-1 min-w-0">
+									<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
+									<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
+								</div>
+								<span
+									class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
+										? 'text-green-600 dark:text-green-400'
+										: 'text-red-600 dark:text-red-400'}"
+								>
+									{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
+								</span>
+							</div>
+							<div class="flex items-center gap-2 mt-2">
+								{#if tx.categoryName}
+									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+								{/if}
+								{#if tx.contactName}
+									<span class="text-xs text-muted-foreground">{tx.contactName}</span>
+								{/if}
+							</div>
+						</Card.Content>
+					</Card.Root>
+				</a>
+			{/each}
+		</div>
+
+		<!-- Desktop table (>= md) -->
+		<div class="hidden md:block rounded-lg border">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
@@ -160,7 +196,13 @@
 							>
 								{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
 							</Table.Cell>
-							<Table.Cell>{tx.categoryName ?? '—'}</Table.Cell>
+							<Table.Cell>
+								{#if tx.categoryName}
+									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+								{:else}
+									—
+								{/if}
+							</Table.Cell>
 							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
 							<Table.Cell class="text-right">
 								<div class="flex justify-end gap-2">

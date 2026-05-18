@@ -4,10 +4,24 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			session: { username: string } | null;
+			session: {
+				user: {
+					id: string;
+					email: string;
+					firstName: string | null;
+					lastName: string | null;
+				};
+			} | null;
 		}
 		interface PageData {
-			session: { username: string } | null;
+			session: {
+				user: {
+					id: string;
+					email: string;
+					firstName: string | null;
+					lastName: string | null;
+				};
+			} | null;
 		}
 		// interface PageState {}
 		// interface Platform {}

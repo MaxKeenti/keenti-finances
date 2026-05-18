@@ -72,7 +72,7 @@ public class CategoryService implements CategoryUseCase {
                         .build());
             }
         }
-        Category updated = categoryRepository.update(new Category(id, category.getName(), category.getType()));
+        Category updated = categoryRepository.update(new Category(id, category.getName(), category.getType(), category.getColor()));
         LOG.infof("category.update id=%d name=%s type=%s", id, updated.getName(), updated.getType());
         return updated;
     }

@@ -5,5 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record CategoryRequest(
     @NotBlank @Size(max = 255) String name,
-    @NotBlank String type
+    @NotBlank String type,
+    @Size(max = 10) String color
 ) {}

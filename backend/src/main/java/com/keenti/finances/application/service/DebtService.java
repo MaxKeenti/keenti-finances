@@ -99,7 +99,7 @@ public class DebtService implements DebtUseCase {
         Transaction tx = transactionUseCase.create(new Transaction(
             null, amount, "INGRESS",
             "Debt payment: " + debt.getDescription(),
-            paymentDate, categoryId, debt.getContactId()));
+            paymentDate, categoryId, debt.getContactId(), null));
 
         DebtPayment payment = debtPaymentRepository.save(new DebtPayment(
             null, debtId, amount, paymentDate, tx.getId(), notes, null));
@@ -156,7 +156,7 @@ public class DebtService implements DebtUseCase {
             Transaction tx = transactionUseCase.create(new Transaction(
                 null, apply, "INGRESS",
                 "Bulk payment: " + debt.getDescription(),
-                paymentDate, categoryId, contactId));
+                paymentDate, categoryId, contactId, null));
 
             debtPaymentRepository.save(new DebtPayment(
                 null, debt.getId(), apply, paymentDate, tx.getId(), notes, null));

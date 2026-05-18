@@ -21,7 +21,22 @@ type Subscription = {
 	categoryId: number | null;
 	nextBillingDate: string;
 	tokenUuid: string | null;
+	ownerParticipates: boolean | null;
 	createdAt: string;
+};
+
+type TransactionResponse = {
+	id: number;
+	amount: number;
+	direction: string;
+	description: string;
+	transactionDate: string;
+	categoryId: number | null;
+	categoryName: string | null;
+	categoryColor: string | null;
+	contactId: number | null;
+	contactName: string | null;
+	subscriptionId: number | null;
 };
 
 type PaymentRecord = {
@@ -41,6 +56,8 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 	let subscription: Subscription;
 	let members: MemberResponse[] = [];
 	let payments: PaymentRecord[] = [];
+	let linkedTransactions: TransactionResponse[] = [];
+	let allTransactions: TransactionResponse[] = [];
 
 	try {
 		const subRes = await fetch(`${BACKEND}/api/subscriptions/${id}`);
@@ -57,9 +74,11 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 	}
 
 	try {
-		const [membersRes, paymentsRes] = await Promise.all([
+		const [membersRes, paymentsRes, linkedRes, allTxRes] = await Promise.all([
 			fetch(`${BACKEND}/api/subscriptions/${id}/members`),
 			fetch(`${BACKEND}/api/subscriptions/${id}/payments`),
+			fetch(`${BACKEND}/api/subscriptions/${id}/linked-transactions`),
+			fetch(`${BACKEND}/api/transactions`),
 		]);
 
 		if (membersRes.ok) members = await membersRes.json();
@@ -67,11 +86,20 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 		if (paymentsRes.ok) payments = await paymentsRes.json();
 		else console.error(`[subscriptions/${id}] load: payments returned ${paymentsRes.status}`);
+
+		if (linkedRes.ok) linkedTransactions = await linkedRes.json();
+		else console.error(`[subscriptions/${id}] load: linked-transactions returned ${linkedRes.status}`);
+
+		if (allTxRes.ok) allTransactions = await allTxRes.json();
+		else console.error(`[subscriptions/${id}] load: transactions returned ${allTxRes.status}`);
 	} catch {
-		console.error(`[subscriptions/${id}] load: backend unreachable for members/payments`);
+		console.error(`[subscriptions/${id}] load: backend unreachable for members/payments/transactions`);
 	}
 
-	return { subscription, members, payments };
+	const linkedIds = new Set(linkedTransactions.map((t) => t.id));
+	const unlinkedTransactions = allTransactions.filter((t) => !t.subscriptionId && !linkedIds.has(t.id));
+
+	return { subscription, members, payments, linkedTransactions, unlinkedTransactions };
 };
 
 export const actions: Actions = {
@@ -101,6 +129,38 @@ export const actions: Actions = {
 		console.log(
 			`[subscriptions/${id}] recordPayment: success — paymentId: ${paymentId}`,
 		);
+		return {};
+	},
+
+	linkTransactions: async ({ params, request, fetch }) => {
+		const id = params.id;
+		const data = await request.formData();
+		const transactionIds = data.getAll('transactionId').map(Number).filter(Boolean);
+
+		if (transactionIds.length === 0)
+			return fail(400, { message: 'No transactions selected.' });
+
+		try {
+			const results = await Promise.all(
+				transactionIds.map((txId) =>
+					fetch(`${BACKEND}/api/transactions/${txId}/link-subscription`, {
+						method: 'PUT',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ subscriptionId: Number(id) }),
+					}),
+				),
+			);
+			const failed = results.filter((r) => !r.ok);
+			if (failed.length > 0) {
+				console.error(`[subscriptions/${id}] linkTransactions: ${failed.length} requests failed`);
+				return fail(502, { message: 'Some transactions could not be linked.' });
+			}
+		} catch {
+			console.error(`[subscriptions/${id}] linkTransactions: backend unreachable`);
+			return fail(502, { message: 'Could not reach backend service.' });
+		}
+
+		console.log(`[transaction.link] subscriptionId=${id} count=${transactionIds.length} ids=${transactionIds.join(',')}`);
 		return {};
 	},
 };

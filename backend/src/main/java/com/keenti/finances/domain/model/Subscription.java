@@ -15,9 +15,11 @@ public class Subscription {
     private LocalDate nextBillingDate;
     private String tokenUuid;
     private LocalDateTime createdAt;
+    private boolean ownerParticipates;
 
     public Subscription(Long id, String name, BigDecimal cost, String billingCycle, String type,
-                        Long categoryId, LocalDate nextBillingDate, String tokenUuid, LocalDateTime createdAt) {
+                        Long categoryId, LocalDate nextBillingDate, String tokenUuid, LocalDateTime createdAt,
+                        boolean ownerParticipates) {
         this.id = id;
         this.name = name;
         this.cost = cost;
@@ -27,6 +29,7 @@ public class Subscription {
         this.nextBillingDate = nextBillingDate;
         this.tokenUuid = tokenUuid;
         this.createdAt = createdAt;
+        this.ownerParticipates = ownerParticipates;
     }
 
     public Long getId() { return id; }
@@ -38,4 +41,5 @@ public class Subscription {
     public LocalDate getNextBillingDate() { return nextBillingDate; }
     public String getTokenUuid() { return tokenUuid; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public boolean isOwnerParticipates() { return ownerParticipates; }
 }

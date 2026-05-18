@@ -14,6 +14,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import * as Select from '$lib/components/ui/select';
 	import type { PageData } from './$types';
 
 	const subscriptionSchema = z.object({
@@ -24,6 +25,7 @@
 		type: z.enum(['PERSONAL', 'SHARED']),
 		categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
 		nextBillingDate: z.string().min(1, 'Next billing date is required'),
+		ownerParticipates: z.boolean().optional(),
 	});
 
 	type MemberResponse = {
@@ -44,6 +46,7 @@
 		categoryId: number | null;
 		nextBillingDate: string;
 		tokenUuid: string | null;
+		ownerParticipates: boolean | null;
 		createdAt: string;
 		members?: MemberResponse[];
 	};
@@ -88,6 +91,7 @@
 				type: 'PERSONAL',
 				categoryId: '',
 				nextBillingDate: today,
+				ownerParticipates: true,
 			},
 		});
 		dialogOpen = true;
@@ -103,6 +107,7 @@
 			type: sub.type as 'PERSONAL' | 'SHARED',
 			categoryId: sub.categoryId ?? '',
 			nextBillingDate: sub.nextBillingDate,
+			ownerParticipates: sub.ownerParticipates ?? true,
 		});
 		dialogOpen = true;
 	}
@@ -144,7 +149,29 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Subscriptions</h1>
 			<p class="text-sm text-muted-foreground">Manage your recurring subscriptions and members.</p>
 		</div>
-		<Button onclick={openCreate}>New Subscription</Button>
+		<div class="flex gap-2">
+			<form
+				method="POST"
+				action="?/generateBilling"
+				use:kitEnhance={async () => {
+					return async ({ result, update }) => {
+						if (result.type === 'success') {
+							const count = (result.data as { generated?: number })?.generated ?? 0;
+							toast.success(`Billing generated: ${count} record${count === 1 ? '' : 's'} created.`);
+							await update();
+						} else {
+							const msg =
+								(result as { data?: { message?: string } }).data?.message ??
+								'Failed to generate billing.';
+							toast.error(msg);
+						}
+					};
+				}}
+			>
+				<Button type="submit" variant="outline">Generate Billing</Button>
+			</form>
+			<Button onclick={openCreate}>New Subscription</Button>
+		</div>
 	</div>
 
 	{#if data.subscriptions.length === 0}
@@ -155,13 +182,16 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.subscriptions as sub (sub.id)}
-				<Card.Root class="flex flex-col">
+				<Card.Root class="flex flex-col relative">
+					<a
+						href="/subscriptions/{sub.id}"
+						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+						aria-label="View {sub.name}"
+					></a>
 					<Card.Content class="flex flex-1 flex-col space-y-3">
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
-								<a href="/subscriptions/{sub.id}" class="hover:underline">
-									<p class="font-semibold text-base truncate">{sub.name}</p>
-								</a>
+								<p class="font-semibold text-base truncate">{sub.name}</p>
 								<p class="text-xl font-bold text-foreground mt-0.5">{fmt.format(sub.cost)}</p>
 							</div>
 							<div class="flex flex-col items-end gap-1 shrink-0">
@@ -181,7 +211,7 @@
 							{/if}
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1">
+						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
 							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">View</Button>
 							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
 							{#if sub.type === 'SHARED'}
@@ -321,6 +351,24 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			{#if $form.type === 'SHARED'}
+				<Form.Field form={sf} name="ownerParticipates">
+					<Form.Control>
+						{#snippet children({ props })}
+							<div class="flex items-center gap-2">
+								<input
+									type="checkbox"
+									id={props.id}
+									bind:checked={$form.ownerParticipates}
+									class="h-4 w-4 rounded border border-input"
+								/>
+								<Form.Label>I participate in this subscription</Form.Label>
+							</div>
+						{/snippet}
+					</Form.Control>
+				</Form.Field>
+			{/if}
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>

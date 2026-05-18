@@ -10,4 +10,6 @@ public interface TransactionUseCase {
     Transaction create(Transaction transaction);
     Transaction update(Long id, Transaction transaction);
     void delete(Long id);
+    Transaction linkSubscription(Long transactionId, Long subscriptionId);
+    List<Transaction> listBySubscriptionId(Long subscriptionId);
 }

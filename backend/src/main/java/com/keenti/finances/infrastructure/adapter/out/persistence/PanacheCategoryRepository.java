@@ -29,6 +29,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         CategoryEntity entity = new CategoryEntity();
         entity.name = category.getName();
         entity.type = category.getType();
+        entity.color = category.getColor();
         entity.persist();
         return toDomain(entity);
     }
@@ -38,6 +39,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         CategoryEntity entity = CategoryEntity.findById(category.getId());
         entity.name = category.getName();
         entity.type = category.getType();
+        entity.color = category.getColor();
         return toDomain(entity);
     }
 
@@ -52,6 +54,6 @@ public class PanacheCategoryRepository implements CategoryRepository {
     }
 
     private Category toDomain(CategoryEntity e) {
-        return new Category(e.id, e.name, e.type);
+        return new Category(e.id, e.name, e.type, e.color);
     }
 }

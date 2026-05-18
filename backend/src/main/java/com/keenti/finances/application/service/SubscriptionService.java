@@ -55,7 +55,7 @@ public class SubscriptionService implements SubscriptionUseCase {
             null, subscription.getName(), subscription.getCost(),
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
-            token, LocalDateTime.now()
+            token, LocalDateTime.now(), subscription.isOwnerParticipates()
         );
         Subscription created = subscriptionRepository.save(toSave);
         LOG.infof("subscription.create id=%d name=%s type=%s", created.getId(), created.getName(), created.getType());
@@ -75,13 +75,17 @@ public class SubscriptionService implements SubscriptionUseCase {
         } else if ("PERSONAL".equals(subscription.getType())) {
             token = null;
         }
+        boolean ownerParticipatesChanged = existing.isOwnerParticipates() != subscription.isOwnerParticipates();
         Subscription updated = subscriptionRepository.update(new Subscription(
             id, subscription.getName(), subscription.getCost(),
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
-            token, existing.getCreatedAt()
+            token, existing.getCreatedAt(), subscription.isOwnerParticipates()
         ));
         LOG.infof("subscription.update id=%d", id);
+        if (ownerParticipatesChanged && "SHARED".equals(updated.getType())) {
+            recalculateShares(id, updated);
+        }
         return updated;
     }
 
@@ -110,12 +114,14 @@ public class SubscriptionService implements SubscriptionUseCase {
                     .entity("{\"error\":\"Contact is already a member of this subscription\"}")
                     .build());
         }
-        int newCount = existing.size() + 1;
-        BigDecimal share = sub.getCost().divide(BigDecimal.valueOf(newCount), 2, RoundingMode.HALF_UP);
+        int memberCount = existing.size() + 1;
+        int divisor = memberCount + (sub.isOwnerParticipates() ? 1 : 0);
+        BigDecimal share = sub.getCost().divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
         subscriptionMemberRepository.updateShareAmounts(subscriptionId, share);
         SubscriptionMember member = subscriptionMemberRepository.save(
             new SubscriptionMember(null, subscriptionId, contactId, share, LocalDateTime.now()));
-        LOG.infof("subscription.member.add subscriptionId=%d contactId=%d share=%s", subscriptionId, contactId, share);
+        LOG.infof("subscription.member.add subscriptionId=%d contactId=%d share=%s divisor=%d ownerParticipates=%b",
+            subscriptionId, contactId, share, divisor, sub.isOwnerParticipates());
         return member;
     }
 
@@ -129,10 +135,14 @@ public class SubscriptionService implements SubscriptionUseCase {
         subscriptionMemberRepository.deleteById(memberId);
         List<SubscriptionMember> remaining = subscriptionMemberRepository.findBySubscriptionId(subscriptionId);
         if (!remaining.isEmpty()) {
-            BigDecimal share = sub.getCost().divide(BigDecimal.valueOf(remaining.size()), 2, RoundingMode.HALF_UP);
+            int divisor = remaining.size() + (sub.isOwnerParticipates() ? 1 : 0);
+            BigDecimal share = sub.getCost().divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
             subscriptionMemberRepository.updateShareAmounts(subscriptionId, share);
+            LOG.infof("subscription.member.remove subscriptionId=%d memberId=%d newShare=%s divisor=%d ownerParticipates=%b",
+                subscriptionId, memberId, share, divisor, sub.isOwnerParticipates());
+        } else {
+            LOG.infof("subscription.member.remove subscriptionId=%d memberId=%d noRemainingMembers", subscriptionId, memberId);
         }
-        LOG.infof("subscription.member.remove subscriptionId=%d memberId=%d", subscriptionId, memberId);
     }
 
     @Override
@@ -147,6 +157,27 @@ public class SubscriptionService implements SubscriptionUseCase {
         Optional<Subscription> result = subscriptionRepository.findByTokenUuid(tokenUuid);
         LOG.infof("subscription.token.lookup token=%s found=%b", tokenUuid, result.isPresent());
         return result;
+    }
+
+    @Override
+    @Transactional
+    public void recalculateShares(Long subscriptionId) {
+        Subscription sub = subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
+        recalculateShares(subscriptionId, sub);
+    }
+
+    private void recalculateShares(Long subscriptionId, Subscription sub) {
+        List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(subscriptionId);
+        if (members.isEmpty()) {
+            return;
+        }
+        int oldDivisor = members.size(); // before: no owner flag awareness
+        int newDivisor = members.size() + (sub.isOwnerParticipates() ? 1 : 0);
+        BigDecimal share = sub.getCost().divide(BigDecimal.valueOf(newDivisor), 2, RoundingMode.HALF_UP);
+        subscriptionMemberRepository.updateShareAmounts(subscriptionId, share);
+        LOG.infof("subscription.shares.recalculate subscriptionId=%d oldDivisor=%d newDivisor=%d newShare=%s ownerParticipates=%b",
+            subscriptionId, oldDivisor, newDivisor, share, sub.isOwnerParticipates());
     }
 
     private void validate(Subscription s) {

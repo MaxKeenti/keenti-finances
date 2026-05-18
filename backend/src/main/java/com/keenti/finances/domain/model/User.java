@@ -12,6 +12,10 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
+    public User(Long id, String username) {
+        this(id, username, null);
+    }
+
     public Long getId() { return id; }
     public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }

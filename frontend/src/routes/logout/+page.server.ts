@@ -1,8 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { COOKIE_NAME } from '$lib/server/session';
+import { clearSession } from '$lib/server/workos-session';
 
 export const load: PageServerLoad = async ({ cookies }) => {
-	cookies.delete(COOKIE_NAME, { path: '/' });
+	clearSession(cookies);
+	console.log('[workos-auth] logout');
 	redirect(303, '/login');
 };

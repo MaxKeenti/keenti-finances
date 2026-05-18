@@ -12,9 +12,10 @@ public class Transaction {
     private LocalDate transactionDate;
     private Long categoryId;
     private Long contactId;
+    private Long subscriptionId;
 
     public Transaction(Long id, BigDecimal amount, String direction, String description,
-                       LocalDate transactionDate, Long categoryId, Long contactId) {
+                       LocalDate transactionDate, Long categoryId, Long contactId, Long subscriptionId) {
         this.id = id;
         this.amount = amount;
         this.direction = direction;
@@ -22,6 +23,7 @@ public class Transaction {
         this.transactionDate = transactionDate;
         this.categoryId = categoryId;
         this.contactId = contactId;
+        this.subscriptionId = subscriptionId;
     }
 
     public Long getId() { return id; }
@@ -31,4 +33,5 @@ public class Transaction {
     public LocalDate getTransactionDate() { return transactionDate; }
     public Long getCategoryId() { return categoryId; }
     public Long getContactId() { return contactId; }
+    public Long getSubscriptionId() { return subscriptionId; }
 }

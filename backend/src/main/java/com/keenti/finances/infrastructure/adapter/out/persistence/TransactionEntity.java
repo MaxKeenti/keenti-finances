@@ -44,4 +44,8 @@ public class TransactionEntity extends PanacheEntityBase {
 
     @Column(name = "created_at")
     public LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subscription_id")
+    public SubscriptionEntity subscription;
 }

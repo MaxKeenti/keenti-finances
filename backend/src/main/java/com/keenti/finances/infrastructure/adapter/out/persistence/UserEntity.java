@@ -20,7 +20,7 @@ public class UserEntity extends PanacheEntityBase {
     @Column(nullable = false, unique = true)
     public String username;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash", nullable = true)
     public String passwordHash;
 
     public static Optional<UserEntity> findByUsername(String username) {

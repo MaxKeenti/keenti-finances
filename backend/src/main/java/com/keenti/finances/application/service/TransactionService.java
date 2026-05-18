@@ -2,6 +2,7 @@ package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
+import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -21,6 +22,9 @@ public class TransactionService implements TransactionUseCase {
 
     @Inject
     TransactionRepository transactionRepository;
+
+    @Inject
+    SubscriptionRepository subscriptionRepository;
 
     @Override
     public List<Transaction> list() {
@@ -57,7 +61,8 @@ public class TransactionService implements TransactionUseCase {
             new NotFoundException("Transaction not found: " + id));
         Transaction updated = transactionRepository.update(new Transaction(
             id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
-            transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId()));
+            transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId(),
+            transaction.getSubscriptionId()));
         LOG.infof("transaction.update id=%d", id);
         return updated;
     }
@@ -69,5 +74,32 @@ public class TransactionService implements TransactionUseCase {
             new NotFoundException("Transaction not found: " + id));
         transactionRepository.deleteById(id);
         LOG.infof("transaction.delete id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public Transaction linkSubscription(Long transactionId, Long subscriptionId) {
+        Transaction existing = transactionRepository.findById(transactionId).orElseThrow(() ->
+            new NotFoundException("Transaction not found: " + transactionId));
+        if (subscriptionId != null) {
+            subscriptionRepository.findById(subscriptionId).orElseThrow(() ->
+                new NotFoundException("Subscription not found: " + subscriptionId));
+        }
+        Transaction updated = transactionRepository.update(new Transaction(
+            existing.getId(), existing.getAmount(), existing.getDirection(), existing.getDescription(),
+            existing.getTransactionDate(), existing.getCategoryId(), existing.getContactId(),
+            subscriptionId));
+        LOG.infof("transaction.link transactionId=%d subscriptionId=%s", transactionId,
+            subscriptionId != null ? subscriptionId.toString() : "null");
+        return updated;
+    }
+
+    @Override
+    public List<Transaction> listBySubscriptionId(Long subscriptionId) {
+        subscriptionRepository.findById(subscriptionId).orElseThrow(() ->
+            new NotFoundException("Subscription not found: " + subscriptionId));
+        List<Transaction> transactions = transactionRepository.findBySubscriptionId(subscriptionId);
+        LOG.infof("transaction.listBySubscription subscriptionId=%d count=%d", subscriptionId, transactions.size());
+        return transactions;
     }
 }

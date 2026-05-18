@@ -2,6 +2,7 @@
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import type { PageData } from './$types';
@@ -24,6 +25,20 @@
 		status: string;
 		paidDate: string | null;
 		createdAt: string;
+	};
+
+	type TransactionResponse = {
+		id: number;
+		amount: number;
+		direction: string;
+		description: string;
+		transactionDate: string;
+		categoryId: number | null;
+		categoryName: string | null;
+		categoryColor: string | null;
+		contactId: number | null;
+		contactName: string | null;
+		subscriptionId: number | null;
 	};
 
 	let { data }: { data: PageData } = $props();
@@ -64,6 +79,15 @@
 	});
 
 	let copyFeedback = $state(false);
+	let linkDialogOpen = $state(false);
+	let selectedTxIds = $state<Set<number>>(new Set());
+
+	function toggleTx(id: number) {
+		const next = new Set(selectedTxIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedTxIds = next;
+	}
 
 	async function copyShareLink() {
 		if (!data.subscription.tokenUuid) return;
@@ -102,6 +126,13 @@
 				<p class="text-muted-foreground">
 					Next billing: <span class="font-medium text-foreground">{data.subscription.nextBillingDate}</span>
 				</p>
+				{#if data.subscription.type === 'SHARED'}
+					<p class="text-muted-foreground">
+						Owner participates: <span class="font-medium text-foreground">
+							{data.subscription.ownerParticipates === false ? 'No' : 'Yes'}
+						</span>
+					</p>
+				{/if}
 			</div>
 
 			{#if data.subscription.type === 'SHARED' && data.subscription.tokenUuid}
@@ -142,6 +173,40 @@
 			</Card.Content>
 		</Card.Root>
 	{/if}
+
+	<!-- Linked Transactions -->
+	<Card.Root>
+		<Card.Content class="space-y-3">
+			<div class="flex items-center justify-between">
+				<h2 class="font-semibold text-base">Linked Transactions</h2>
+				{#if data.unlinkedTransactions.length > 0}
+					<Button variant="outline" size="sm" onclick={() => { selectedTxIds = new Set(); linkDialogOpen = true; }}>
+						Link Transactions
+					</Button>
+				{/if}
+			</div>
+			{#if data.linkedTransactions.length === 0}
+				<p class="text-sm text-muted-foreground">No transactions linked yet.</p>
+			{:else}
+				<ul class="divide-y rounded-md border">
+					{#each data.linkedTransactions as tx (tx.id)}
+						<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+							<div class="min-w-0 space-y-0.5">
+								<p class="text-sm font-medium truncate">{tx.description}</p>
+								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								{#if tx.categoryName}
+									<Badge variant="secondary">{tx.categoryName}</Badge>
+								{/if}
+								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
 	<!-- Payment Records -->
 	<Card.Root>
@@ -206,3 +271,72 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<!-- Link Transactions dialog -->
+<Dialog.Root bind:open={linkDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Link Transactions</Dialog.Title>
+			<Dialog.Description>Select transactions to link to this subscription.</Dialog.Description>
+		</Dialog.Header>
+
+		<form
+			method="POST"
+			action="?/linkTransactions"
+			use:kitEnhance={async () => {
+				return async ({ result, update }) => {
+					if (result.type === 'success') {
+						linkDialogOpen = false;
+						selectedTxIds = new Set();
+						toast.success('Transactions linked.');
+						await update();
+					} else {
+						const msg =
+							(result as { data?: { message?: string } }).data?.message ??
+							'Failed to link transactions.';
+						toast.error(msg);
+					}
+				};
+			}}
+			class="space-y-4"
+		>
+			{#each selectedTxIds as txId}
+				<input type="hidden" name="transactionId" value={txId} />
+			{/each}
+
+			{#if data.unlinkedTransactions.length === 0}
+				<p class="text-sm text-muted-foreground">No unlinked transactions available.</p>
+			{:else}
+				<ul class="divide-y rounded-md border max-h-72 overflow-y-auto">
+					{#each data.unlinkedTransactions as tx (tx.id)}
+						<li class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50" onclick={() => toggleTx(tx.id)}>
+							<input
+								type="checkbox"
+								class="h-4 w-4 rounded border border-input shrink-0"
+								checked={selectedTxIds.has(tx.id)}
+								onchange={() => toggleTx(tx.id)}
+							/>
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium truncate">{tx.description}</p>
+								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								{#if tx.categoryName}
+									<Badge variant="secondary">{tx.categoryName}</Badge>
+								{/if}
+								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => (linkDialogOpen = false)}>Cancel</Button>
+				<Button type="submit" disabled={selectedTxIds.size === 0}>
+					Link {selectedTxIds.size > 0 ? `(${selectedTxIds.size})` : ''}
+				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>

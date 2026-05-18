@@ -8,12 +8,13 @@ const categorySchema = z.object({
 	id: z.coerce.number().optional(),
 	name: z.string().min(1, 'Name is required'),
 	type: z.enum(['INGRESS', 'EGRESS', 'BOTH']),
+	color: z.string().optional(),
 });
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-	let categories: Array<{ id: number; name: string; type: string }> = [];
+	let categories: Array<{ id: number; name: string; type: string; color?: string }> = [];
 	try {
 		const res = await fetch(`${BACKEND}/api/categories`);
 		if (res.ok) {
@@ -39,7 +40,7 @@ export const actions: Actions = {
 			res = await fetch(`${BACKEND}/api/categories`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ name: form.data.name, type: form.data.type }),
+				body: JSON.stringify({ name: form.data.name, type: form.data.type, color: form.data.color ?? null }),
 			});
 		} catch {
 			console.error('[categories] create: backend unreachable');
@@ -71,7 +72,7 @@ export const actions: Actions = {
 			res = await fetch(`${BACKEND}/api/categories/${id}`, {
 				method: 'PUT',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ name: form.data.name, type: form.data.type }),
+				body: JSON.stringify({ name: form.data.name, type: form.data.type, color: form.data.color ?? null }),
 			});
 		} catch {
 			console.error('[categories] update: backend unreachable');

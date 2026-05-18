@@ -1,10 +1,14 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
+import com.keenti.finances.domain.model.Category;
 import com.keenti.finances.domain.model.Contact;
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.SubscriptionMember;
+import com.keenti.finances.domain.model.Transaction;
+import com.keenti.finances.domain.port.in.CategoryUseCase;
 import com.keenti.finances.domain.port.in.ContactUseCase;
 import com.keenti.finances.domain.port.in.SubscriptionUseCase;
+import com.keenti.finances.domain.port.in.TransactionUseCase;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
@@ -18,6 +22,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Path("/api/subscriptions")
@@ -30,6 +35,12 @@ public class SubscriptionResource {
 
     @Inject
     ContactUseCase contactUseCase;
+
+    @Inject
+    CategoryUseCase categoryUseCase;
+
+    @Inject
+    TransactionUseCase transactionUseCase;
 
     @GET
     public Response list() {
@@ -95,15 +106,41 @@ public class SubscriptionResource {
         return Response.noContent().build();
     }
 
+    @GET
+    @Path("/{id}/linked-transactions")
+    public Response listLinkedTransactions(@PathParam("id") Long id) {
+        List<TransactionResponse> body = transactionUseCase.listBySubscriptionId(id).stream()
+            .map(this::toTransactionResponse)
+            .collect(Collectors.toList());
+        return Response.ok(body).build();
+    }
+
     private Subscription toSubscription(Long id, SubscriptionRequest r) {
         return new Subscription(id, r.name(), r.cost(), r.billingCycle(), r.type(),
-            r.categoryId(), r.nextBillingDate(), null, null);
+            r.categoryId(), r.nextBillingDate(), null, null, r.ownerParticipatesOrDefault());
     }
 
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(
             s.getId(), s.getName(), s.getCost(), s.getBillingCycle(), s.getType(),
-            s.getCategoryId(), s.getNextBillingDate(), s.getTokenUuid(), s.getCreatedAt()
+            s.getCategoryId(), s.getNextBillingDate(), s.getTokenUuid(), s.getCreatedAt(),
+            s.isOwnerParticipates()
+        );
+    }
+
+    private TransactionResponse toTransactionResponse(Transaction t) {
+        Optional<Category> category = t.getCategoryId() != null
+            ? categoryUseCase.getById(t.getCategoryId())
+            : Optional.empty();
+        String categoryName = category.map(Category::getName).orElse(null);
+        String categoryColor = category.map(Category::getColor).orElse(null);
+        String contactName = t.getContactId() != null
+            ? contactUseCase.getById(t.getContactId()).map(Contact::getName).orElse(null)
+            : null;
+        return new TransactionResponse(
+            t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
+            t.getTransactionDate(), t.getCategoryId(), categoryName, categoryColor,
+            t.getContactId(), contactName, t.getSubscriptionId()
         );
     }
 

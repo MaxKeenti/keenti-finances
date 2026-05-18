@@ -14,4 +14,5 @@ public interface TransactionRepository {
     void deleteById(Long id);
     List<MonthSummary> findMonthlySummary(int year);
     BigDecimal getNetBalance();
+    List<Transaction> findBySubscriptionId(Long subscriptionId);
 }

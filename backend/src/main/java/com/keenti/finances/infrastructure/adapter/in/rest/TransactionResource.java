@@ -100,22 +100,31 @@ public class TransactionResource {
         return Response.noContent().build();
     }
 
+    @PUT
+    @Path("/{id}/link-subscription")
+    public Response linkSubscription(@PathParam("id") Long id, LinkSubscriptionRequest request) {
+        Transaction updated = transactionUseCase.linkSubscription(id, request != null ? request.subscriptionId() : null);
+        return Response.ok(toResponse(updated)).build();
+    }
+
     private Transaction toTransaction(Long id, TransactionRequest r) {
         return new Transaction(id, r.amount(), r.direction(), r.description(),
-                r.transactionDate(), r.categoryId(), r.contactId());
+                r.transactionDate(), r.categoryId(), r.contactId(), null);
     }
 
     private TransactionResponse toResponse(Transaction t) {
-        String categoryName = t.getCategoryId() != null
-                ? categoryUseCase.getById(t.getCategoryId()).map(Category::getName).orElse(null)
-                : null;
+        Optional<Category> category = t.getCategoryId() != null
+                ? categoryUseCase.getById(t.getCategoryId())
+                : Optional.empty();
+        String categoryName = category.map(Category::getName).orElse(null);
+        String categoryColor = category.map(Category::getColor).orElse(null);
         String contactName = t.getContactId() != null
                 ? contactUseCase.getById(t.getContactId()).map(Contact::getName).orElse(null)
                 : null;
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
-            t.getTransactionDate(), t.getCategoryId(), categoryName,
-            t.getContactId(), contactName
+            t.getTransactionDate(), t.getCategoryId(), categoryName, categoryColor,
+            t.getContactId(), contactName, t.getSubscriptionId()
         );
     }
 }

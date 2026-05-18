@@ -28,7 +28,7 @@ public class CategoryResource {
     @GET
     public Response list() {
         List<CategoryResponse> body = categoryUseCase.list().stream()
-                .map(c -> new CategoryResponse(c.getId(), c.getName(), c.getType()))
+                .map(c -> new CategoryResponse(c.getId(), c.getName(), c.getType(), c.getColor()))
                 .collect(Collectors.toList());
         return Response.ok(body).build();
     }
@@ -37,7 +37,7 @@ public class CategoryResource {
     @Path("/{id}")
     public Response getById(@PathParam("id") Long id) {
         return categoryUseCase.getById(id)
-                .map(c -> Response.ok(new CategoryResponse(c.getId(), c.getName(), c.getType())).build())
+                .map(c -> Response.ok(new CategoryResponse(c.getId(), c.getName(), c.getType(), c.getColor())).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND)
                         .entity("{\"error\":\"Category not found\"}")
                         .build());
@@ -45,17 +45,17 @@ public class CategoryResource {
 
     @POST
     public Response create(@Valid CategoryRequest request) {
-        Category created = categoryUseCase.create(new Category(null, request.name(), request.type()));
+        Category created = categoryUseCase.create(new Category(null, request.name(), request.type(), request.color()));
         return Response.status(Response.Status.CREATED)
-                .entity(new CategoryResponse(created.getId(), created.getName(), created.getType()))
+                .entity(new CategoryResponse(created.getId(), created.getName(), created.getType(), created.getColor()))
                 .build();
     }
 
     @PUT
     @Path("/{id}")
     public Response update(@PathParam("id") Long id, @Valid CategoryRequest request) {
-        Category updated = categoryUseCase.update(id, new Category(null, request.name(), request.type()));
-        return Response.ok(new CategoryResponse(updated.getId(), updated.getName(), updated.getType())).build();
+        Category updated = categoryUseCase.update(id, new Category(null, request.name(), request.type(), request.color()));
+        return Response.ok(new CategoryResponse(updated.getId(), updated.getName(), updated.getType(), updated.getColor())).build();
     }
 
     @DELETE

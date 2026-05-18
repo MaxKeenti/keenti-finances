@@ -53,6 +53,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.contact = transaction.getContactId() != null
                 ? ContactEntity.findById(transaction.getContactId())
                 : null;
+        entity.subscription = transaction.getSubscriptionId() != null
+                ? SubscriptionEntity.findById(transaction.getSubscriptionId())
+                : null;
         return toDomain(entity);
     }
 
@@ -102,6 +105,15 @@ public class PanacheTransactionRepository implements TransactionRepository {
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }
 
+    @Override
+    public List<Transaction> findBySubscriptionId(Long subscriptionId) {
+        return TransactionEntity.<TransactionEntity>find(
+                "subscription.id = ?1 ORDER BY transactionDate DESC, createdAt DESC", subscriptionId)
+                .stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+    }
+
     private TransactionEntity toEntity(Transaction t) {
         TransactionEntity e = new TransactionEntity();
         e.amount = t.getAmount();
@@ -111,6 +123,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         e.category = CategoryEntity.findById(t.getCategoryId());
         e.contact = t.getContactId() != null
                 ? ContactEntity.findById(t.getContactId())
+                : null;
+        e.subscription = t.getSubscriptionId() != null
+                ? SubscriptionEntity.findById(t.getSubscriptionId())
                 : null;
         return e;
     }
@@ -123,7 +138,8 @@ public class PanacheTransactionRepository implements TransactionRepository {
             e.description,
             e.transactionDate,
             e.category != null ? e.category.id : null,
-            e.contact != null ? e.contact.id : null
+            e.contact != null ? e.contact.id : null,
+            e.subscription != null ? e.subscription.id : null
         );
     }
 }
