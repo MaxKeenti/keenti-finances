@@ -3,6 +3,7 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 import com.keenti.finances.domain.model.MonthSummary;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.out.TransactionRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -19,6 +20,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<Transaction> findAll() {
@@ -56,6 +60,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.subscription = transaction.getSubscriptionId() != null
                 ? SubscriptionEntity.findById(transaction.getSubscriptionId())
                 : null;
+        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
@@ -70,10 +75,11 @@ public class PanacheTransactionRepository implements TransactionRepository {
         List<Object[]> rows = em.createNativeQuery(
             "SELECT EXTRACT(MONTH FROM transaction_date) AS month, direction, SUM(amount) AS total " +
             "FROM transaction " +
-            "WHERE EXTRACT(YEAR FROM transaction_date) = :year " +
+            "WHERE EXTRACT(YEAR FROM transaction_date) = :year AND user_id = :userId " +
             "GROUP BY EXTRACT(MONTH FROM transaction_date), direction " +
             "ORDER BY EXTRACT(MONTH FROM transaction_date)")
             .setParameter("year", year)
+            .setParameter("userId", userContext.getUserId())
             .getResultList();
 
         Map<Integer, BigDecimal[]> byMonth = new HashMap<>();
@@ -100,7 +106,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
     @Override
     public BigDecimal getNetBalance() {
         Object raw = em.createNativeQuery(
-            "SELECT COALESCE(SUM(CASE WHEN direction='INGRESS' THEN amount ELSE -amount END), 0) FROM transaction")
+            "SELECT COALESCE(SUM(CASE WHEN direction='INGRESS' THEN amount ELSE -amount END), 0) FROM transaction " +
+            "WHERE user_id = :userId")
+            .setParameter("userId", userContext.getUserId())
             .getSingleResult();
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }
@@ -127,6 +135,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
         e.subscription = t.getSubscriptionId() != null
                 ? SubscriptionEntity.findById(t.getSubscriptionId())
                 : null;
+        e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
 
