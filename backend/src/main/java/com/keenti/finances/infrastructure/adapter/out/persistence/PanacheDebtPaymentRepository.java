@@ -2,6 +2,7 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.DebtPayment;
 import com.keenti.finances.domain.port.out.DebtPaymentRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -14,6 +15,9 @@ public class PanacheDebtPaymentRepository implements DebtPaymentRepository {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<DebtPayment> findByDebtId(Long debtId) {
@@ -34,8 +38,11 @@ public class PanacheDebtPaymentRepository implements DebtPaymentRepository {
     @Override
     public BigDecimal sumByDebtId(Long debtId) {
         Object raw = em.createNativeQuery(
-            "SELECT COALESCE(SUM(amount), 0) FROM debt_payment WHERE debt_id = :debtId")
+            "SELECT COALESCE(SUM(dp.amount), 0) FROM debt_payment dp " +
+            "JOIN debt d ON dp.debt_id = d.id " +
+            "WHERE dp.debt_id = :debtId AND d.user_id = :userId")
             .setParameter("debtId", debtId)
+            .setParameter("userId", userContext.getUserId())
             .getSingleResult();
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }

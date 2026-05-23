@@ -2,13 +2,18 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.port.out.DebtRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheDebtRepository implements DebtRepository {
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<Debt> findAll() {
@@ -49,6 +54,7 @@ public class PanacheDebtRepository implements DebtRepository {
         if (debt.getCreatedAt() != null) {
             entity.createdAt = debt.getCreatedAt();
         }
+        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
@@ -64,6 +70,7 @@ public class PanacheDebtRepository implements DebtRepository {
         e.totalAmount = d.getTotalAmount();
         e.status = d.getStatus() != null ? d.getStatus() : "ACTIVE";
         e.createdAt = d.getCreatedAt();
+        e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
 

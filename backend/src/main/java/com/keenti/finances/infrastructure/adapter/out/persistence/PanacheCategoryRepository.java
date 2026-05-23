@@ -2,13 +2,18 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Category;
 import com.keenti.finances.domain.port.out.CategoryRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheCategoryRepository implements CategoryRepository {
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<Category> findAll() {
@@ -26,10 +31,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
 
     @Override
     public Category save(Category category) {
-        CategoryEntity entity = new CategoryEntity();
-        entity.name = category.getName();
-        entity.type = category.getType();
-        entity.color = category.getColor();
+        CategoryEntity entity = toEntity(category);
         entity.persist();
         return toDomain(entity);
     }
@@ -40,6 +42,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         entity.name = category.getName();
         entity.type = category.getType();
         entity.color = category.getColor();
+        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
@@ -51,6 +54,15 @@ public class PanacheCategoryRepository implements CategoryRepository {
     @Override
     public boolean existsByName(String name) {
         return CategoryEntity.count("name", name) > 0;
+    }
+
+    private CategoryEntity toEntity(Category c) {
+        CategoryEntity e = new CategoryEntity();
+        e.name = c.getName();
+        e.type = c.getType();
+        e.color = c.getColor();
+        e.user = UserEntity.findById(userContext.getUserId());
+        return e;
     }
 
     private Category toDomain(CategoryEntity e) {

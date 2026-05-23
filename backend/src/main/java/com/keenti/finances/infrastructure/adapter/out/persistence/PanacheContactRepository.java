@@ -2,13 +2,18 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Contact;
 import com.keenti.finances.domain.port.out.ContactRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheContactRepository implements ContactRepository {
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<Contact> findAll() {
@@ -26,10 +31,7 @@ public class PanacheContactRepository implements ContactRepository {
 
     @Override
     public Contact save(Contact contact) {
-        ContactEntity entity = new ContactEntity();
-        entity.name = contact.getName();
-        entity.phone = contact.getPhone();
-        entity.email = contact.getEmail();
+        ContactEntity entity = toEntity(contact);
         entity.persist();
         return toDomain(entity);
     }
@@ -40,12 +42,22 @@ public class PanacheContactRepository implements ContactRepository {
         entity.name = contact.getName();
         entity.phone = contact.getPhone();
         entity.email = contact.getEmail();
+        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
     @Override
     public void deleteById(Long id) {
         ContactEntity.deleteById(id);
+    }
+
+    private ContactEntity toEntity(Contact c) {
+        ContactEntity e = new ContactEntity();
+        e.name = c.getName();
+        e.phone = c.getPhone();
+        e.email = c.getEmail();
+        e.user = UserEntity.findById(userContext.getUserId());
+        return e;
     }
 
     private Contact toDomain(ContactEntity e) {

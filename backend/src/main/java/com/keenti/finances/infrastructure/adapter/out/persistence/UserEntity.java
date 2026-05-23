@@ -23,7 +23,14 @@ public class UserEntity extends PanacheEntityBase {
     @Column(name = "password_hash", nullable = true)
     public String passwordHash;
 
+    @Column(name = "workos_id", unique = true)
+    public String workosId;
+
     public static Optional<UserEntity> findByUsername(String username) {
         return find("username", username).firstResultOptional();
+    }
+
+    public static Optional<UserEntity> findByWorkosId(String workosId) {
+        return find("workosId", workosId).firstResultOptional();
     }
 }

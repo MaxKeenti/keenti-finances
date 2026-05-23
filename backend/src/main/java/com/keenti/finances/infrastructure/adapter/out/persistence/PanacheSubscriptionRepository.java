@@ -2,7 +2,9 @@ package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +12,9 @@ import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheSubscriptionRepository implements SubscriptionRepository {
+
+    @Inject
+    UserContext userContext;
 
     @Override
     public List<Subscription> findAll() {
@@ -41,6 +46,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         entity.nextBillingDate = subscription.getNextBillingDate();
         entity.tokenUuid = subscription.getTokenUuid();
         entity.ownerParticipates = subscription.isOwnerParticipates();
+        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
@@ -72,6 +78,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         e.tokenUuid = s.getTokenUuid();
         e.createdAt = s.getCreatedAt();
         e.ownerParticipates = s.isOwnerParticipates();
+        e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
 

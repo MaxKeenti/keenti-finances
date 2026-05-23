@@ -5,4 +5,6 @@ import java.util.Optional;
 
 public interface UserRepository {
     Optional<User> findByUsername(String username);
+    Optional<User> findByWorkosId(String workosId);
+    User save(User user);
 }

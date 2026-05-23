@@ -13,9 +13,14 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 
 @Entity
 @Table(name = "transaction")
+@FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = Long.class))
+@Filter(name = "userScope", condition = "user_id = :userId")
 public class TransactionEntity extends PanacheEntityBase {
 
     @Id
@@ -48,4 +53,8 @@ public class TransactionEntity extends PanacheEntityBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subscription_id")
     public SubscriptionEntity subscription;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    public UserEntity user;
 }
