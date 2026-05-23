@@ -11,6 +11,26 @@ public class PanacheUserRepository implements UserRepository {
     @Override
     public Optional<User> findByUsername(String username) {
         return UserEntity.findByUsername(username)
-                .map(e -> new User(e.id, e.username, e.passwordHash));
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Optional<User> findByWorkosId(String workosId) {
+        return UserEntity.findByWorkosId(workosId)
+                .map(this::toDomain);
+    }
+
+    @Override
+    public User save(User user) {
+        UserEntity entity = new UserEntity();
+        entity.username = user.getUsername();
+        entity.passwordHash = user.getPasswordHash();
+        entity.workosId = user.getWorkosId();
+        entity.persist();
+        return toDomain(entity);
+    }
+
+    private User toDomain(UserEntity entity) {
+        return new User(entity.id, entity.username, entity.passwordHash, entity.workosId);
     }
 }
