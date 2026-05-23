@@ -16,7 +16,7 @@ import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
-@FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = "long"))
+@FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = Long.class))
 @Filter(name = "userScope", condition = "user_id = :userId")
 @Entity
 @Table(name = "debt")

@@ -38,8 +38,11 @@ public class PanacheDebtPaymentRepository implements DebtPaymentRepository {
     @Override
     public BigDecimal sumByDebtId(Long debtId) {
         Object raw = em.createNativeQuery(
-            "SELECT COALESCE(SUM(amount), 0) FROM debt_payment WHERE debt_id = :debtId")
+            "SELECT COALESCE(SUM(dp.amount), 0) FROM debt_payment dp " +
+            "INNER JOIN debt d ON dp.debt_id = d.id " +
+            "WHERE dp.debt_id = :debtId AND d.user_id = :userId")
             .setParameter("debtId", debtId)
+            .setParameter("userId", userContext.getUserId())
             .getSingleResult();
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }

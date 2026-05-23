@@ -14,6 +14,7 @@ import static org.hamcrest.Matchers.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CategoryResourceTest {
 
+    private static final String TEST_USER = "test-workos-category-user";
     private static Long createdId;
 
     @Test
@@ -22,6 +23,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"color\":\"#00FF00\"}";
 
         Integer id = given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -40,6 +42,7 @@ class CategoryResourceTest {
     @Order(2)
     void listCategories_returns200WithCreatedCategory() {
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .when().get("/api/categories")
                 .then()
                 .statusCode(200)
@@ -51,6 +54,7 @@ class CategoryResourceTest {
     @Order(3)
     void getById_existingId_returns200WithCorrectFields() {
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .when().get("/api/categories/" + createdId)
                 .then()
                 .statusCode(200)
@@ -66,6 +70,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"color\":\"#0000FF\"}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().put("/api/categories/" + createdId)
@@ -78,6 +83,7 @@ class CategoryResourceTest {
     @Order(5)
     void deleteCategory_existingId_returns204() {
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .when().delete("/api/categories/" + createdId)
                 .then()
                 .statusCode(204);
@@ -87,6 +93,7 @@ class CategoryResourceTest {
     @Order(6)
     void getById_afterDelete_returns404() {
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .when().get("/api/categories/" + createdId)
                 .then()
                 .statusCode(404);
@@ -98,6 +105,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Bad Category\",\"type\":\"INVALID_TYPE\",\"color\":\"#FF0000\"}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -111,6 +119,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Duplicate Name\",\"type\":\"EGRESS\",\"color\":null}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -118,6 +127,7 @@ class CategoryResourceTest {
                 .statusCode(201);
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -129,6 +139,7 @@ class CategoryResourceTest {
     @Order(9)
     void getById_nonexistentId_returns404() {
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .when().get("/api/categories/999999")
                 .then()
                 .statusCode(404);
@@ -140,6 +151,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"\",\"type\":\"INGRESS\",\"color\":null}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -153,6 +165,7 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Long Color\",\"type\":\"INGRESS\",\"color\":\"#TOOLONGCOLOR\"}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().post("/api/categories")
@@ -166,10 +179,20 @@ class CategoryResourceTest {
         String body = "{\"name\":\"Ghost\",\"type\":\"EGRESS\",\"color\":null}";
 
         given()
+                .header("X-WorkOS-User-Id", TEST_USER)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .when().put("/api/categories/999999")
                 .then()
                 .statusCode(404);
+    }
+
+    @Test
+    @Order(13)
+    void missingHeader_returns401() {
+        given()
+                .when().get("/api/categories")
+                .then()
+                .statusCode(401);
     }
 }
