@@ -31,11 +31,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
 
     @Override
     public Category save(Category category) {
-        CategoryEntity entity = new CategoryEntity();
-        entity.name = category.getName();
-        entity.type = category.getType();
-        entity.color = category.getColor();
-        entity.user = UserEntity.findById(userContext.getUserId());
+        CategoryEntity entity = toEntity(category);
         entity.persist();
         return toDomain(entity);
     }
@@ -58,6 +54,15 @@ public class PanacheCategoryRepository implements CategoryRepository {
     @Override
     public boolean existsByName(String name) {
         return CategoryEntity.count("name", name) > 0;
+    }
+
+    private CategoryEntity toEntity(Category c) {
+        CategoryEntity e = new CategoryEntity();
+        e.name = c.getName();
+        e.type = c.getType();
+        e.color = c.getColor();
+        e.user = UserEntity.findById(userContext.getUserId());
+        return e;
     }
 
     private Category toDomain(CategoryEntity e) {

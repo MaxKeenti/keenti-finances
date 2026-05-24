@@ -21,6 +21,8 @@ import org.hibernate.annotations.ParamDef;
 @Filter(name = "userScope", condition = "user_id = :userId")
 @Entity
 @Table(name = "transaction")
+@FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = Long.class))
+@Filter(name = "userScope", condition = "user_id = :userId")
 public class TransactionEntity extends PanacheEntityBase {
 
     @Id

@@ -106,8 +106,8 @@ public class PanacheTransactionRepository implements TransactionRepository {
     @Override
     public BigDecimal getNetBalance() {
         Object raw = em.createNativeQuery(
-            "SELECT COALESCE(SUM(CASE WHEN direction='INGRESS' THEN amount ELSE -amount END), 0) FROM transaction " +
-            "WHERE user_id = :userId")
+            "SELECT COALESCE(SUM(CASE WHEN direction='INGRESS' THEN amount ELSE -amount END), 0) " +
+            "FROM transaction WHERE user_id = :userId")
             .setParameter("userId", userContext.getUserId())
             .getSingleResult();
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
