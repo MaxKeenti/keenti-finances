@@ -1,4 +1,5 @@
 import { error, fail } from '@sveltejs/kit';
+import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -50,8 +51,14 @@ type PaymentRecord = {
 	createdAt: string;
 };
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const id = params.id;
+
+	const session = getSession(cookies);
+	const accessToken = session?.accessToken;
+	const authHeaders: Record<string, string> = accessToken
+		? { Authorization: `Bearer ${accessToken}` }
+		: {};
 
 	let subscription: Subscription;
 	let members: MemberResponse[] = [];
@@ -60,7 +67,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 	let allTransactions: TransactionResponse[] = [];
 
 	try {
-		const subRes = await fetch(`${BACKEND}/api/subscriptions/${id}`);
+		const subRes = await fetch(`${BACKEND}/api/subscriptions/${id}`, { headers: authHeaders });
 		if (subRes.status === 404) error(404, 'Subscription not found');
 		if (!subRes.ok) {
 			console.error(`[subscriptions/${id}] load: backend returned ${subRes.status}`);
@@ -75,10 +82,10 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 	try {
 		const [membersRes, paymentsRes, linkedRes, allTxRes] = await Promise.all([
-			fetch(`${BACKEND}/api/subscriptions/${id}/members`),
-			fetch(`${BACKEND}/api/subscriptions/${id}/payments`),
-			fetch(`${BACKEND}/api/subscriptions/${id}/linked-transactions`),
-			fetch(`${BACKEND}/api/transactions`),
+			fetch(`${BACKEND}/api/subscriptions/${id}/members`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/subscriptions/${id}/payments`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/subscriptions/${id}/linked-transactions`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/transactions`, { headers: authHeaders }),
 		]);
 
 		if (membersRes.ok) members = await membersRes.json();
@@ -103,8 +110,14 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 };
 
 export const actions: Actions = {
-	recordPayment: async ({ params, request, fetch }) => {
+	recordPayment: async ({ params, request, fetch, cookies }) => {
 		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const data = await request.formData();
 		const paymentId = data.get('paymentId');
 
@@ -114,6 +127,7 @@ export const actions: Actions = {
 		try {
 			res = await fetch(`${BACKEND}/api/subscriptions/${id}/payments/${paymentId}`, {
 				method: 'PUT',
+				headers: authHeaders,
 			});
 		} catch {
 			console.error(`[subscriptions/${id}] recordPayment: backend unreachable`);
@@ -132,8 +146,14 @@ export const actions: Actions = {
 		return {};
 	},
 
-	linkTransactions: async ({ params, request, fetch }) => {
+	linkTransactions: async ({ params, request, fetch, cookies }) => {
 		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const data = await request.formData();
 		const transactionIds = data.getAll('transactionId').map(Number).filter(Boolean);
 
@@ -145,7 +165,7 @@ export const actions: Actions = {
 				transactionIds.map((txId) =>
 					fetch(`${BACKEND}/api/transactions/${txId}/link-subscription`, {
 						method: 'PUT',
-						headers: { 'content-type': 'application/json' },
+						headers: { 'content-type': 'application/json', ...authHeaders },
 						body: JSON.stringify({ subscriptionId: Number(id) }),
 					}),
 				),
