@@ -1,3 +1,4 @@
+import { getSession } from '$lib/server/workos-session';
 import type { PageServerLoad } from './$types';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -24,14 +25,22 @@ const EMPTY_SUMMARY: DashboardSummary = {
 	monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, ingress: 0, egress: 0 })),
 };
 
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 	const yearParam = url.searchParams.get('year');
 	const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+
+	const session = getSession(cookies);
+	const accessToken = session?.accessToken;
+	const authHeaders: Record<string, string> = accessToken
+		? { Authorization: `Bearer ${accessToken}` }
+		: {};
 
 	let summary: DashboardSummary = { ...EMPTY_SUMMARY, year };
 
 	try {
-		const res = await fetch(`${BACKEND}/api/dashboard/summary?year=${year}`);
+		const res = await fetch(`${BACKEND}/api/dashboard/summary?year=${year}`, {
+			headers: authHeaders,
+		});
 		if (res.ok) {
 			summary = await res.json();
 			console.log(

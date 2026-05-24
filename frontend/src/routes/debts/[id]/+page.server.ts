@@ -2,6 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
+import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 
 const paymentSchema = z.object({
@@ -37,15 +38,21 @@ type DebtPayment = {
 
 type Category = { id: number; name: string; type: string };
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const id = params.id;
+
+	const session = getSession(cookies);
+	const accessToken = session?.accessToken;
+	const authHeaders: Record<string, string> = accessToken
+		? { Authorization: `Bearer ${accessToken}` }
+		: {};
 
 	let debt: Debt;
 	let payments: DebtPayment[] = [];
 	let categories: Category[] = [];
 
 	try {
-		const debtRes = await fetch(`${BACKEND}/api/debts/${id}`);
+		const debtRes = await fetch(`${BACKEND}/api/debts/${id}`, { headers: authHeaders });
 		if (debtRes.status === 404) error(404, 'Debt not found');
 		if (!debtRes.ok) {
 			console.error(`[debts/${id}] load: backend returned ${debtRes.status}`);
@@ -60,8 +67,8 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 	try {
 		const [paymentsRes, categoriesRes] = await Promise.all([
-			fetch(`${BACKEND}/api/debts/${id}/payments`),
-			fetch(`${BACKEND}/api/categories`),
+			fetch(`${BACKEND}/api/debts/${id}/payments`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
 		]);
 
 		if (paymentsRes.ok) payments = await paymentsRes.json();
@@ -83,8 +90,14 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 };
 
 export const actions: Actions = {
-	recordPayment: async ({ params, request, fetch }) => {
+	recordPayment: async ({ params, request, fetch, cookies }) => {
 		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const form = await superValidate(request, zod4(paymentSchema));
 		if (!form.valid) return fail(400, { form });
 
@@ -92,7 +105,7 @@ export const actions: Actions = {
 		try {
 			res = await fetch(`${BACKEND}/api/debts/${id}/payments`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					amount: form.data.amount,
 					paymentDate: form.data.paymentDate,
