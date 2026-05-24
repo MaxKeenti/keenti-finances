@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
+import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 
 const transactionSchema = z.object({
@@ -31,16 +32,22 @@ type Transaction = {
 	contactName: string | null;
 };
 
-export const load: PageServerLoad = async ({ fetch }) => {
+export const load: PageServerLoad = async ({ fetch, cookies }) => {
+	const session = getSession(cookies);
+	const accessToken = session?.accessToken;
+	const authHeaders: Record<string, string> = accessToken
+		? { Authorization: `Bearer ${accessToken}` }
+		: {};
+
 	let transactions: Transaction[] = [];
 	let categories: Category[] = [];
 	let contacts: Contact[] = [];
 
 	try {
 		const [txRes, catRes, conRes] = await Promise.all([
-			fetch(`${BACKEND}/api/transactions`),
-			fetch(`${BACKEND}/api/categories`),
-			fetch(`${BACKEND}/api/contacts`),
+			fetch(`${BACKEND}/api/transactions`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 		]);
 
 		if (txRes.ok) transactions = await txRes.json();
@@ -65,7 +72,13 @@ export const load: PageServerLoad = async ({ fetch }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, fetch }) => {
+	create: async ({ request, fetch, cookies }) => {
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const form = await superValidate(request, zod4(transactionSchema));
 		if (!form.valid) return fail(400, { form });
 
@@ -75,7 +88,7 @@ export const actions: Actions = {
 		try {
 			res = await fetch(`${BACKEND}/api/transactions`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					amount: form.data.amount,
 					direction: form.data.direction,
@@ -103,7 +116,13 @@ export const actions: Actions = {
 		return { form };
 	},
 
-	update: async ({ request, fetch }) => {
+	update: async ({ request, fetch, cookies }) => {
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const form = await superValidate(request, zod4(transactionSchema));
 		if (!form.valid) return fail(400, { form });
 
@@ -116,7 +135,7 @@ export const actions: Actions = {
 		try {
 			res = await fetch(`${BACKEND}/api/transactions/${id}`, {
 				method: 'PUT',
-				headers: { 'content-type': 'application/json' },
+				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					amount: form.data.amount,
 					direction: form.data.direction,
@@ -145,7 +164,13 @@ export const actions: Actions = {
 		return { form };
 	},
 
-	delete: async ({ request, fetch }) => {
+	delete: async ({ request, fetch, cookies }) => {
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
 		const data = await request.formData();
 		const id = data.get('id');
 
@@ -153,7 +178,10 @@ export const actions: Actions = {
 
 		let res: Response;
 		try {
-			res = await fetch(`${BACKEND}/api/transactions/${id}`, { method: 'DELETE' });
+			res = await fetch(`${BACKEND}/api/transactions/${id}`, {
+				method: 'DELETE',
+				headers: authHeaders,
+			});
 		} catch {
 			console.error('[transactions] delete: backend unreachable');
 			return fail(502, { message: 'Could not reach backend service.' });
