@@ -1,5 +1,6 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
@@ -72,8 +73,33 @@ public class TransactionService implements TransactionUseCase {
     public void delete(Long id) {
         transactionRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + id));
+        transactionRepository.softDeleteById(id);
+        LOG.infof("transaction.soft_deleted id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void restore(Long id) {
+        transactionRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted transaction not found: " + id));
+        transactionRepository.restoreById(id);
+        LOG.infof("transaction.restored id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void permanentDelete(Long id) {
+        transactionRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted transaction not found: " + id));
         transactionRepository.deleteById(id);
-        LOG.infof("transaction.delete id=%d", id);
+        LOG.infof("transaction.permanent_deleted id=%d", id);
+    }
+
+    @Override
+    public List<TrashItem> listDeleted() {
+        List<TrashItem> items = transactionRepository.findAllDeleted();
+        LOG.infof("transaction.trash.list count=%d", items.size());
+        return items;
     }
 
     @Override

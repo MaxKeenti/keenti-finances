@@ -7,6 +7,7 @@
 		HandCoins,
 		Layers,
 		Users,
+		Trash2,
 		LogOut,
 		EllipsisVertical
 	} from '@lucide/svelte';
@@ -18,7 +19,8 @@
 		{ href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
 		{ href: '/debts', label: 'Debts', icon: HandCoins },
 		{ href: '/categories', label: 'Categories', icon: Layers },
-		{ href: '/contacts', label: 'Contacts', icon: Users }
+		{ href: '/contacts', label: 'Contacts', icon: Users },
+		{ href: '/trash', label: 'Trash', icon: Trash2 }
 	];
 
 	// Mobile: 3 pinned items

@@ -231,7 +231,7 @@
         return async ({ result, update }) => {
           if (result.type === "success") {
             deleteDialogOpen = false;
-            toast.success("Category deleted.");
+            toast.success("Category moved to trash.");
             await update();
           } else {
             const msg =

@@ -291,7 +291,7 @@
 			use:kitEnhance={async () => {
 				return async ({ result }) => {
 					if (result.type === 'redirect') {
-						toast.success('Transaction deleted.');
+						toast.success('Transaction moved to trash.');
 						goto(result.location);
 					} else if (result.type === 'failure') {
 						const msg =

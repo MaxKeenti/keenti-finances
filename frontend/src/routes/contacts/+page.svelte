@@ -204,7 +204,7 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Contact deleted.');
+						toast.success('Contact moved to trash.');
 						await update();
 					} else {
 						const msg =

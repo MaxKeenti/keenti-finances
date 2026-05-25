@@ -1,6 +1,7 @@
 package com.keenti.finances.domain.port.out;
 
 import com.keenti.finances.domain.model.Category;
+import com.keenti.finances.domain.model.TrashItem;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,4 +12,8 @@ public interface CategoryRepository {
     Category update(Category category);
     void deleteById(Long id);
     boolean existsByName(String name);
+    void softDeleteById(Long id);
+    void restoreById(Long id);
+    Optional<TrashItem> findDeletedById(Long id);
+    List<TrashItem> findAllDeleted();
 }

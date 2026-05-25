@@ -373,7 +373,7 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Transaction deleted.');
+						toast.success('Transaction moved to trash.');
 						await update();
 					} else {
 						const msg =

@@ -1,6 +1,7 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Contact;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.in.ContactUseCase;
 import com.keenti.finances.domain.port.out.ContactRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -56,7 +57,32 @@ public class ContactService implements ContactUseCase {
     public void delete(Long id) {
         contactRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Contact not found: " + id));
+        contactRepository.softDeleteById(id);
+        LOG.infof("contact.soft_deleted id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void restore(Long id) {
+        contactRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted contact not found: " + id));
+        contactRepository.restoreById(id);
+        LOG.infof("contact.restored id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void permanentDelete(Long id) {
+        contactRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted contact not found: " + id));
         contactRepository.deleteById(id);
-        LOG.infof("contact.delete id=%d", id);
+        LOG.infof("contact.permanent_deleted id=%d", id);
+    }
+
+    @Override
+    public List<TrashItem> listDeleted() {
+        List<TrashItem> items = contactRepository.findAllDeleted();
+        LOG.infof("contact.trash.list count=%d", items.size());
+        return items;
     }
 }

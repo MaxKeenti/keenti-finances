@@ -518,7 +518,7 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Debt deleted.');
+						toast.success('Debt moved to trash.');
 						await update();
 					} else {
 						const msg =

@@ -53,6 +53,7 @@ public class UserScopeFilter implements ContainerRequestFilter {
 
         Session session = em.unwrap(Session.class);
         session.enableFilter("userScope").setParameter("userId", user.id);
+        session.enableFilter("softDelete");
         LOG.infof("auth.workos.scope.enabled path=%s userId=%d", path, user.id);
     }
 

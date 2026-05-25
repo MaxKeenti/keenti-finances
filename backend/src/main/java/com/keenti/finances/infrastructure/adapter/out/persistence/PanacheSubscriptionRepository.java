@@ -1,20 +1,27 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Subscription;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.hibernate.Session;
 
 @ApplicationScoped
 public class PanacheSubscriptionRepository implements SubscriptionRepository {
 
     @Inject
     UserContext userContext;
+
+    @Inject
+    EntityManager em;
 
     @Override
     public List<Subscription> findAll() {
@@ -24,7 +31,8 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
 
     @Override
     public Optional<Subscription> findById(Long id) {
-        return SubscriptionEntity.<SubscriptionEntity>findByIdOptional(id).map(this::toDomain);
+        return SubscriptionEntity.<SubscriptionEntity>find("id = ?1", id)
+            .firstResultOptional().map(this::toDomain);
     }
 
     @Override
@@ -65,6 +73,54 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     public Optional<Subscription> findByTokenUuid(String tokenUuid) {
         return SubscriptionEntity.<SubscriptionEntity>find("tokenUuid", tokenUuid)
             .firstResultOptional().map(this::toDomain);
+    }
+
+    @Override
+    public void softDeleteById(Long id) {
+        SubscriptionEntity.update("deletedAt = ?1 WHERE id = ?2", LocalDateTime.now(), id);
+    }
+
+    @Override
+    public void restoreById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            SubscriptionEntity entity = SubscriptionEntity.findById(id);
+            if (entity != null) {
+                entity.deletedAt = null;
+            }
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public Optional<TrashItem> findDeletedById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return SubscriptionEntity.<SubscriptionEntity>find(
+                    "id = ?1 AND deletedAt IS NOT NULL", id)
+                    .firstResultOptional()
+                    .map(e -> new TrashItem(e.id, "subscription", e.name, e.deletedAt));
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public List<TrashItem> findAllDeleted() {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return SubscriptionEntity.<SubscriptionEntity>find(
+                    "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
+                    .stream()
+                    .map(e -> new TrashItem(e.id, "subscription", e.name, e.deletedAt))
+                    .collect(Collectors.toList());
+        } finally {
+            session.enableFilter("softDelete");
+        }
     }
 
     private SubscriptionEntity toEntity(Subscription s) {
