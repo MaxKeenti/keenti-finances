@@ -1,19 +1,26 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Debt;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.DebtRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.hibernate.Session;
 
 @ApplicationScoped
 public class PanacheDebtRepository implements DebtRepository {
 
     @Inject
     UserContext userContext;
+
+    @Inject
+    EntityManager em;
 
     @Override
     public List<Debt> findAll() {
@@ -25,7 +32,8 @@ public class PanacheDebtRepository implements DebtRepository {
 
     @Override
     public Optional<Debt> findById(Long id) {
-        return DebtEntity.<DebtEntity>findByIdOptional(id).map(this::toDomain);
+        return DebtEntity.<DebtEntity>find("id = ?1", id)
+                .firstResultOptional().map(this::toDomain);
     }
 
     @Override
@@ -54,13 +62,60 @@ public class PanacheDebtRepository implements DebtRepository {
         if (debt.getCreatedAt() != null) {
             entity.createdAt = debt.getCreatedAt();
         }
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 
     @Override
     public void deleteById(Long id) {
         DebtEntity.deleteById(id);
+    }
+
+    @Override
+    public void softDeleteById(Long id) {
+        DebtEntity.update("deletedAt = ?1 WHERE id = ?2", LocalDateTime.now(), id);
+    }
+
+    @Override
+    public void restoreById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            DebtEntity entity = DebtEntity.findById(id);
+            if (entity != null) {
+                entity.deletedAt = null;
+            }
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public Optional<TrashItem> findDeletedById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return DebtEntity.<DebtEntity>find(
+                    "id = ?1 AND deletedAt IS NOT NULL", id)
+                    .firstResultOptional()
+                    .map(e -> new TrashItem(e.id, "debt", e.description, e.deletedAt));
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public List<TrashItem> findAllDeleted() {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return DebtEntity.<DebtEntity>find(
+                    "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
+                    .stream()
+                    .map(e -> new TrashItem(e.id, "debt", e.description, e.deletedAt))
+                    .collect(Collectors.toList());
+        } finally {
+            session.enableFilter("softDelete");
+        }
     }
 
     private DebtEntity toEntity(Debt d) {

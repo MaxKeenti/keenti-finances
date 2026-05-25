@@ -65,6 +65,7 @@
 		"svelte"
 	],
 	"dependencies": {
+		"@fontsource-variable/inter": "^5.2.8",
 		"@workos-inc/node": "^9.3.0",
 		"d3-scale": "^4.0.2",
 		"zod": "^4.4.3"

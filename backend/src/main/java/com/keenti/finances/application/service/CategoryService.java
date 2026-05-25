@@ -1,6 +1,7 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Category;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.in.CategoryUseCase;
 import com.keenti.finances.domain.port.out.CategoryRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -72,7 +73,7 @@ public class CategoryService implements CategoryUseCase {
                         .build());
             }
         }
-        Category updated = categoryRepository.update(new Category(id, category.getName(), category.getType(), category.getColor()));
+        Category updated = categoryRepository.update(new Category(id, category.getName(), category.getType(), category.getHue()));
         LOG.infof("category.update id=%d name=%s type=%s", id, updated.getName(), updated.getType());
         return updated;
     }
@@ -82,7 +83,32 @@ public class CategoryService implements CategoryUseCase {
     public void delete(Long id) {
         categoryRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Category not found: " + id));
+        categoryRepository.softDeleteById(id);
+        LOG.infof("category.soft_deleted id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void restore(Long id) {
+        categoryRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted category not found: " + id));
+        categoryRepository.restoreById(id);
+        LOG.infof("category.restored id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void permanentDelete(Long id) {
+        categoryRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted category not found: " + id));
         categoryRepository.deleteById(id);
-        LOG.infof("category.delete id=%d", id);
+        LOG.infof("category.permanent_deleted id=%d", id);
+    }
+
+    @Override
+    public List<TrashItem> listDeleted() {
+        List<TrashItem> items = categoryRepository.findAllDeleted();
+        LOG.infof("category.trash.list count=%d", items.size());
+        return items;
     }
 }

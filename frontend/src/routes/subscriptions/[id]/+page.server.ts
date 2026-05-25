@@ -34,7 +34,7 @@ type TransactionResponse = {
 	transactionDate: string;
 	categoryId: number | null;
 	categoryName: string | null;
-	categoryColor: string | null;
+	categoryHue: number | null;
 	contactId: number | null;
 	contactName: string | null;
 	subscriptionId: number | null;

@@ -1,5 +1,6 @@
 package com.keenti.finances.domain.port.in;
 
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import java.util.List;
 import java.util.Optional;
@@ -12,4 +13,7 @@ public interface TransactionUseCase {
     void delete(Long id);
     Transaction linkSubscription(Long transactionId, Long subscriptionId);
     List<Transaction> listBySubscriptionId(Long subscriptionId);
+    void restore(Long id);
+    void permanentDelete(Long id);
+    List<TrashItem> listDeleted();
 }

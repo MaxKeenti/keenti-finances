@@ -1,13 +1,17 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.Category;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.CategoryRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.hibernate.Session;
 
 @ApplicationScoped
 public class PanacheCategoryRepository implements CategoryRepository {
@@ -15,9 +19,12 @@ public class PanacheCategoryRepository implements CategoryRepository {
     @Inject
     UserContext userContext;
 
+    @Inject
+    EntityManager em;
+
     @Override
     public List<Category> findAll() {
-        return CategoryEntity.<CategoryEntity>listAll()
+        return CategoryEntity.<CategoryEntity>find("deletedAt IS NULL")
                 .stream()
                 .map(this::toDomain)
                 .collect(Collectors.toList());
@@ -25,7 +32,8 @@ public class PanacheCategoryRepository implements CategoryRepository {
 
     @Override
     public Optional<Category> findById(Long id) {
-        return CategoryEntity.<CategoryEntity>findByIdOptional(id)
+        return CategoryEntity.<CategoryEntity>find("id = ?1 AND deletedAt IS NULL", id)
+                .firstResultOptional()
                 .map(this::toDomain);
     }
 
@@ -41,8 +49,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         CategoryEntity entity = CategoryEntity.findById(category.getId());
         entity.name = category.getName();
         entity.type = category.getType();
-        entity.color = category.getColor();
-        entity.user = UserEntity.findById(userContext.getUserId());
+        entity.hue = category.getHue();
         return toDomain(entity);
     }
 
@@ -56,16 +63,64 @@ public class PanacheCategoryRepository implements CategoryRepository {
         return CategoryEntity.count("name", name) > 0;
     }
 
+    @Override
+    public void softDeleteById(Long id) {
+        CategoryEntity.update("deletedAt = ?1 WHERE id = ?2", LocalDateTime.now(), id);
+    }
+
+    @Override
+    public void restoreById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            CategoryEntity entity = CategoryEntity.findById(id);
+            if (entity != null) {
+                entity.deletedAt = null;
+            }
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public Optional<TrashItem> findDeletedById(Long id) {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return CategoryEntity.<CategoryEntity>find(
+                    "id = ?1 AND deletedAt IS NOT NULL", id)
+                    .firstResultOptional()
+                    .map(e -> new TrashItem(e.id, "category", e.name, e.deletedAt));
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
+    public List<TrashItem> findAllDeleted() {
+        Session session = em.unwrap(Session.class);
+        session.disableFilter("softDelete");
+        try {
+            return CategoryEntity.<CategoryEntity>find(
+                    "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
+                    .stream()
+                    .map(e -> new TrashItem(e.id, "category", e.name, e.deletedAt))
+                    .collect(Collectors.toList());
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
     private CategoryEntity toEntity(Category c) {
         CategoryEntity e = new CategoryEntity();
         e.name = c.getName();
         e.type = c.getType();
-        e.color = c.getColor();
+        e.hue = c.getHue();
         e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
 
     private Category toDomain(CategoryEntity e) {
-        return new Category(e.id, e.name, e.type, e.color);
+        return new Category(e.id, e.name, e.type, e.hue);
     }
 }

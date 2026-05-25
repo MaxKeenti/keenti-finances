@@ -2,6 +2,7 @@ package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.DebtUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
@@ -72,8 +73,33 @@ public class DebtService implements DebtUseCase {
     public void delete(Long id) {
         debtRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Debt not found: " + id));
+        debtRepository.softDeleteById(id);
+        LOG.infof("debt.soft_deleted id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void restore(Long id) {
+        debtRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted debt not found: " + id));
+        debtRepository.restoreById(id);
+        LOG.infof("debt.restored id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void permanentDelete(Long id) {
+        debtRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted debt not found: " + id));
         debtRepository.deleteById(id);
-        LOG.infof("debt.delete id=%d", id);
+        LOG.infof("debt.permanent_deleted id=%d", id);
+    }
+
+    @Override
+    public List<TrashItem> listDeleted() {
+        List<TrashItem> items = debtRepository.findAllDeleted();
+        LOG.infof("debt.trash.list count=%d", items.size());
+        return items;
     }
 
     @Override

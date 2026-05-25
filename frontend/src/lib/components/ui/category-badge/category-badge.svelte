@@ -2,16 +2,17 @@
   import { getIsDark } from '$lib/theme.svelte';
 
   interface Props {
-    hue: string | null;
+    hue: number | null;
     name: string;
     direction?: string;
+    forceTheme?: 'light' | 'dark';
   }
 
-  let { hue, name, direction }: Props = $props();
+  let { hue, name, direction, forceTheme }: Props = $props();
 
   const style = $derived.by(() => {
-    if (!hue) return '';
-    const dark = getIsDark();
+    if (hue === null || hue === undefined) return '';
+    const dark = forceTheme ? forceTheme === 'dark' : getIsDark();
     const l = dark ? 0.3 : 0.92;
     const c = dark ? 0.08 : 0.05;
     const textColor = dark ? 'oklch(0.9 0 0)' : 'oklch(0.2 0 0)';
@@ -19,7 +20,7 @@
   });
 </script>
 
-{#if hue}
+{#if hue !== null && hue !== undefined}
   <span
     class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
     style={style}

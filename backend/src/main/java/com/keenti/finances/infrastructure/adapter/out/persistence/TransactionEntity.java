@@ -17,10 +17,12 @@ import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
-@Entity
-@Table(name = "transaction")
 @FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = Long.class))
 @Filter(name = "userScope", condition = "user_id = :userId")
+@FilterDef(name = "softDelete", defaultCondition = "deleted_at IS NULL")
+@Filter(name = "softDelete")
+@Entity
+@Table(name = "transaction")
 public class TransactionEntity extends PanacheEntityBase {
 
     @Id
@@ -53,6 +55,9 @@ public class TransactionEntity extends PanacheEntityBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subscription_id")
     public SubscriptionEntity subscription;
+
+    @Column(name = "deleted_at")
+    public LocalDateTime deletedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

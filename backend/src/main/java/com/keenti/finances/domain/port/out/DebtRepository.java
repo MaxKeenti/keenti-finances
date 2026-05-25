@@ -1,6 +1,7 @@
 package com.keenti.finances.domain.port.out;
 
 import com.keenti.finances.domain.model.Debt;
+import com.keenti.finances.domain.model.TrashItem;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,4 +12,8 @@ public interface DebtRepository {
     Debt save(Debt debt);
     Debt update(Debt debt);
     void deleteById(Long id);
+    void softDeleteById(Long id);
+    void restoreById(Long id);
+    Optional<TrashItem> findDeletedById(Long id);
+    List<TrashItem> findAllDeleted();
 }

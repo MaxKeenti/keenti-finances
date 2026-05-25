@@ -133,13 +133,13 @@ public class SubscriptionResource {
             ? categoryUseCase.getById(t.getCategoryId())
             : Optional.empty();
         String categoryName = category.map(Category::getName).orElse(null);
-        String categoryColor = category.map(Category::getColor).orElse(null);
+        Integer categoryHue = category.map(Category::getHue).orElse(null);
         String contactName = t.getContactId() != null
             ? contactUseCase.getById(t.getContactId()).map(Contact::getName).orElse(null)
             : null;
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
-            t.getTransactionDate(), t.getCategoryId(), categoryName, categoryColor,
+            t.getTransactionDate(), t.getCategoryId(), categoryName, categoryHue,
             t.getContactId(), contactName, t.getSubscriptionId()
         );
     }

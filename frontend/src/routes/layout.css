@@ -3,24 +3,32 @@
 @import "shadcn-svelte/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/playfair-display";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
+	/* Per-User personalization knobs. The hue defaults to 91 (current amber);
+	 * +layout.svelte overrides on the root element once preferences load. */
+	--primary-hue: 91;
+	--user-body-font: 'Geist Variable';
+	--user-heading-font: 'Fraunces Variable';
+
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.147 0.004 49.25);
 	--card: oklch(1 0 0);
 	--card-foreground: oklch(0.147 0.004 49.25);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0.147 0.004 49.25);
-	--primary: oklch(0.852 0.199 91.936);
-	--primary-foreground: oklch(0.421 0.095 57.708);
+	--primary: oklch(0.852 0.199 var(--primary-hue));
+	--primary-foreground: oklch(0.421 0.095 var(--primary-hue));
 	--secondary: oklch(0.967 0.001 286.375);
 	--secondary-foreground: oklch(0.21 0.006 285.885);
 	--muted: oklch(0.97 0.001 106.424);
 	--muted-foreground: oklch(0.553 0.013 58.071);
-	--accent: oklch(0.852 0.199 91.936);
-	--accent-foreground: oklch(0.421 0.095 57.708);
+	--accent: oklch(0.852 0.199 var(--primary-hue));
+	--accent-foreground: oklch(0.421 0.095 var(--primary-hue));
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.923 0.003 48.717);
 	--input: oklch(0.923 0.003 48.717);
@@ -48,14 +56,14 @@
 	--card-foreground: oklch(0.985 0.001 106.423);
 	--popover: oklch(0.216 0.006 56.043);
 	--popover-foreground: oklch(0.985 0.001 106.423);
-	--primary: oklch(0.795 0.184 86.047);
-	--primary-foreground: oklch(0.421 0.095 57.708);
+	--primary: oklch(0.795 0.184 var(--primary-hue));
+	--primary-foreground: oklch(0.421 0.095 var(--primary-hue));
 	--secondary: oklch(0.274 0.006 286.033);
 	--secondary-foreground: oklch(0.985 0 0);
 	--muted: oklch(0.268 0.007 34.298);
 	--muted-foreground: oklch(0.709 0.01 56.259);
-	--accent: oklch(0.795 0.184 86.047);
-	--accent-foreground: oklch(0.421 0.095 57.708);
+	--accent: oklch(0.795 0.184 var(--primary-hue));
+	--accent-foreground: oklch(0.421 0.095 var(--primary-hue));
 	--destructive: oklch(0.704 0.191 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
@@ -76,8 +84,8 @@
 }
 
 @theme inline {
-	--font-sans: 'Geist Variable', sans-serif;
-	--font-heading: 'Fraunces Variable', serif;
+	--font-sans: var(--user-body-font), sans-serif;
+	--font-heading: var(--user-heading-font), serif;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

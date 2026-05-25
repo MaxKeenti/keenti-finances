@@ -1,6 +1,7 @@
 package com.keenti.finances.domain.port.out;
 
 import com.keenti.finances.domain.model.MonthSummary;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,4 +16,8 @@ public interface TransactionRepository {
     List<MonthSummary> findMonthlySummary(int year);
     BigDecimal getNetBalance();
     List<Transaction> findBySubscriptionId(Long subscriptionId);
+    void softDeleteById(Long id);
+    void restoreById(Long id);
+    Optional<TrashItem> findDeletedById(Long id);
+    List<TrashItem> findAllDeleted();
 }

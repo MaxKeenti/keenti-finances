@@ -2,6 +2,7 @@ package com.keenti.finances.domain.port.in;
 
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.SubscriptionMember;
+import com.keenti.finances.domain.model.TrashItem;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,4 +17,7 @@ public interface SubscriptionUseCase {
     List<SubscriptionMember> listMembers(Long subscriptionId);
     Optional<Subscription> getByToken(String tokenUuid);
     void recalculateShares(Long subscriptionId);
+    void restore(Long id);
+    void permanentDelete(Long id);
+    List<TrashItem> listDeleted();
 }

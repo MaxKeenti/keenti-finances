@@ -159,7 +159,7 @@
 							</div>
 							<div class="flex items-center gap-2 mt-2">
 								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+									<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
 								{/if}
 								{#if tx.contactName}
 									<span class="text-xs text-muted-foreground">{tx.contactName}</span>
@@ -198,7 +198,7 @@
 							</Table.Cell>
 							<Table.Cell>
 								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+									<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
 								{:else}
 									—
 								{/if}
@@ -373,7 +373,7 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Transaction deleted.');
+						toast.success('Transaction moved to trash.');
 						await update();
 					} else {
 						const msg =

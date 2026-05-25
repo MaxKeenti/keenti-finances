@@ -10,14 +10,17 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
-@Entity
-@Table(name = "contact")
 @FilterDef(name = "userScope", parameters = @ParamDef(name = "userId", type = Long.class))
 @Filter(name = "userScope", condition = "user_id = :userId")
+@FilterDef(name = "softDelete", defaultCondition = "deleted_at IS NULL")
+@Filter(name = "softDelete")
+@Entity
+@Table(name = "contact")
 public class ContactEntity extends PanacheEntityBase {
 
     @Id
@@ -30,6 +33,9 @@ public class ContactEntity extends PanacheEntityBase {
     public String phone;
 
     public String email;
+
+    @Column(name = "deleted_at")
+    public LocalDateTime deletedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

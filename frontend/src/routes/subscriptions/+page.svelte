@@ -397,7 +397,7 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Subscription deleted.');
+						toast.success('Subscription moved to trash.');
 						await update();
 					} else {
 						const msg =

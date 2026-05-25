@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleFetch } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { getWorkOS, getAuthorizationUrl } from '$lib/server/workos';
 import {
@@ -80,4 +80,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const authUrl = getAuthorizationUrl(redirectUri);
 	console.log(`[workos-auth] redirect — unauthenticated request to ${path}`);
 	redirect(303, authUrl);
+};
+
+const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080';
+
+export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
+	if (request.url.startsWith(BACKEND_URL) && event.locals.session) {
+		const headers = new Headers(request.headers);
+		headers.set('X-WorkOS-User-Id', event.locals.session.user.id);
+		return fetch(new Request(request, { headers }));
+	}
+	return fetch(request);
 };

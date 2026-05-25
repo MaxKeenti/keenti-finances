@@ -48,3 +48,7 @@ vendor/
 coverage/
 .cache/
 tmp/
+
+# GSD framework (migrated to docs/archive/gsd-snapshot/ on 2026-05-25)
+.gsd
+.gsd-id

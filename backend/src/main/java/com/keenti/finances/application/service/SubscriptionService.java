@@ -2,6 +2,7 @@ package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.SubscriptionMember;
+import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.in.SubscriptionUseCase;
 import com.keenti.finances.domain.port.out.SubscriptionMemberRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
@@ -94,8 +95,33 @@ public class SubscriptionService implements SubscriptionUseCase {
     public void delete(Long id) {
         subscriptionRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Subscription not found: " + id));
+        subscriptionRepository.softDeleteById(id);
+        LOG.infof("subscription.soft_deleted id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void restore(Long id) {
+        subscriptionRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted subscription not found: " + id));
+        subscriptionRepository.restoreById(id);
+        LOG.infof("subscription.restored id=%d", id);
+    }
+
+    @Override
+    @Transactional
+    public void permanentDelete(Long id) {
+        subscriptionRepository.findDeletedById(id).orElseThrow(() ->
+            new NotFoundException("Deleted subscription not found: " + id));
         subscriptionRepository.deleteById(id);
-        LOG.infof("subscription.delete id=%d", id);
+        LOG.infof("subscription.permanent_deleted id=%d", id);
+    }
+
+    @Override
+    public List<TrashItem> listDeleted() {
+        List<TrashItem> items = subscriptionRepository.findAllDeleted();
+        LOG.infof("subscription.trash.list count=%d", items.size());
+        return items;
     }
 
     @Override
