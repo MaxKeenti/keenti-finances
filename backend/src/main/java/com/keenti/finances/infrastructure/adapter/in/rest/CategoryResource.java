@@ -47,7 +47,7 @@ public class CategoryResource {
     public Response create(@Valid CategoryRequest request) {
         Category created = categoryUseCase.create(new Category(null, request.name(), request.type(), request.hue()));
         return Response.status(Response.Status.CREATED)
-                .entity(new CategoryResponse(created.getId(), created.getName(), created.getType(), created.getColor()))
+                .entity(new CategoryResponse(created.getId(), created.getName(), created.getType(), created.getHue()))
                 .build();
     }
 
@@ -55,7 +55,7 @@ public class CategoryResource {
     @Path("/{id}")
     public Response update(@PathParam("id") Long id, @Valid CategoryRequest request) {
         Category updated = categoryUseCase.update(id, new Category(null, request.name(), request.type(), request.hue()));
-        return Response.ok(new CategoryResponse(updated.getId(), updated.getName(), updated.getType(), updated.getColor())).build();
+        return Response.ok(new CategoryResponse(updated.getId(), updated.getName(), updated.getType(), updated.getHue())).build();
     }
 
     @DELETE

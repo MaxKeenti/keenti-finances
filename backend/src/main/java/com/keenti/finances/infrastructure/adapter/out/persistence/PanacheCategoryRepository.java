@@ -84,7 +84,6 @@ public class PanacheCategoryRepository implements CategoryRepository {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Optional<TrashItem> findDeletedById(Long id) {
         Session session = em.unwrap(Session.class);
         session.disableFilter("softDelete");
@@ -99,7 +98,6 @@ public class PanacheCategoryRepository implements CategoryRepository {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<TrashItem> findAllDeleted() {
         Session session = em.unwrap(Session.class);
         session.disableFilter("softDelete");
