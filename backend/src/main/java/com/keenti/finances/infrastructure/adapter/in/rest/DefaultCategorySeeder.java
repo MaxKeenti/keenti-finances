@@ -35,6 +35,15 @@ public class DefaultCategorySeeder {
     };
 
     public void seedFor(UserEntity user) {
+        // Idempotency guard: if the User already has any Category, treat
+        // seeding as already done. Protects against re-invocation (e.g. a
+        // future admin re-seed path) and against partial-unique-index
+        // collisions on category(user_id, name) from ADR-0015.
+        long existing = CategoryEntity.count("user.id = ?1", user.id);
+        if (existing > 0) {
+            LOG.infof("category.defaults_skipped userId=%d existing=%d", user.id, existing);
+            return;
+        }
         for (Seed s : STARTERS) {
             CategoryEntity c = new CategoryEntity();
             c.name = s.name();
