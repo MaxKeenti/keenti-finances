@@ -50,7 +50,6 @@ public class PanacheCategoryRepository implements CategoryRepository {
         entity.name = category.getName();
         entity.type = category.getType();
         entity.hue = category.getHue();
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 

@@ -50,7 +50,6 @@ public class PanacheContactRepository implements ContactRepository {
         entity.name = contact.getName();
         entity.phone = contact.getPhone();
         entity.email = contact.getEmail();
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 

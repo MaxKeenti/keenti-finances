@@ -64,7 +64,6 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.subscription = transaction.getSubscriptionId() != null
                 ? SubscriptionEntity.findById(transaction.getSubscriptionId())
                 : null;
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 

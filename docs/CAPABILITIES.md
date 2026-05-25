@@ -17,14 +17,14 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 
 - **Categories with Direction (INGRESS / EGRESS / BOTH)** — full CRUD, per-User. *Shipped (M001 + M003).*
 - **Category colour as OKLCH hue with theme-adaptive badges** — see ADR-0008. *Shipped (M002).*
-- **Category hue is mandatory; stored as `SMALLINT` (0–359) with CHECK constraint** — see ADR-0017. *Planned (M003).*
-- **Category colour picker: 360° hue wheel + hex input, live preview in both themes** — direction-constrained palette relaxed but new-Category default hue is still direction-seeded (INGRESS=100, EGRESS=10, BOTH=220). Hex input is lossy by design; the dual preview is the explanation. Vivid slider gradient (constant L=0.7, C=0.18) for hue navigation. *Planned (M003).*
-- **System default categories seeded JIT at user creation** — 12 starter Categories written in `provisionUser()` so a new User lands on a populated Categories page on first login. *Planned (M003).*
+- **Category hue is mandatory; stored as `SMALLINT` (0–359) with CHECK constraint** — see ADR-0017. *Shipped (M003).*
+- **Category colour picker: 360° hue wheel + hex input, live preview in both themes** — direction-constrained palette relaxed but new-Category default hue is still direction-seeded (INGRESS=100, EGRESS=10, BOTH=220). Hex input is lossy by design; the dual preview is the explanation. Vivid slider gradient (constant L=0.7, C=0.18) for hue navigation. *Shipped (M003).*
+- **System default categories seeded JIT at user creation** — 12 starter Categories (Salary, Other income, Supermarkets, Restaurants, Transportation, Mobile/TV/Internet, Rent/Mortgage, Clothing, Pharmacies, Subscriptions, Entertainment, Transfers) written by `DefaultCategorySeeder` inside `provisionUser()` so a new User lands on a populated Categories page on first login. *Shipped (M003).*
 
 ## Subscriptions
 
 - **Personal vs Shared Subscriptions with Members** — full CRUD. *Shipped (M001).*
-- **Daily idempotent billing scheduler, 7-day lead time** — see ADR-0006. *Shipped (M001).*
+- **Daily idempotent billing scheduler, 7-day lead time** — see ADR-0006. The cron path runs outside any HTTP request and explicitly enables the `softDelete` Hibernate filter (since `UserScopeFilter` doesn't fire) so soft-deleted Subscriptions aren't billed. *Shipped (M001 + M003 soft-delete fix).*
 - **Manual billing trigger** — POST endpoint + UI button; idempotent. *Shipped (M002).*
 - **Owner Participation toggle (middleman mode)** — boolean on Subscription; see ADR-0009. *Shipped (M002).*
 - **Public Subscription View** — unauthenticated, UUID-token-protected page where Members see payment status. Invalid tokens 404. *Shipped (M001).*
@@ -56,9 +56,9 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 ## Personalization
 
 - **System theme detection (`prefers-color-scheme`)** — no manual toggle, no flash on load. *Shipped (M002).*
-- **Per-User theme customization** — primary OKLCH hue + heading/body font presets stored on `app_user`, applied via CSS variables loaded in `+layout.server.ts`. Primary hue rotates `--primary`, `--accent`, and `--primary-foreground` only; theme-fixed L/C, swap only the hue. Settings page auto-saves with debounce + "Saved ✓" indicator. *Planned (M003).*
-- **Font preset list** — 3 sans (Geist, Inter, System UI) × 2 serif/display (Fraunces, Playfair Display). *Planned (M003).*
-- **Font loading strategy** — the User's currently-selected fonts are preloaded via `<link rel="preload">` in `app.html` (server-rendered from preferences). Other presets lazy-import via CSS and incur a brief FOUT the first time they're picked in Settings. *Planned (M003).*
+- **Per-User theme customization** — primary OKLCH hue + heading/body font presets stored on `app_user`, applied via CSS variables loaded in `+layout.server.ts` and emitted SSR-side in `<svelte:head>`. Primary hue rotates `--primary`, `--accent`, and `--primary-foreground` only; theme-fixed L/C, swap only the hue. Settings page auto-saves with 500ms debounce on the slider, immediate on dropdowns, plus a "Saved ✓" indicator. *Shipped (M003).*
+- **Font preset list** — 3 body (Geist, Inter, System UI) × 2 heading (Fraunces, Playfair Display). *Shipped (M003).*
+- **Font loading strategy** — the User's currently-selected fonts are preloaded via `<link rel="preload">` rendered through `<svelte:head>` (Vite `?url` imports survive the bundle). All four web font @imports live in `layout.css` with `font-display: swap`, so the un-preloaded fonts lazy-fetch only when first selected in Settings (brief FOUT on first switch is acceptable). *Shipped (M003).*
 
 ## Navigation & layout
 
@@ -71,7 +71,7 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 - **SvelteKit-owns-auth, Quarkus-internal-only via SvelteKit proxy** — see ADR-0002, ADR-0003. *Shipped (M001).*
 - **Railway two-service deploy with private networking** — see ADR-0007. *Shipped (M001 artifacts, M002 provisioning).*
 - **`/q/health` probe + multi-stage Dockerfiles + `%prod` Quarkus profile** — *Shipped (M001).*
-- **JUnit integration tests for daily billing scheduler under stacked filters** — scoped down from the broader M002 test backlog; covers idempotency, 7-day lead, and behaviour when a Subscription or its Owner User is soft-deleted. Owner-participation math and Transaction↔Subscription linking deliberately left untested — failures in either are immediately user-visible. *Planned (M003).*
+- **JUnit integration tests for daily billing scheduler under stacked filters** — covers idempotency (re-running the cron creates no duplicate Payment Records), 7-day lead (Subscriptions whose next billing is more than a week out are skipped), and soft-delete handling (the cron explicitly enables the `softDelete` Hibernate filter since `UserScopeFilter` doesn't fire outside HTTP requests — without this, soft-deleted Subscriptions would still be billed). Owner-participation math and Transaction↔Subscription linking deliberately left untested — failures in either are immediately user-visible. *Shipped (M003).*
 
 ---
 

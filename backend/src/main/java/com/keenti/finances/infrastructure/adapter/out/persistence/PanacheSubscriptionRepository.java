@@ -54,7 +54,6 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         entity.nextBillingDate = subscription.getNextBillingDate();
         entity.tokenUuid = subscription.getTokenUuid();
         entity.ownerParticipates = subscription.isOwnerParticipates();
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 

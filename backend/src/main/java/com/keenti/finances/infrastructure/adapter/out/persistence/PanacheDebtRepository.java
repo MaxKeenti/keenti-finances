@@ -62,7 +62,6 @@ public class PanacheDebtRepository implements DebtRepository {
         if (debt.getCreatedAt() != null) {
             entity.createdAt = debt.getCreatedAt();
         }
-        entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
 

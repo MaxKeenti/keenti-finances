@@ -27,6 +27,9 @@ public class UserScopeFilter implements ContainerRequestFilter {
     @Inject
     EntityManager em;
 
+    @Inject
+    DefaultCategorySeeder defaultCategorySeeder;
+
     @Override
     @Transactional
     public void filter(ContainerRequestContext requestContext) {
@@ -67,6 +70,7 @@ public class UserScopeFilter implements ContainerRequestFilter {
             em.persist(entity);
             em.flush();
             LOG.infof("auth.workos.jit_provisioned userId=%d workosId=%s", entity.id, workosId);
+            defaultCategorySeeder.seedFor(entity);
             return entity;
         } catch (PersistenceException ex) {
             LOG.warnf("auth.workos.jit_race workosId=%s", workosId);
