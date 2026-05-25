@@ -124,7 +124,7 @@
 				<p class="text-sm text-muted-foreground">Category</p>
 				<div class="mt-1">
 					{#if tx.categoryName}
-						<CategoryBadge hue={tx.categoryColor ?? null} name={tx.categoryName} direction={tx.direction} />
+						<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
 					{:else}
 						<span class="text-muted-foreground">—</span>
 					{/if}

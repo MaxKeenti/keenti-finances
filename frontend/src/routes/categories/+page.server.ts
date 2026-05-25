@@ -5,11 +5,13 @@ import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 
+const DIRECTION_DEFAULT_HUE = { INGRESS: 100, EGRESS: 10, BOTH: 220 } as const;
+
 const categorySchema = z.object({
 	id: z.coerce.number().optional(),
 	name: z.string().min(1, 'Name is required'),
 	type: z.enum(['INGRESS', 'EGRESS', 'BOTH']),
-	color: z.string().optional(),
+	hue: z.coerce.number().int().min(0).max(359),
 });
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -21,7 +23,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		? { Authorization: `Bearer ${accessToken}` }
 		: {};
 
-	let categories: Array<{ id: number; name: string; type: string; color?: string }> = [];
+	let categories: Array<{ id: number; name: string; type: string; hue: number }> = [];
 	try {
 		const res = await fetch(`${BACKEND}/api/categories`, { headers: authHeaders });
 		if (res.ok) {
@@ -33,7 +35,10 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		console.error('[categories] load: backend unreachable');
 	}
 
-	const form = await superValidate({ name: '', type: 'INGRESS' as const }, zod4(categorySchema));
+	const form = await superValidate(
+		{ name: '', type: 'INGRESS' as const, hue: DIRECTION_DEFAULT_HUE.INGRESS },
+		zod4(categorySchema),
+	);
 	return { categories, form };
 };
 
@@ -53,7 +58,7 @@ export const actions: Actions = {
 			res = await fetch(`${BACKEND}/api/categories`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json', ...authHeaders },
-				body: JSON.stringify({ name: form.data.name, type: form.data.type, color: form.data.color ?? null }),
+				body: JSON.stringify({ name: form.data.name, type: form.data.type, hue: form.data.hue }),
 			});
 		} catch {
 			console.error('[categories] create: backend unreachable');
@@ -91,7 +96,7 @@ export const actions: Actions = {
 			res = await fetch(`${BACKEND}/api/categories/${id}`, {
 				method: 'PUT',
 				headers: { 'content-type': 'application/json', ...authHeaders },
-				body: JSON.stringify({ name: form.data.name, type: form.data.type, color: form.data.color ?? null }),
+				body: JSON.stringify({ name: form.data.name, type: form.data.type, hue: form.data.hue }),
 			});
 		} catch {
 			console.error('[categories] update: backend unreachable');

@@ -19,8 +19,8 @@ class CategoryResourceTest {
 
     @Test
     @Order(1)
-    void createCategory_validBody_returns201WithColorAndId() {
-        String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"color\":\"#00FF00\"}";
+    void createCategory_validBody_returns201WithHueAndId() {
+        String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"hue\":100}";
 
         Integer id = given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -32,7 +32,7 @@ class CategoryResourceTest {
                 .body("id", notNullValue())
                 .body("name", equalTo("Test Salary"))
                 .body("type", equalTo("INGRESS"))
-                .body("color", equalTo("#00FF00"))
+                .body("hue", equalTo(100))
                 .extract().path("id");
 
         createdId = id.longValue();
@@ -47,7 +47,7 @@ class CategoryResourceTest {
                 .then()
                 .statusCode(200)
                 .body("size()", greaterThanOrEqualTo(1))
-                .body("find { it.name == 'Test Salary' }.color", equalTo("#00FF00"));
+                .body("find { it.name == 'Test Salary' }.hue", equalTo(100));
     }
 
     @Test
@@ -61,13 +61,13 @@ class CategoryResourceTest {
                 .body("id", equalTo(createdId.intValue()))
                 .body("name", equalTo("Test Salary"))
                 .body("type", equalTo("INGRESS"))
-                .body("color", equalTo("#00FF00"));
+                .body("hue", equalTo(100));
     }
 
     @Test
     @Order(4)
-    void updateCategory_newColor_returns200WithUpdatedColor() {
-        String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"color\":\"#0000FF\"}";
+    void updateCategory_newHue_returns200WithUpdatedHue() {
+        String body = "{\"name\":\"Test Salary\",\"type\":\"INGRESS\",\"hue\":120}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -76,7 +76,7 @@ class CategoryResourceTest {
                 .when().put("/api/categories/" + createdId)
                 .then()
                 .statusCode(200)
-                .body("color", equalTo("#0000FF"));
+                .body("hue", equalTo(120));
     }
 
     @Test
@@ -102,7 +102,7 @@ class CategoryResourceTest {
     @Test
     @Order(7)
     void createCategory_invalidType_returns400() {
-        String body = "{\"name\":\"Bad Category\",\"type\":\"INVALID_TYPE\",\"color\":\"#FF0000\"}";
+        String body = "{\"name\":\"Bad Category\",\"type\":\"INVALID_TYPE\",\"hue\":10}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -116,7 +116,7 @@ class CategoryResourceTest {
     @Test
     @Order(8)
     void createCategory_duplicateName_returns409() {
-        String body = "{\"name\":\"Duplicate Name\",\"type\":\"EGRESS\",\"color\":null}";
+        String body = "{\"name\":\"Duplicate Name\",\"type\":\"EGRESS\",\"hue\":10}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -148,7 +148,7 @@ class CategoryResourceTest {
     @Test
     @Order(10)
     void createCategory_emptyName_returns400() {
-        String body = "{\"name\":\"\",\"type\":\"INGRESS\",\"color\":null}";
+        String body = "{\"name\":\"\",\"type\":\"INGRESS\",\"hue\":100}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -161,8 +161,8 @@ class CategoryResourceTest {
 
     @Test
     @Order(11)
-    void createCategory_colorExceedsMaxLength_returns400() {
-        String body = "{\"name\":\"Long Color\",\"type\":\"INGRESS\",\"color\":\"#TOOLONGCOLOR\"}";
+    void createCategory_hueOutOfRange_returns400() {
+        String body = "{\"name\":\"Out Of Range\",\"type\":\"INGRESS\",\"hue\":360}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)
@@ -176,7 +176,7 @@ class CategoryResourceTest {
     @Test
     @Order(12)
     void updateCategory_nonexistentId_returns404() {
-        String body = "{\"name\":\"Ghost\",\"type\":\"EGRESS\",\"color\":null}";
+        String body = "{\"name\":\"Ghost\",\"type\":\"EGRESS\",\"hue\":10}";
 
         given()
                 .header("X-WorkOS-User-Id", TEST_USER)

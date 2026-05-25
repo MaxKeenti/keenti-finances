@@ -33,7 +33,8 @@ public class CategoryEntity extends PanacheEntityBase {
     @Column(nullable = false)
     public String type;
 
-    public String color;
+    @Column(nullable = false)
+    public int hue;
 
     @Column(name = "deleted_at")
     public LocalDateTime deletedAt;

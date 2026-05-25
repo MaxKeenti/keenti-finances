@@ -49,7 +49,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         CategoryEntity entity = CategoryEntity.findById(category.getId());
         entity.name = category.getName();
         entity.type = category.getType();
-        entity.color = category.getColor();
+        entity.hue = category.getHue();
         entity.user = UserEntity.findById(userContext.getUserId());
         return toDomain(entity);
     }
@@ -118,12 +118,12 @@ public class PanacheCategoryRepository implements CategoryRepository {
         CategoryEntity e = new CategoryEntity();
         e.name = c.getName();
         e.type = c.getType();
-        e.color = c.getColor();
+        e.hue = c.getHue();
         e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
 
     private Category toDomain(CategoryEntity e) {
-        return new Category(e.id, e.name, e.type, e.color);
+        return new Category(e.id, e.name, e.type, e.hue);
     }
 }

@@ -14,14 +14,16 @@
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { CategoryBadge } from "$lib/components/ui/category-badge";
-  import { SwatchPicker } from "$lib/components/ui/swatch-picker";
+  import { ColorPicker } from "$lib/components/ui/color-picker";
   import type { PageData } from "./$types";
+
+  const DIRECTION_DEFAULT_HUE = { INGRESS: 100, EGRESS: 10, BOTH: 220 } as const;
 
   const categorySchema = z.object({
     id: z.coerce.number().optional(),
     name: z.string().min(1, "Name is required"),
     type: z.enum(["INGRESS", "EGRESS", "BOTH"]),
-    color: z.string().optional(),
+    hue: z.coerce.number().int().min(0).max(359),
   });
 
   let { data }: { data: PageData } = $props();
@@ -49,17 +51,19 @@
 
   function openCreate() {
     editMode = false;
-    sf.reset({ data: { name: "", type: "INGRESS", color: undefined } });
+    sf.reset({
+      data: { name: "", type: "INGRESS", hue: DIRECTION_DEFAULT_HUE.INGRESS },
+    });
     dialogOpen = true;
   }
 
-  function openEdit(cat: { id: number; name: string; type: string; color?: string }) {
+  function openEdit(cat: { id: number; name: string; type: string; hue: number }) {
     editMode = true;
     form.set({
       id: cat.id,
       name: cat.name,
       type: cat.type as "INGRESS" | "EGRESS" | "BOTH",
-      color: cat.color,
+      hue: cat.hue,
     });
     dialogOpen = true;
   }
@@ -113,7 +117,7 @@
           {#each data.categories as cat (cat.id)}
             <Table.Row>
               <Table.Cell class="font-medium">
-                <CategoryBadge hue={cat.color ?? null} name={cat.name} direction={cat.type} />
+                <CategoryBadge hue={cat.hue} name={cat.name} direction={cat.type} />
               </Table.Cell>
               <Table.Cell>
                 <Badge variant={typeBadgeVariant[cat.type]}>
@@ -180,7 +184,11 @@
             <NativeSelect
               name={fieldName}
               value={$form.type}
-              onValueChange={(v) => { $form.type = v as 'INGRESS' | 'EGRESS' | 'BOTH'; }}
+              onValueChange={(v) => {
+                const next = v as 'INGRESS' | 'EGRESS' | 'BOTH';
+                if (!editMode) $form.hue = DIRECTION_DEFAULT_HUE[next];
+                $form.type = next;
+              }}
               placeholder="Select type…"
               items={[
                 { value: 'INGRESS', label: 'Ingress (income)' },
@@ -195,12 +203,13 @@
       </Form.Field>
 
       <div class="grid gap-1.5">
-        <span class="text-sm font-medium leading-none">Color</span>
-        <input type="hidden" name="color" value={$form.color ?? ''} />
-        <SwatchPicker
+        <span class="text-sm font-medium leading-none">Colour</span>
+        <input type="hidden" name="hue" value={$form.hue} />
+        <ColorPicker
+          name={$form.name}
           direction={$form.type}
-          value={$form.color ?? null}
-          onchange={(hue) => { $form.color = hue || undefined; }}
+          hue={$form.hue}
+          onchange={(h) => { $form.hue = h; }}
         />
       </div>
 

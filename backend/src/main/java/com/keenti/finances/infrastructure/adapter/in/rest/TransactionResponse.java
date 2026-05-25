@@ -11,7 +11,7 @@ public record TransactionResponse(
     LocalDate transactionDate,
     Long categoryId,
     String categoryName,
-    String categoryColor,
+    Integer categoryHue,
     Long contactId,
     String contactName,
     Long subscriptionId

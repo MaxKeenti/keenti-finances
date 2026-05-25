@@ -26,7 +26,7 @@ type Transaction = {
 	transactionDate: string;
 	categoryId: number;
 	categoryName: string | null;
-	categoryColor: string | null;
+	categoryHue: number | null;
 	contactId: number | null;
 	contactName: string | null;
 };
