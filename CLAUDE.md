@@ -13,3 +13,7 @@ Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `read
 ### Domain docs
 
 Single-context: `CONTEXT.md` at the repo root is the domain glossary; `docs/adr/` holds architectural decisions. See `docs/agents/domain.md`.
+
+### Database migrations
+
+Flyway `Vnn__*.sql` files are append-only once deployed. Never edit an applied migration — ship a new one. See `docs/agents/migrations.md` for the failure mode and remediation.
