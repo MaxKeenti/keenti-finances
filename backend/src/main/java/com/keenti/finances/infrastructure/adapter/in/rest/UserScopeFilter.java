@@ -11,7 +11,6 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
-import org.hibernate.Session;
 import org.jboss.logging.Logger;
 
 @Provider
@@ -53,11 +52,12 @@ public class UserScopeFilter implements ContainerRequestFilter {
             .orElseGet(() -> provisionUser(workosId));
 
         userContext.setUserId(user.id);
-
-        Session session = em.unwrap(Session.class);
-        session.enableFilter("userScope").setParameter("userId", user.id);
-        session.enableFilter("softDelete");
-        LOG.infof("auth.workos.scope.enabled path=%s userId=%d", path, user.id);
+        // The Hibernate userScope + softDelete filters are activated by
+        // UserScopedInterceptor inside each resource's transactional scope —
+        // this filter's @Transactional opens a separate session that ends
+        // before the resource method runs, so enabling filters here was a
+        // no-op cross-session call that caused a cross-user data leak.
+        LOG.infof("auth.workos.scope.resolved path=%s userId=%d", path, user.id);
     }
 
     private UserEntity provisionUser(String workosId) {

@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import org.hibernate.Session;
 
 @ApplicationScoped
+@com.keenti.finances.infrastructure.adapter.in.rest.UserScoped
 public class PanacheContactRepository implements ContactRepository {
 
     @Inject
