@@ -38,7 +38,7 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 ## Multi-user & identity
 
 - **WorkOS passkey-only auth** — `@workos-inc/node` with manual OAuth/PKCE in SvelteKit. See ADR-0004. *Shipped (M002).*
-- **Per-User data isolation via Hibernate stacked filters (userScope + softDelete)** — see ADR-0011, ADR-0012, ADR-0014. *Shipped (M003).*
+- **Per-User data isolation via Hibernate stacked filters (userScope + softDelete)** — activation lives in a CDI interceptor (`@UserScoped` on each root-entity Panache repository) so the `enableFilter` calls land on the same Hibernate session the queries run against. See ADR-0011, ADR-0012, ADR-0014, ADR-0018. *Shipped (M003).*
 - **`X-WorkOS-User-Id` propagation + JIT user provisioning** — see ADR-0013. *Shipped (M003).*
 - **`app_user.workos_id` (unique, indexed) as the bridge from WorkOS identity to local `user_id` FK** — also stores per-User preferences. *Shipped (M003).*
 - **One-time data migration: existing rows assigned to User 1; `user_id` + `deleted_at` columns added to data tables; default Categories seeded** — *Shipped (M003).*

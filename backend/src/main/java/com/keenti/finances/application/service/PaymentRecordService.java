@@ -35,6 +35,15 @@ public class PaymentRecordService implements PaymentRecordUseCase {
     @Override
     @Transactional
     public PaymentRecord recordPayment(Long subscriptionId, Long paymentId) {
+        // Verify the subscription itself is visible to the current User before
+        // touching any of its child Payment Records. Without this guard,
+        // paymentRecordRepository.findById(paymentId) below is a primary-key
+        // load that bypasses Hibernate's userScope filter — an attacker who
+        // knew a valid (subscriptionId, paymentId) pair belonging to someone
+        // else could mark that record PAID. The subscription repository is
+        // @UserScoped so this findById correctly 404s for non-owned rows.
+        subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
         PaymentRecord record = paymentRecordRepository.findById(paymentId)
             .orElseThrow(() -> new NotFoundException("Payment record not found: " + paymentId));
         if (!record.getSubscriptionId().equals(subscriptionId)) {
