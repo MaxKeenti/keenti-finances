@@ -22,3 +22,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Lockfiles — bun.lock is canonical (the Dockerfile runs `bun install`); the npm lockfile is unused
+package-lock.json

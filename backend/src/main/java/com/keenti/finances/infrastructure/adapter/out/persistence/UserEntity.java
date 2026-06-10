@@ -47,10 +47,6 @@ public class UserEntity extends PanacheEntityBase {
     @Column(name = "body_font", nullable = false, length = 50)
     public String bodyFont = DEFAULT_BODY_FONT;
 
-    public static Optional<UserEntity> findByUsername(String username) {
-        return find("username", username).firstResultOptional();
-    }
-
     public static Optional<UserEntity> findByWorkosId(String workosId) {
         return find("workosId", workosId).firstResultOptional();
     }
