@@ -18,9 +18,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Path("/api/transactions")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -38,9 +36,9 @@ public class TransactionResource {
 
     @GET
     public Response list() {
-        List<TransactionResponse> body = transactionUseCase.list().stream()
+        var body = transactionUseCase.list().stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
         return Response.ok(body).build();
     }
 

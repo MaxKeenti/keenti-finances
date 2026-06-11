@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
+import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.interceptor.AroundInvoke;
@@ -30,7 +31,7 @@ public class UserScopedInterceptor {
 
     @AroundInvoke
     public Object intercept(InvocationContext ctx) throws Exception {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
 
         if (userContext.getUserId() != null && session.getEnabledFilter("userScope") == null) {
             session.enableFilter("userScope").setParameter("userId", userContext.getUserId());

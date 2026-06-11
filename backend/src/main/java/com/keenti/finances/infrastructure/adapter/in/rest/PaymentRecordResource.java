@@ -11,8 +11,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Path("/api/subscriptions/{subscriptionId}/payments")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -24,8 +22,8 @@ public class PaymentRecordResource {
 
     @GET
     public Response list(@PathParam("subscriptionId") Long subscriptionId) {
-        List<PaymentRecordResponse> body = paymentRecordUseCase.listBySubscription(subscriptionId)
-            .stream().map(this::toResponse).collect(Collectors.toList());
+        var body = paymentRecordUseCase.listBySubscription(subscriptionId)
+            .stream().map(this::toResponse).toList();
         return Response.ok(body).build();
     }
 

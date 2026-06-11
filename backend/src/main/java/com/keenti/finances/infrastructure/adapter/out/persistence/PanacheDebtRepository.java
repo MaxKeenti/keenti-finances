@@ -4,13 +4,13 @@ import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.DebtRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
+import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.hibernate.Session;
 
 @ApplicationScoped
@@ -28,7 +28,7 @@ public class PanacheDebtRepository implements DebtRepository {
         return DebtEntity.<DebtEntity>find("ORDER BY createdAt DESC")
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -43,7 +43,7 @@ public class PanacheDebtRepository implements DebtRepository {
                 "contact.id = ?1 AND status = 'ACTIVE' ORDER BY createdAt ASC", contactId)
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -78,7 +78,7 @@ public class PanacheDebtRepository implements DebtRepository {
 
     @Override
     public void restoreById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             DebtEntity entity = DebtEntity.findById(id);
@@ -91,8 +91,9 @@ public class PanacheDebtRepository implements DebtRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public Optional<TrashItem> findDeletedById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return DebtEntity.<DebtEntity>find(
@@ -105,15 +106,16 @@ public class PanacheDebtRepository implements DebtRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public List<TrashItem> findAllDeleted() {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return DebtEntity.<DebtEntity>find(
                     "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
                     .stream()
                     .map(e -> new TrashItem(e.id, "debt", e.description, e.deletedAt))
-                    .collect(Collectors.toList());
+                    .toList();
         } finally {
             session.enableFilter("softDelete");
         }

@@ -14,7 +14,6 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 
 @Path("/api/public/subscriptions")
@@ -34,6 +33,7 @@ public class PublicSubscriptionResource {
 
     @GET
     @Path("/{token}")
+    @SuppressWarnings("null")
     public Response getByToken(@PathParam("token") String token) {
         var result = subscriptionUseCase.getByToken(token);
         if (result.isEmpty()) {
@@ -49,24 +49,24 @@ public class PublicSubscriptionResource {
         List<SubscriptionMember> members = subscriptionUseCase.listMembers(sub.getId());
         List<PaymentRecord> allPayments = paymentRecordUseCase.listBySubscription(sub.getId());
 
-        List<PublicSubscriptionResponse.MemberPaymentSummary> memberSummaries = members.stream()
+        var memberSummaries = members.stream()
             .map(m -> {
                 String contactName = contactUseCase.getById(m.getContactId())
                     .map(c -> c.getName())
                     .orElse(null);
 
-                List<PublicSubscriptionResponse.PaymentSummary> payments = allPayments.stream()
+                var payments = allPayments.stream()
                     .filter(p -> m.getId().equals(p.getMemberId()))
                     .map(p -> new PublicSubscriptionResponse.PaymentSummary(
                         p.getId(), p.getBillingDate(), p.getAmount(), p.getStatus(), p.getPaidDate()
                     ))
-                    .collect(Collectors.toList());
+                    .toList();
 
                 return new PublicSubscriptionResponse.MemberPaymentSummary(
                     m.getId(), m.getContactId(), contactName, m.getShareAmount(), payments
                 );
             })
-            .collect(Collectors.toList());
+            .toList();
 
         PublicSubscriptionResponse response = new PublicSubscriptionResponse(
             sub.getName(), sub.getCost(), sub.getBillingCycle(), sub.getNextBillingDate(), memberSummaries

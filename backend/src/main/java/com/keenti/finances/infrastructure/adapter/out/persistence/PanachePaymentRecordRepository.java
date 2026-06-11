@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanachePaymentRecordRepository implements PaymentRecordRepository {
@@ -15,7 +14,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
     public List<PaymentRecord> findBySubscriptionId(Long subscriptionId) {
         return PaymentRecordEntity.<PaymentRecordEntity>find(
             "subscription.id = ?1 ORDER BY billingDate DESC", subscriptionId)
-            .stream().map(this::toDomain).collect(Collectors.toList());
+            .stream().map(this::toDomain).toList();
     }
 
     @Override

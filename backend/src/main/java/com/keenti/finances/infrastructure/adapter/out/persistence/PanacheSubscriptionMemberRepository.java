@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRepository {
@@ -14,7 +13,7 @@ public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRe
     @Override
     public List<SubscriptionMember> findBySubscriptionId(Long subscriptionId) {
         return SubscriptionMemberEntity.<SubscriptionMemberEntity>find("subscription.id", subscriptionId)
-            .stream().map(this::toDomain).collect(Collectors.toList());
+            .stream().map(this::toDomain).toList();
     }
 
     @Override

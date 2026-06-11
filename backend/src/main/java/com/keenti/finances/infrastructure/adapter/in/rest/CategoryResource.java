@@ -14,8 +14,6 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Path("/api/categories")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -27,9 +25,9 @@ public class CategoryResource {
 
     @GET
     public Response list() {
-        List<CategoryResponse> body = categoryUseCase.list().stream()
+        var body = categoryUseCase.list().stream()
                 .map(c -> new CategoryResponse(c.getId(), c.getName(), c.getType(), c.getHue()))
-                .collect(Collectors.toList());
+                .toList();
         return Response.ok(body).build();
     }
 

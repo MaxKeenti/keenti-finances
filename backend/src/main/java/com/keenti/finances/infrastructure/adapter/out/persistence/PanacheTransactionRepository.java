@@ -5,6 +5,7 @@ import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
+import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -15,7 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.hibernate.Session;
 
 @ApplicationScoped
@@ -34,7 +34,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
                 "ORDER BY transactionDate DESC, createdAt DESC")
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -123,7 +123,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
                 "subscription.id = ?1 ORDER BY transactionDate DESC, createdAt DESC", subscriptionId)
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -133,7 +133,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
 
     @Override
     public void restoreById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             TransactionEntity entity = TransactionEntity.findById(id);
@@ -146,8 +146,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public Optional<TrashItem> findDeletedById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return TransactionEntity.<TransactionEntity>find(
@@ -162,8 +163,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public List<TrashItem> findAllDeleted() {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return TransactionEntity.<TransactionEntity>find(
@@ -172,7 +174,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
                     .map(e -> new TrashItem(e.id, "transaction",
                             e.description != null ? e.description : e.amount.toPlainString(),
                             e.deletedAt))
-                    .collect(Collectors.toList());
+                    .toList();
         } finally {
             session.enableFilter("softDelete");
         }
