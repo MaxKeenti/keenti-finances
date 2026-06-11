@@ -12,14 +12,14 @@ import jakarta.transaction.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Optional;
+import java.util.OptionalInt;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class BillingService {
 
     private static final Logger LOG = Logger.getLogger(BillingService.class);
-    static final int LEAD_DAYS = 7;
 
     @Inject
     SubscriptionRepository subscriptionRepository;
@@ -30,51 +30,60 @@ public class BillingService {
     @Inject
     PaymentRecordRepository paymentRecordRepository;
 
+    /**
+     * Generate the Payment Record(s) for a single Subscription's current billing
+     * period, on demand. Triggered manually from the Subscription detail page
+     * (there is no scheduler — see ADR-0019).
+     *
+     * <p>Runs inside the HTTP request, so {@code UserScopedInterceptor} has
+     * already engaged the {@code userScope} + {@code softDelete} Hibernate
+     * filters: {@code findById} only resolves a non-deleted Subscription owned
+     * by the caller. An unknown/foreign/trashed id yields {@link OptionalInt#empty()}.
+     *
+     * <p>Idempotent per period: an existing Payment Record for the
+     * {@code (subscription, billingDate, member)} tuple is never duplicated, and
+     * {@code nextBillingDate} only advances when at least one record was created
+     * — so re-triggering an already-generated period is a no-op rather than a
+     * runaway that keeps rolling the date forward. Unlike the former scheduler
+     * there is no lead-time window: the next period is generated regardless of
+     * how far off the billing date is.
+     *
+     * @return the number of records created, or empty if no such Subscription
+     */
     @Transactional
-    public int generateBilling() {
-        LocalDate cutoff = LocalDate.now().plusDays(LEAD_DAYS);
-        List<Subscription> upcoming = subscriptionRepository.findWithNextBillingDateBefore(cutoff);
-        int count = generateForSubscriptions(upcoming);
-        LOG.infof("billing.generate cutoff=%s subscriptions=%d recordsCreated=%d", cutoff, upcoming.size(), count);
-        return count;
-    }
+    public OptionalInt generateForSubscription(Long subscriptionId) {
+        Optional<Subscription> found = subscriptionRepository.findById(subscriptionId);
+        if (found.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        Subscription sub = found.get();
+        LocalDate billingDate = sub.getNextBillingDate();
+        int created = 0;
 
-    @Transactional
-    public int generateBillingManual() {
-        List<Subscription> all = subscriptionRepository.findAll();
-        int count = generateForSubscriptions(all);
-        LOG.infof("billing.generate.manual subscriptions=%d recordsCreated=%d", all.size(), count);
-        return count;
-    }
-
-    private int generateForSubscriptions(List<Subscription> subscriptions) {
-        AtomicInteger created = new AtomicInteger(0);
-
-        for (Subscription sub : subscriptions) {
-            LocalDate billingDate = sub.getNextBillingDate();
-            if ("SHARED".equals(sub.getType())) {
-                List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(sub.getId());
-                for (SubscriptionMember member : members) {
-                    if (!paymentRecordRepository.existsBySubscriptionIdAndBillingDateAndMemberId(
-                            sub.getId(), billingDate, member.getId())) {
-                        paymentRecordRepository.save(new PaymentRecord(
-                            null, sub.getId(), member.getId(), billingDate,
-                            member.getShareAmount(), "PENDING", null, LocalDateTime.now()
-                        ));
-                        created.incrementAndGet();
-                    }
-                }
-            } else {
+        if ("SHARED".equals(sub.getType())) {
+            List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(sub.getId());
+            for (SubscriptionMember member : members) {
                 if (!paymentRecordRepository.existsBySubscriptionIdAndBillingDateAndMemberId(
-                        sub.getId(), billingDate, null)) {
+                        sub.getId(), billingDate, member.getId())) {
                     paymentRecordRepository.save(new PaymentRecord(
-                        null, sub.getId(), null, billingDate,
-                        sub.getCost(), "PENDING", null, LocalDateTime.now()
+                        null, sub.getId(), member.getId(), billingDate,
+                        member.getShareAmount(), "PENDING", null, LocalDateTime.now()
                     ));
-                    created.incrementAndGet();
+                    created++;
                 }
             }
-            // Advance nextBillingDate
+        } else {
+            if (!paymentRecordRepository.existsBySubscriptionIdAndBillingDateAndMemberId(
+                    sub.getId(), billingDate, null)) {
+                paymentRecordRepository.save(new PaymentRecord(
+                    null, sub.getId(), null, billingDate,
+                    sub.getCost(), "PENDING", null, LocalDateTime.now()
+                ));
+                created++;
+            }
+        }
+
+        if (created > 0) {
             LocalDate nextDate = "MONTHLY".equals(sub.getBillingCycle())
                 ? billingDate.plusMonths(1)
                 : billingDate.plusYears(1);
@@ -85,6 +94,7 @@ public class BillingService {
             ));
         }
 
-        return created.get();
+        LOG.infof("billing.generate.subscription id=%d recordsCreated=%d", subscriptionId, created);
+        return OptionalInt.of(created);
     }
 }

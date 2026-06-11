@@ -183,4 +183,35 @@ export const actions: Actions = {
 		console.log(`[transaction.link] subscriptionId=${id} count=${transactionIds.length} ids=${transactionIds.join(',')}`);
 		return {};
 	},
+
+	generateBilling: async ({ params, fetch, cookies }) => {
+		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
+		let res: Response;
+		try {
+			res = await fetch(`${BACKEND}/api/subscriptions/${id}/generate-billing`, {
+				method: 'POST',
+				headers: authHeaders,
+			});
+		} catch {
+			console.error(`[subscriptions/${id}] generateBilling: backend unreachable`);
+			return fail(502, { message: 'Could not reach backend service.' });
+		}
+
+		if (res.status === 404) return fail(404, { message: 'Subscription not found.' });
+		if (!res.ok) {
+			console.error(`[subscriptions/${id}] generateBilling: backend error ${res.status}`);
+			return fail(502, { message: 'Unexpected error generating billing.' });
+		}
+
+		const result = await res.json();
+		const count: number = result.generated ?? 0;
+		console.log(`[billing.generate] subscriptionId=${id} generated=${count}`);
+		return { generated: count };
+	},
 };

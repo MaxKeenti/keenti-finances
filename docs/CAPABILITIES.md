@@ -24,8 +24,7 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 ## Subscriptions
 
 - **Personal vs Shared Subscriptions with Members** — full CRUD. *Shipped (M001).*
-- **Daily idempotent billing scheduler, 7-day lead time** — see ADR-0006. The cron path runs outside any HTTP request and explicitly enables the `softDelete` Hibernate filter (since `UserScopeFilter` doesn't fire) so soft-deleted Subscriptions aren't billed. *Shipped (M001 + M003 soft-delete fix).*
-- **Manual billing trigger** — POST endpoint + UI button; idempotent. *Shipped (M002).*
+- **Manual per-Subscription billing trigger** — the **Generate billing** button on the Subscription detail page (`POST /api/subscriptions/{id}/generate-billing`) creates the next period's Payment Record(s) on demand. Idempotent per period (advances `nextBillingDate` only when a record is created); no lead-time window; runs inside the HTTP request so the `userScope` + `softDelete` filters scope it to the caller's own, non-deleted Subscription. Replaced the daily cron scheduler — see ADR-0019 (supersedes ADR-0006). *Shipped (M001/M002; scheduler removed later).*
 - **Owner Participation toggle (middleman mode)** — boolean on Subscription; see ADR-0009. *Shipped (M002).*
 - **Public Subscription View** — unauthenticated, UUID-token-protected page where Members see payment status. Invalid tokens 404. *Shipped (M001).*
 - **Transaction ↔ Subscription linking** — nullable FK, retroactive multi-select with inline previews; see ADR-0010. *Shipped (M002).*
@@ -71,7 +70,7 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 - **SvelteKit-owns-auth, Quarkus-internal-only via SvelteKit proxy** — see ADR-0002, ADR-0003. *Shipped (M001).*
 - **Railway two-service deploy with private networking** — see ADR-0007. *Shipped (M001 artifacts, M002 provisioning).*
 - **`/q/health` probe + multi-stage Dockerfiles + `%prod` Quarkus profile** — *Shipped (M001).*
-- **JUnit integration tests for daily billing scheduler under stacked filters** — covers idempotency (re-running the cron creates no duplicate Payment Records), 7-day lead (Subscriptions whose next billing is more than a week out are skipped), and soft-delete handling (the cron explicitly enables the `softDelete` Hibernate filter since `UserScopeFilter` doesn't fire outside HTTP requests — without this, soft-deleted Subscriptions would still be billed). Owner-participation math and Transaction↔Subscription linking deliberately left untested — failures in either are immediately user-visible. *Shipped (M003).*
+- **JUnit integration tests for per-Subscription billing generation** — covers on-demand generation regardless of billing date, idempotency per period (an already-generated period creates no duplicate and does not advance `nextBillingDate`), one record per Member for Shared Subscriptions, and unknown-Subscription handling. Owner-participation math and Transaction↔Subscription linking deliberately left untested — failures in either are immediately user-visible. *Shipped (M003; updated when the scheduler was removed).*
 
 ---
 

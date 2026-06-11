@@ -7,7 +7,6 @@ import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -61,12 +60,6 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     @Override
     public void deleteById(Long id) {
         SubscriptionEntity.deleteById(id);
-    }
-
-    @Override
-    public List<Subscription> findWithNextBillingDateBefore(LocalDate cutoff) {
-        return SubscriptionEntity.<SubscriptionEntity>find("nextBillingDate <= ?1", cutoff)
-            .stream().map(this::toDomain).collect(Collectors.toList());
     }
 
     @Override

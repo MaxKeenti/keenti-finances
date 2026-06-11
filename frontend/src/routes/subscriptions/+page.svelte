@@ -149,29 +149,7 @@
 			<h1 class="text-2xl font-semibold tracking-tight">Subscriptions</h1>
 			<p class="text-sm text-muted-foreground">Manage your recurring subscriptions and members.</p>
 		</div>
-		<div class="flex gap-2">
-			<form
-				method="POST"
-				action="?/generateBilling"
-				use:kitEnhance={async () => {
-					return async ({ result, update }) => {
-						if (result.type === 'success') {
-							const count = (result.data as { generated?: number })?.generated ?? 0;
-							toast.success(`Billing generated: ${count} record${count === 1 ? '' : 's'} created.`);
-							await update();
-						} else {
-							const msg =
-								(result as { data?: { message?: string } }).data?.message ??
-								'Failed to generate billing.';
-							toast.error(msg);
-						}
-					};
-				}}
-			>
-				<Button type="submit" variant="outline">Generate Billing</Button>
-			</form>
-			<Button onclick={openCreate}>New Subscription</Button>
-		</div>
+		<Button onclick={openCreate}>New Subscription</Button>
 	</div>
 
 	{#if data.subscriptions.length === 0}

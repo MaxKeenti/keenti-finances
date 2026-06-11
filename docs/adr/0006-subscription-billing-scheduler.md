@@ -1,6 +1,9 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0019
 ---
+
+> **Superseded by [ADR-0019](0019-manual-per-subscription-billing-trigger.md).** The Quarkus `@Scheduled` cron proved unreliable in the Railway deployment (a daily job that never fires across restarts/sleeps — see ADR-0007) and the manual `POST` trigger it mentions had drifted into a separate, buggy code path. Billing is now generated on demand per Subscription from the detail page; the scheduler, the `quarkus-scheduler` dependency, and the cron config were removed. Retained for history.
 
 # Subscription billing is a daily idempotent date-check scheduler
 

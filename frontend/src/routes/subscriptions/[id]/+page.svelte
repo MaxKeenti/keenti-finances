@@ -211,11 +211,39 @@
 	<!-- Payment Records -->
 	<Card.Root>
 		<Card.Content class="space-y-4">
-			<h2 class="font-semibold text-base">Payment Records</h2>
+			<div class="flex items-center justify-between">
+				<h2 class="font-semibold text-base">Payment Records</h2>
+				<form
+					method="POST"
+					action="?/generateBilling"
+					use:kitEnhance={async () => {
+						return async ({ result, update }) => {
+							if (result.type === 'success') {
+								const count = (result.data as { generated?: number })?.generated ?? 0;
+								toast.success(
+									count > 0
+										? `Billing generated: ${count} record${count === 1 ? '' : 's'} created.`
+										: 'Already up to date — no new records.',
+								);
+								await update();
+							} else {
+								const msg =
+									(result as { data?: { message?: string } }).data?.message ??
+									'Failed to generate billing.';
+								toast.error(msg);
+							}
+						};
+					}}
+				>
+					<Button type="submit" variant="outline" size="sm" class="h-7 text-xs px-3">
+						Generate billing
+					</Button>
+				</form>
+			</div>
 
 			{#if data.payments.length === 0}
 				<p class="text-sm text-muted-foreground">
-					No payment records yet. The scheduler generates upcoming records daily.
+					No payment records yet. Use “Generate billing” to create the upcoming period’s records.
 				</p>
 			{:else}
 				{#each paymentsByDate() as [date, records] (date)}

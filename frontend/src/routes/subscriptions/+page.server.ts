@@ -311,33 +311,4 @@ export const actions: Actions = {
 		);
 		return {};
 	},
-
-	generateBilling: async ({ fetch, cookies }) => {
-		const session = getSession(cookies);
-		const accessToken = session?.accessToken;
-		const authHeaders: Record<string, string> = accessToken
-			? { Authorization: `Bearer ${accessToken}` }
-			: {};
-
-		let res: Response;
-		try {
-			res = await fetch(`${BACKEND}/api/subscriptions/generate-billing`, {
-				method: 'POST',
-				headers: authHeaders,
-			});
-		} catch {
-			console.error('[subscriptions] generateBilling: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
-		}
-
-		if (!res.ok) {
-			console.error(`[subscriptions] generateBilling: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error generating billing.' });
-		}
-
-		const result = await res.json();
-		const count: number = result.generated ?? 0;
-		console.log(`[billing.generate] generated=${count}`);
-		return { generated: count };
-	},
 };

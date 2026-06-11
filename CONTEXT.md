@@ -49,7 +49,7 @@ A boolean on a Shared Subscription. When true, the Owner counts as one of the co
 _Avoid_: Owner share, owner-includes-self.
 
 **Payment Record**:
-One per-period entry on a Subscription's billing schedule, recording whether each Subscription Member has paid for that period. Generated daily, 7 days before the billing date, by the billing scheduler. Idempotent — re-running never duplicates.
+One per-period entry on a Subscription's billing schedule, recording whether each Subscription Member has paid for that period. Generated on demand from the Subscription detail page via the **Generate billing** button (one record per Member per period; see ADR-0019). Idempotent per period — re-triggering an already-generated period never duplicates.
 _Avoid_: Invoice, bill, charge, period, billing entry.
 
 **Public Subscription View**:
@@ -87,7 +87,7 @@ _Avoid_: Account (the app has no separate "account" concept), tenant, customer.
 >
 > **Dev:** And for Subscriptions — the monthly billing thing — that's also not an invoice?
 >
-> **Domain:** Right. Those are Payment Records. One per Subscription Member per billing period. The scheduler creates them 7 days before the period's billing date so Members see the upcoming due on the Public Subscription View.
+> **Domain:** Right. Those are Payment Records. One per Subscription Member per billing period. You create them on demand with the **Generate billing** button on the Subscription's page; they then show up for Members on the Public Subscription View.
 >
 > **Dev:** So if a Member doesn't pay, the Payment Record stays unpaid forever?
 >
