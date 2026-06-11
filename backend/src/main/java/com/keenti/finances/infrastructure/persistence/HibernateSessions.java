@@ -9,8 +9,11 @@ public final class HibernateSessions {
     }
 
     public static Session unwrap(EntityManager entityManager) {
-        Object unwrapped = entityManager.unwrap(Session.class);
-        if (unwrapped instanceof Session session) {
+        if (entityManager instanceof Session session) {
+            return session;
+        }
+        Object delegate = entityManager.getDelegate();
+        if (delegate instanceof Session session) {
             return session;
         }
         throw new IllegalStateException("EntityManager did not unwrap to a Hibernate Session");

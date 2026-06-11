@@ -30,23 +30,31 @@ public class BillingService {
     @Inject
     PaymentRecordRepository paymentRecordRepository;
 
+    /** Safety bound: never roll through more periods than this in one click,
+     * in case a corrupted {@code nextBillingDate} sits far in the past. */
+    private static final int MAX_CATCH_UP_PERIODS = 600;
+
     /**
-     * Generate the Payment Record(s) for a single Subscription's current billing
-     * period, on demand. Triggered manually from the Subscription detail page
-     * (there is no scheduler — see ADR-0019).
+     * Generate the Payment Record(s) for a Subscription, catching up to the
+     * current period on demand. Triggered manually from the Subscription detail
+     * page (there is no scheduler — see ADR-0019).
      *
      * <p>Runs inside the HTTP request, so {@code UserScopedInterceptor} has
      * already engaged the {@code userScope} + {@code softDelete} Hibernate
      * filters: {@code findById} only resolves a non-deleted Subscription owned
      * by the caller. An unknown/foreign/trashed id yields {@link OptionalInt#empty()}.
      *
+     * <p><b>Backfill semantics.</b> A single click generates a record set for
+     * every period from {@code nextBillingDate} up to and including the current
+     * period (any {@code billingDate <= today}), advancing {@code nextBillingDate}
+     * to the first period strictly after today. This builds the full payment
+     * history in one action so past periods are browsable. A Subscription whose
+     * {@code nextBillingDate} is in the future generates nothing until it falls due.
+     *
      * <p>Idempotent per period: an existing Payment Record for the
      * {@code (subscription, billingDate, member)} tuple is never duplicated, and
-     * {@code nextBillingDate} only advances when at least one record was created
-     * — so re-triggering an already-generated period is a no-op rather than a
-     * runaway that keeps rolling the date forward. Unlike the former scheduler
-     * there is no lead-time window: the next period is generated regardless of
-     * how far off the billing date is.
+     * {@code nextBillingDate} only advances when the catch-up loop actually ran —
+     * so re-triggering an already-caught-up Subscription is a no-op.
      *
      * @return the number of records created, or empty if no such Subscription
      */
@@ -57,9 +65,35 @@ public class BillingService {
             return OptionalInt.empty();
         }
         Subscription sub = found.get();
+        LocalDate today = LocalDate.now();
         LocalDate billingDate = sub.getNextBillingDate();
         int created = 0;
+        int periods = 0;
 
+        while (!billingDate.isAfter(today) && periods < MAX_CATCH_UP_PERIODS) {
+            created += generatePeriod(sub, billingDate);
+            billingDate = "MONTHLY".equals(sub.getBillingCycle())
+                ? billingDate.plusMonths(1)
+                : billingDate.plusYears(1);
+            periods++;
+        }
+
+        if (periods > 0 && !billingDate.equals(sub.getNextBillingDate())) {
+            subscriptionRepository.update(new Subscription(
+                sub.getId(), sub.getName(), sub.getCost(), sub.getBillingCycle(), sub.getType(),
+                sub.getCategoryId(), billingDate, sub.getTokenUuid(), sub.getCreatedAt(),
+                sub.isOwnerParticipates()
+            ));
+        }
+
+        LOG.infof("billing.generate.subscription id=%d periods=%d recordsCreated=%d",
+            subscriptionId, periods, created);
+        return OptionalInt.of(created);
+    }
+
+    /** Idempotently create the Payment Record(s) for one billing period. */
+    private int generatePeriod(Subscription sub, LocalDate billingDate) {
+        int created = 0;
         if ("SHARED".equals(sub.getType())) {
             List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(sub.getId());
             for (SubscriptionMember member : members) {
@@ -67,7 +101,7 @@ public class BillingService {
                         sub.getId(), billingDate, member.getId())) {
                     paymentRecordRepository.save(new PaymentRecord(
                         null, sub.getId(), member.getId(), billingDate,
-                        member.getShareAmount(), "PENDING", null, LocalDateTime.now()
+                        member.getShareAmount(), "PENDING", null, null, LocalDateTime.now()
                     ));
                     created++;
                 }
@@ -77,24 +111,11 @@ public class BillingService {
                     sub.getId(), billingDate, null)) {
                 paymentRecordRepository.save(new PaymentRecord(
                     null, sub.getId(), null, billingDate,
-                    sub.getCost(), "PENDING", null, LocalDateTime.now()
+                    sub.getCost(), "PENDING", null, null, LocalDateTime.now()
                 ));
                 created++;
             }
         }
-
-        if (created > 0) {
-            LocalDate nextDate = "MONTHLY".equals(sub.getBillingCycle())
-                ? billingDate.plusMonths(1)
-                : billingDate.plusYears(1);
-            subscriptionRepository.update(new Subscription(
-                sub.getId(), sub.getName(), sub.getCost(), sub.getBillingCycle(), sub.getType(),
-                sub.getCategoryId(), nextDate, sub.getTokenUuid(), sub.getCreatedAt(),
-                sub.isOwnerParticipates()
-            ));
-        }
-
-        LOG.infof("billing.generate.subscription id=%d recordsCreated=%d", subscriptionId, created);
-        return OptionalInt.of(created);
+        return created;
     }
 }

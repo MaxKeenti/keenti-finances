@@ -12,5 +12,6 @@ public record PaymentRecordResponse(
     BigDecimal amount,
     String status,
     LocalDate paidDate,
+    Long transactionId,
     LocalDateTime createdAt
 ) {}

@@ -11,13 +11,14 @@ The cron was unreliable in practice: the Railway two-service topology (ADR-0007)
 
 ## Behaviour
 
-- **On demand, any date.** Generating works regardless of how far off `nextBillingDate` is — there is no 7-day lead window. A manual click must always do something visible (the old lead window made the button a no-op for Subscriptions billed more than a week out — the bug recorded in quick-fix Q10).
-- **Idempotent per period.** A Payment Record is never duplicated for the same `(subscription, billingDate, member)` tuple, and `nextBillingDate` advances by one cycle **only when at least one record was created**. Re-triggering an already-generated period is a no-op, not a runaway that keeps rolling the date forward.
+- **Backfill to today in one click.** Generating catches up: a single click creates a record set for **every** period from `nextBillingDate` up to and including the current period (any `billingDate <= today`), then advances `nextBillingDate` to the first period strictly after today. This is what makes per-Subscription payment history browsable — past periods are generated in one action rather than one click per month. A safety bound (`MAX_CATCH_UP_PERIODS`) stops a corrupted far-past `nextBillingDate` from looping unbounded.
+- **Nothing ahead of today.** A Subscription whose `nextBillingDate` is in the future generates nothing until it falls due. This replaces the earlier "a click must always do something, regardless of date" rule (and its no-lead-window framing): billing future periods early served no purpose once catch-up is automatic, and not pre-billing keeps the history aligned with reality.
+- **Idempotent per period.** A Payment Record is never duplicated for the same `(subscription, billingDate, member)` tuple, and `nextBillingDate` only advances when the catch-up loop actually ran. Re-triggering an already-caught-up Subscription is a no-op, not a runaway that keeps rolling the date forward.
 - **Per Subscription, caller-scoped.** It runs inside the HTTP request, so `UserScopedInterceptor` (ADR-0018) has already engaged the `userScope` + `softDelete` Hibernate filters. `findById` therefore resolves only a non-deleted Subscription owned by the caller; an unknown/foreign/trashed id returns 404. No manual `enableFilter` juggling is needed — the fragility that forced the cron to manage `softDelete` itself is gone with the cron.
 
 ## Consequences
 
-- Catching up is now a user action: if a period is missed, the user clicks **Generate billing** (once per period). Members no longer get an automatic 7-day-ahead view; the upcoming period appears when the owner generates it.
+- Catching up is a single user action: clicking **Generate billing** backfills every missed period at once, so the detail page can show a month-by-month payment history. Members no longer get an automatic 7-day-ahead view; the upcoming period appears once it is due and the owner generates it.
 - `Subscription` no longer needs the `findWithNextBillingDateBefore` lead-window query for billing; it remains only if some other reader uses it.
 - The `quarkus-scheduler` dependency and `quarkus.scheduler.enabled` config were removed.
 

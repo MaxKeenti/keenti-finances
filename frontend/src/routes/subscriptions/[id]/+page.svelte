@@ -3,6 +3,7 @@
 	import { enhance as kitEnhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import type { PageData } from './$types';
@@ -24,6 +25,7 @@
 		amount: number;
 		status: string;
 		paidDate: string | null;
+		transactionId: number | null;
 		createdAt: string;
 	};
 
@@ -44,6 +46,11 @@
 	let { data }: { data: PageData } = $props();
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const monthFmt = new Intl.DateTimeFormat('es-MX', { month: 'short', year: 'numeric' });
+
+	function periodLabel(billingDate: string): string {
+		return monthFmt.format(new Date(`${billingDate}T00:00:00`));
+	}
 
 	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
 		MONTHLY: 'info',
@@ -66,21 +73,51 @@
 		return m?.contactName ?? `Member #${memberId}`;
 	}
 
-	// Group payments by billingDate
-	const paymentsByDate = $derived(() => {
-		const groups = new Map<string, PaymentRecord[]>();
-		for (const p of data.payments) {
-			const key = p.billingDate;
-			if (!groups.has(key)) groups.set(key, []);
-			groups.get(key)!.push(p);
+	// Distinct billing periods, newest first — one tab per period.
+	const periods = $derived.by(() => {
+		const seen = new Set<string>();
+		for (const p of data.payments) seen.add(p.billingDate);
+		return Array.from(seen).sort((a, b) => b.localeCompare(a));
+	});
+
+	// Records for one period.
+	function recordsForPeriod(billingDate: string): PaymentRecord[] {
+		return data.payments.filter((p: PaymentRecord) => p.billingDate === billingDate);
+	}
+
+	// Find the transaction that settled a PAID record (for the "paid via" hint).
+	function linkedTransaction(transactionId: number | null): TransactionResponse | undefined {
+		if (transactionId === null) return undefined;
+		return data.linkedTransactions.find((t: TransactionResponse) => t.id === transactionId);
+	}
+
+	// Eager init (so SSR has an active tab); the effect re-points it when the set
+	// of periods changes, e.g. after generating billing or linking a payment.
+	let selectedPeriod = $state(
+		[...new Set(data.payments.map((p: PaymentRecord) => p.billingDate))].sort((a, b) =>
+			b.localeCompare(a),
+		)[0] ?? '',
+	);
+	$effect(() => {
+		if (periods.length > 0 && !periods.includes(selectedPeriod)) {
+			selectedPeriod = periods[0];
 		}
-		// Sort dates descending
-		return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
 	});
 
 	let copyFeedback = $state(false);
 	let linkDialogOpen = $state(false);
 	let selectedTxIds = $state<Set<number>>(new Set());
+
+	// Link a single transaction to a specific Payment Record (marks it PAID).
+	let payLinkDialogOpen = $state(false);
+	let payLinkPaymentId = $state<number | null>(null);
+	let payLinkTxId = $state<number | null>(null);
+
+	function openPayLink(paymentId: number) {
+		payLinkPaymentId = paymentId;
+		payLinkTxId = null;
+		payLinkDialogOpen = true;
+	}
 
 	function toggleTx(id: number) {
 		const next = new Set(selectedTxIds);
@@ -243,58 +280,80 @@
 
 			{#if data.payments.length === 0}
 				<p class="text-sm text-muted-foreground">
-					No payment records yet. Use “Generate billing” to create the upcoming period’s records.
+					No payment records yet. Use “Generate billing” to create records for every period up to this month.
 				</p>
 			{:else}
-				{#each paymentsByDate() as [date, records] (date)}
-					<div class="space-y-2">
-						<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-							Billing period: {date}
-						</p>
-						<ul class="divide-y rounded-md border">
-							{#each records as payment (payment.id)}
-								<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-									<div class="min-w-0 space-y-0.5">
-										<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
-										<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
-										{#if payment.paidDate}
-											<p class="text-xs text-muted-foreground">Paid: {payment.paidDate}</p>
-										{/if}
-									</div>
-									<div class="flex items-center gap-3 shrink-0">
-										<Badge variant={statusBadgeVariant[payment.status]}>
-											{payment.status}
-										</Badge>
-										{#if payment.status === 'PENDING'}
-											<form
-												method="POST"
-												action="?/recordPayment"
-												use:kitEnhance={async () => {
-													return async ({ result, update }) => {
-														if (result.type === 'success') {
-															toast.success('Payment recorded.');
-															await update();
-														} else {
-															const msg =
-																(result as { data?: { message?: string } }).data?.message ??
-																'Failed to record payment.';
-															toast.error(msg);
-														}
-													};
-												}}
-											>
-												<input type="hidden" name="paymentId" value={payment.id} />
-												<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
-													Record Payment
-												</Button>
-											</form>
-										{/if}
-									</div>
-								</li>
+				<Tabs.Root bind:value={selectedPeriod} class="w-full">
+					<div class="overflow-x-auto pb-1">
+						<Tabs.List>
+							{#each periods as period (period)}
+								<Tabs.Trigger value={period}>{periodLabel(period)}</Tabs.Trigger>
 							{/each}
-						</ul>
+						</Tabs.List>
 					</div>
-				{/each}
+
+					{#each periods as period (period)}
+						<Tabs.Content value={period}>
+							<ul class="divide-y rounded-md border">
+								{#each recordsForPeriod(period) as payment (payment.id)}
+									{@const tx = linkedTransaction(payment.transactionId)}
+									<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+										<div class="min-w-0 space-y-0.5">
+											<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
+											<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
+											{#if payment.paidDate}
+												<p class="text-xs text-muted-foreground">Paid: {payment.paidDate}</p>
+											{/if}
+											{#if tx}
+												<p class="text-xs text-muted-foreground truncate">
+													Paid via transaction: {tx.description}
+												</p>
+											{/if}
+										</div>
+										<div class="flex items-center gap-2 shrink-0">
+											<Badge variant={statusBadgeVariant[payment.status]}>
+												{payment.status}
+											</Badge>
+											{#if payment.status === 'PENDING'}
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													class="h-7 text-xs px-3"
+													onclick={() => openPayLink(payment.id)}
+												>
+													Link Transaction
+												</Button>
+												<form
+													method="POST"
+													action="?/recordPayment"
+													use:kitEnhance={async () => {
+														return async ({ result, update }) => {
+															if (result.type === 'success') {
+																toast.success('Payment recorded.');
+																await update();
+															} else {
+																const msg =
+																	(result as { data?: { message?: string } }).data?.message ??
+																	'Failed to record payment.';
+																toast.error(msg);
+															}
+														};
+													}}
+												>
+													<input type="hidden" name="paymentId" value={payment.id} />
+													<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
+														Record Payment
+													</Button>
+												</form>
+											{/if}
+										</div>
+									</li>
+								{/each}
+							</ul>
+						</Tabs.Content>
+					{/each}
+				</Tabs.Root>
 			{/if}
 		</Card.Content>
 	</Card.Root>
@@ -364,6 +423,79 @@
 				<Button type="submit" disabled={selectedTxIds.size === 0}>
 					Link {selectedTxIds.size > 0 ? `(${selectedTxIds.size})` : ''}
 				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Link a single transaction to a Payment Record (marks it paid) -->
+<Dialog.Root bind:open={payLinkDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Link a transaction</Dialog.Title>
+			<Dialog.Description>
+				Pick the transaction that paid this period. The record is marked paid, dated to that transaction.
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<form
+			method="POST"
+			action="?/linkTransactionToPayment"
+			use:kitEnhance={async () => {
+				return async ({ result, update }) => {
+					if (result.type === 'success') {
+						payLinkDialogOpen = false;
+						payLinkPaymentId = null;
+						payLinkTxId = null;
+						toast.success('Transaction linked — payment recorded.');
+						await update();
+					} else {
+						const msg =
+							(result as { data?: { message?: string } }).data?.message ??
+							'Failed to link transaction.';
+						toast.error(msg);
+					}
+				};
+			}}
+			class="space-y-4"
+		>
+			<input type="hidden" name="paymentId" value={payLinkPaymentId} />
+			<input type="hidden" name="transactionId" value={payLinkTxId} />
+
+			{#if data.unlinkedTransactions.length === 0}
+				<p class="text-sm text-muted-foreground">No unlinked transactions available.</p>
+			{:else}
+				<ul class="divide-y rounded-md border max-h-72 overflow-y-auto">
+					{#each data.unlinkedTransactions as tx (tx.id)}
+						<li
+							class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50"
+							onclick={() => (payLinkTxId = tx.id)}
+						>
+							<input
+								type="radio"
+								name="txChoice"
+								class="h-4 w-4 shrink-0"
+								checked={payLinkTxId === tx.id}
+								onchange={() => (payLinkTxId = tx.id)}
+							/>
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium truncate">{tx.description}</p>
+								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								{#if tx.categoryName}
+									<Badge variant="secondary">{tx.categoryName}</Badge>
+								{/if}
+								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => (payLinkDialogOpen = false)}>Cancel</Button>
+				<Button type="submit" disabled={payLinkTxId === null}>Link &amp; mark paid</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

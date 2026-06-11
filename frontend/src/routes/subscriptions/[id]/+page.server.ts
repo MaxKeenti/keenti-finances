@@ -48,6 +48,7 @@ type PaymentRecord = {
 	amount: number;
 	status: string;
 	paidDate: string | null;
+	transactionId: number | null;
 	createdAt: string;
 };
 
@@ -142,6 +143,49 @@ export const actions: Actions = {
 
 		console.log(
 			`[subscriptions/${id}] recordPayment: success — paymentId: ${paymentId}`,
+		);
+		return {};
+	},
+
+	linkTransactionToPayment: async ({ params, request, fetch, cookies }) => {
+		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
+		const data = await request.formData();
+		const paymentId = data.get('paymentId');
+		const transactionId = data.get('transactionId');
+
+		if (!paymentId) return fail(400, { message: 'Missing paymentId.' });
+		if (!transactionId) return fail(400, { message: 'No transaction selected.' });
+
+		let res: Response;
+		try {
+			res = await fetch(
+				`${BACKEND}/api/subscriptions/${id}/payments/${paymentId}/link-transaction`,
+				{
+					method: 'PUT',
+					headers: { 'content-type': 'application/json', ...authHeaders },
+					body: JSON.stringify({ transactionId: Number(transactionId) }),
+				},
+			);
+		} catch {
+			console.error(`[subscriptions/${id}] linkTransactionToPayment: backend unreachable`);
+			return fail(502, { message: 'Could not reach backend service.' });
+		}
+
+		if (res.status === 404) return fail(404, { message: 'Payment record or transaction not found.' });
+		if (res.status === 409) return fail(409, { message: 'Payment record is already paid.' });
+		if (!res.ok) {
+			console.error(`[subscriptions/${id}] linkTransactionToPayment: backend error ${res.status}`);
+			return fail(502, { message: 'Unexpected error linking transaction.' });
+		}
+
+		console.log(
+			`[subscriptions/${id}] linkTransactionToPayment: success — paymentId=${paymentId} transactionId=${transactionId}`,
 		);
 		return {};
 	},

@@ -3,6 +3,7 @@ package com.keenti.finances.infrastructure.adapter.in.rest;
 import com.keenti.finances.domain.model.PaymentRecord;
 import com.keenti.finances.domain.port.in.PaymentRecordUseCase;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
@@ -35,11 +36,21 @@ public class PaymentRecordResource {
         return Response.ok(toResponse(updated)).build();
     }
 
+    @PUT
+    @Path("/{paymentId}/link-transaction")
+    public Response linkTransaction(@PathParam("subscriptionId") Long subscriptionId,
+                                    @PathParam("paymentId") Long paymentId,
+                                    @Valid LinkTransactionRequest request) {
+        PaymentRecord updated = paymentRecordUseCase.linkTransaction(
+            subscriptionId, paymentId, request.transactionId());
+        return Response.ok(toResponse(updated)).build();
+    }
+
     private PaymentRecordResponse toResponse(PaymentRecord r) {
         return new PaymentRecordResponse(
             r.getId(), r.getSubscriptionId(), r.getMemberId(),
             r.getBillingDate(), r.getAmount(), r.getStatus(),
-            r.getPaidDate(), r.getCreatedAt()
+            r.getPaidDate(), r.getTransactionId(), r.getCreatedAt()
         );
     }
 }
