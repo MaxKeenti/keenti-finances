@@ -13,16 +13,17 @@
 		EllipsisVertical
 	} from '@lucide/svelte';
 	import DockOverflowDialog from './dock-overflow-dialog.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	const allNavItems = [
-		{ href: '/', label: 'Dashboard', icon: LayoutDashboard },
-		{ href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
-		{ href: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
-		{ href: '/debts', label: 'Debts', icon: HandCoins },
-		{ href: '/categories', label: 'Categories', icon: Layers },
-		{ href: '/contacts', label: 'Contacts', icon: Users },
-		{ href: '/trash', label: 'Trash', icon: Trash2 },
-		{ href: '/settings', label: 'Settings', icon: Settings }
+		{ href: '/', label: m.nav_dashboard(), icon: LayoutDashboard },
+		{ href: '/transactions', label: m.nav_transactions(), icon: ArrowLeftRight },
+		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
+		{ href: '/debts', label: m.nav_debts(), icon: HandCoins },
+		{ href: '/categories', label: m.nav_categories(), icon: Layers },
+		{ href: '/contacts', label: m.nav_contacts(), icon: Users },
+		{ href: '/trash', label: m.nav_trash(), icon: Trash2 },
+		{ href: '/settings', label: m.nav_settings(), icon: Settings }
 	];
 
 	// Mobile: 3 pinned items
@@ -40,7 +41,7 @@
 
 <nav
 	class="flex items-center justify-center border-t border-sidebar-border bg-sidebar px-2 shrink-0"
-	aria-label="Main navigation"
+	aria-label={m.nav_main()}
 >
 	<!-- Desktop: all items centered -->
 	<div class="hidden sm:flex items-center gap-1 py-2">
@@ -68,15 +69,15 @@
 
 		<a
 			href="/logout"
-			title="Logout"
-			aria-label="Logout"
+			title={m.nav_logout()}
+			aria-label={m.nav_logout()}
 			class="relative group flex items-center justify-center w-10 h-10 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
 		>
 			<LogOut class="w-5 h-5 shrink-0" />
 			<span
 				class="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-popover text-popover-foreground text-xs px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md border border-border"
 			>
-				Logout
+				{m.nav_logout()}
 			</span>
 		</a>
 	</div>
@@ -100,11 +101,11 @@
 
 		<button
 			onclick={() => (overflowOpen = true)}
-			aria-label="More navigation options"
+			aria-label={m.nav_more_options()}
 			class="flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-colors text-xs font-medium text-sidebar-foreground hover:text-sidebar-accent-foreground"
 		>
 			<EllipsisVertical class="w-5 h-5 shrink-0" />
-			<span>More</span>
+			<span>{m.nav_more()}</span>
 		</button>
 	</div>
 </nav>

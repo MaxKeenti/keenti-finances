@@ -16,14 +16,28 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Path("/api/transactions")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class TransactionResource {
+
+    private static final int DEFAULT_PAGE_SIZE = 25;
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> SORT_FIELDS = Set.of(
+        "transactionDate",
+        "amount",
+        "direction",
+        "description",
+        "categoryName",
+        "contactName"
+    );
 
     @Inject
     TransactionUseCase transactionUseCase;
@@ -35,7 +49,54 @@ public class TransactionResource {
     ContactUseCase contactUseCase;
 
     @GET
-    public Response list() {
+    public Response list(
+        @QueryParam("page") Integer page,
+        @QueryParam("pageSize") Integer pageSize,
+        @QueryParam("sortBy") String sortBy,
+        @QueryParam("sortDirection") String sortDirection
+    ) {
+        if (page != null || pageSize != null || sortBy != null || sortDirection != null) {
+            int requestedPage = page != null ? page : 0;
+            int requestedPageSize = pageSize != null ? pageSize : DEFAULT_PAGE_SIZE;
+            String requestedSortBy = sortBy != null && !sortBy.isBlank() ? sortBy : "transactionDate";
+            String requestedSortDirection = sortDirection != null && !sortDirection.isBlank()
+                    ? sortDirection.toLowerCase(Locale.ROOT)
+                    : "desc";
+
+            if (requestedPage < 0 || requestedPageSize < 1 || requestedPageSize > MAX_PAGE_SIZE) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"error\":\"Invalid pagination parameters\"}")
+                        .build();
+            }
+            if (!SORT_FIELDS.contains(requestedSortBy)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"error\":\"Invalid sortBy\"}")
+                        .build();
+            }
+            if (!Set.of("asc", "desc").contains(requestedSortDirection)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"error\":\"Invalid sortDirection\"}")
+                        .build();
+            }
+
+            var pageResult = transactionUseCase.listPage(
+                requestedPage,
+                requestedPageSize,
+                requestedSortBy,
+                "desc".equals(requestedSortDirection)
+            );
+            var body = new TransactionPageResponse(
+                pageResult.items().stream().map(this::toResponse).toList(),
+                pageResult.pageIndex(),
+                pageResult.pageSize(),
+                pageResult.totalItems(),
+                pageResult.totalPages(),
+                requestedSortBy,
+                requestedSortDirection
+            );
+            return Response.ok(body).build();
+        }
+
         var body = transactionUseCase.list().stream()
                 .map(this::toResponse)
                 .toList();

@@ -15,16 +15,17 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	const subscriptionSchema = z.object({
 		id: z.coerce.number().optional(),
-		name: z.string().min(1, 'Name is required'),
-		cost: z.coerce.number().positive('Cost must be greater than 0'),
+		name: z.string().min(1, m.validation_name_required()),
+		cost: z.coerce.number().positive(m.validation_cost_positive()),
 		billingCycle: z.enum(['MONTHLY', 'YEARLY']),
 		type: z.enum(['PERSONAL', 'SHARED']),
 		categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
-		nextBillingDate: z.string().min(1, 'Next billing date is required'),
+		nextBillingDate: z.string().min(1, m.validation_next_billing_required()),
 		ownerParticipates: z.boolean().optional(),
 	});
 
@@ -70,7 +71,7 @@
 		onResult({ result }) {
 			if (result.type === 'success') {
 				dialogOpen = false;
-				toast.success(editMode ? 'Subscription updated.' : 'Subscription created.');
+				toast.success(editMode ? m.subscriptions_updated() : m.subscriptions_created());
 			} else if (result.type === 'failure') {
 				const msg = (result.data as Record<string, unknown> | undefined)?.form as
 					| { message?: string }
@@ -146,16 +147,16 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Subscriptions</h1>
-			<p class="text-sm text-muted-foreground">Manage your recurring subscriptions and members.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{m.subscriptions_title()}</h1>
+			<p class="text-sm text-muted-foreground">{m.subscriptions_description()}</p>
 		</div>
-		<Button onclick={openCreate}>New Subscription</Button>
+		<Button onclick={openCreate}>{m.subscriptions_new()}</Button>
 	</div>
 
 	{#if data.subscriptions.length === 0}
 		<Empty.Root class="border">
-			<Empty.Title>No subscriptions yet.</Empty.Title>
-			<Empty.Description>Create one to get started.</Empty.Description>
+			<Empty.Title>{m.subscriptions_empty_title()}</Empty.Title>
+			<Empty.Description>{m.subscriptions_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -164,7 +165,7 @@
 					<a
 						href="/subscriptions/{sub.id}"
 						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-						aria-label="View {sub.name}"
+						aria-label={m.subscriptions_view_aria({ name: sub.name })}
 					></a>
 					<Card.Content class="flex flex-1 flex-col space-y-3">
 						<div class="flex items-start justify-between gap-2">
@@ -174,28 +175,28 @@
 							</div>
 							<div class="flex flex-col items-end gap-1 shrink-0">
 								<Badge variant={typeBadgeVariant[sub.type]}>
-									{sub.type === 'PERSONAL' ? 'Personal' : 'Shared'}
+									{sub.type === 'PERSONAL' ? m.subscription_personal() : m.subscription_shared()}
 								</Badge>
 								<Badge variant={cycleBadgeVariant[sub.billingCycle]}>
-									{sub.billingCycle === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+									{sub.billingCycle === 'MONTHLY' ? m.billing_monthly() : m.billing_yearly()}
 								</Badge>
 							</div>
 						</div>
 
 						<div class="text-xs text-muted-foreground space-y-0.5">
-							<p>Next billing: <span class="font-medium text-foreground">{sub.nextBillingDate}</span></p>
+							<p>{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{sub.nextBillingDate}</span></p>
 							{#if sub.type === 'SHARED'}
-								<p>Members: <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
+								<p>{m.subscriptions_members_count()} <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
 							{/if}
 						</div>
 
 						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
-							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">View</Button>
-							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>Edit</Button>
+							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">{m.common_view()}</Button>
+							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>{m.common_edit()}</Button>
 							{#if sub.type === 'SHARED'}
-								<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>Members</Button>
+								<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>{m.subscriptions_members()}</Button>
 							{/if}
-							<Button variant="destructive" size="sm" onclick={() => openDelete(sub)}>Delete</Button>
+							<Button variant="destructive" size="sm" onclick={() => openDelete(sub)}>{m.common_delete()}</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -208,11 +209,11 @@
 <Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>{editMode ? 'Edit Subscription' : 'New Subscription'}</Dialog.Title>
+			<Dialog.Title>{editMode ? m.subscriptions_edit_title() : m.subscriptions_new_title()}</Dialog.Title>
 			<Dialog.Description>
 				{editMode
-					? 'Update the subscription details below.'
-					: 'Fill in the details for the new subscription.'}
+					? m.subscriptions_edit_description()
+					: m.subscriptions_new_description()}
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -235,8 +236,8 @@
 			<Form.Field form={sf} name="name">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>Name</Form.Label>
-						<Input {...props} bind:value={$form.name} placeholder="e.g. Netflix" />
+						<Form.Label>{m.common_name()}</Form.Label>
+						<Input {...props} bind:value={$form.name} placeholder={m.subscriptions_placeholder_name()} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -245,7 +246,7 @@
 			<Form.Field form={sf} name="cost">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>Cost (MXN)</Form.Label>
+						<Form.Label>{m.subscriptions_cost_mxn()}</Form.Label>
 						<Input {...props} type="number" step="0.01" min="0.01" bind:value={$form.cost} />
 					{/snippet}
 				</Form.Control>
@@ -257,15 +258,15 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Billing Cycle</Form.Label>
+							<Form.Label>{m.common_billing_cycle()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$form.billingCycle}
 								onValueChange={(v) => { $form.billingCycle = v as 'MONTHLY' | 'YEARLY'; }}
-								placeholder="Select cycle…"
+								placeholder={m.common_select_cycle()}
 								items={[
-									{ value: 'MONTHLY', label: 'Monthly' },
-									{ value: 'YEARLY', label: 'Yearly' },
+									{ value: 'MONTHLY', label: m.billing_monthly() },
+									{ value: 'YEARLY', label: m.billing_yearly() },
 								]}
 								{...triggerProps}
 							/>
@@ -278,15 +279,15 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Type</Form.Label>
+							<Form.Label>{m.common_type()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$form.type}
 								onValueChange={(v) => { $form.type = v as 'PERSONAL' | 'SHARED'; }}
-								placeholder="Select type…"
+								placeholder={m.common_select_type()}
 								items={[
-									{ value: 'PERSONAL', label: 'Personal' },
-									{ value: 'SHARED', label: 'Shared' },
+									{ value: 'PERSONAL', label: m.subscription_personal() },
+									{ value: 'SHARED', label: m.subscription_shared() },
 								]}
 								{...triggerProps}
 							/>
@@ -300,12 +301,12 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Category (optional)</Form.Label>
+						<Form.Label>{m.common_category_optional()}</Form.Label>
 						<NativeSelect
 							name={fieldName}
 							value={$form.categoryId !== '' ? String($form.categoryId) : ''}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : ''; }}
-							placeholder="— None —"
+							placeholder={m.common_none()}
 							items={data.categories.map(c => ({ value: String(c.id), label: c.name }))}
 							{...triggerProps}
 						/>
@@ -318,7 +319,7 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Next Billing Date</Form.Label>
+						<Form.Label>{m.subscriptions_next_billing_date()}</Form.Label>
 						<NativeDatePicker
 							name={fieldName}
 							value={$form.nextBillingDate}
@@ -341,7 +342,7 @@
 									bind:checked={$form.ownerParticipates}
 									class="h-4 w-4 rounded border border-input"
 								/>
-								<Form.Label>I participate in this subscription</Form.Label>
+								<Form.Label>{m.subscriptions_owner_participates()}</Form.Label>
 							</div>
 						{/snippet}
 					</Form.Control>
@@ -349,9 +350,9 @@
 			{/if}
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={$submitting}>
-					{$submitting ? 'Saving…' : editMode ? 'Update' : 'Create'}
+					{$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
 				</Button>
 			</Dialog.Footer>
 		</form>
@@ -362,10 +363,9 @@
 <Dialog.Root bind:open={deleteDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Delete Subscription</Dialog.Title>
+			<Dialog.Title>{m.subscriptions_delete_title()}</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to delete <strong>{deleteTargetName}</strong>? This action cannot be
-				undone.
+				{m.delete_confirm_prefix()} <strong>{deleteTargetName}</strong>{m.delete_confirm_suffix()}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -375,12 +375,12 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Subscription moved to trash.');
+						toast.success(m.subscriptions_trashed());
 						await update();
 					} else {
 						const msg =
 							(result as { data?: { message?: string } }).data?.message ??
-							'Failed to delete subscription.';
+							m.subscriptions_delete_failed();
 						toast.error(msg);
 					}
 				};
@@ -389,9 +389,9 @@
 			<input type="hidden" name="id" value={deleteTargetId} />
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					Cancel
+					{m.common_cancel()}
 				</Button>
-				<Button type="submit" variant="destructive">Delete</Button>
+				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>
@@ -401,33 +401,33 @@
 <Dialog.Root bind:open={memberDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Members — {memberTargetSub?.name}</Dialog.Title>
-			<Dialog.Description>Assign or remove contacts from this shared subscription.</Dialog.Description>
+			<Dialog.Title>{m.subscriptions_members_title({ name: memberTargetSub?.name ?? '' })}</Dialog.Title>
+			<Dialog.Description>{m.subscriptions_members_description()}</Dialog.Description>
 		</Dialog.Header>
 
 		{#if memberTargetSub}
 			<div class="space-y-4">
 				<!-- Current members list -->
 				{#if (memberTargetSub.members ?? []).length === 0}
-					<p class="text-sm text-muted-foreground">No members yet.</p>
+					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members()}</p>
 				{:else}
 					<ul class="divide-y rounded-md border">
 						{#each memberTargetSub.members ?? [] as member (member.id)}
 							<li class="flex items-center justify-between px-3 py-2">
-								<span class="text-sm">{member.contactName ?? `Contact #${member.contactId}`}</span>
+								<span class="text-sm">{member.contactName ?? m.contact_number({ id: member.contactId ?? member.id })}</span>
 								<form
 									method="POST"
 									action="?/removeMember"
 									use:kitEnhance={async () => {
 										return async ({ result, update }) => {
 											if (result.type === 'success') {
-												toast.success('Member removed.');
+												toast.success(m.subscriptions_member_removed());
 												await update();
 												memberDialogOpen = false;
 											} else {
 												const msg =
 													(result as { data?: { message?: string } }).data?.message ??
-													'Failed to remove member.';
+													m.subscriptions_member_remove_failed();
 												toast.error(msg);
 											}
 										};
@@ -435,7 +435,7 @@
 								>
 									<input type="hidden" name="subscriptionId" value={memberTargetSub?.id} />
 									<input type="hidden" name="memberId" value={member.id} />
-									<Button type="submit" variant="destructive" size="sm">Remove</Button>
+									<Button type="submit" variant="destructive" size="sm">{m.common_remove()}</Button>
 								</form>
 							</li>
 						{/each}
@@ -451,13 +451,13 @@
 							return async ({ result, update }) => {
 								if (result.type === 'success') {
 									selectedContactId = '';
-									toast.success('Member added.');
+									toast.success(m.subscriptions_member_added());
 									await update();
 									memberDialogOpen = false;
 								} else {
 									const msg =
 										(result as { data?: { message?: string } }).data?.message ??
-										'Failed to add member.';
+										m.subscriptions_member_add_failed();
 									toast.error(msg);
 								}
 							};
@@ -467,7 +467,7 @@
 						<input type="hidden" name="subscriptionId" value={memberTargetSub.id} />
 						<Select.Root name="contactId" bind:value={selectedContactId}>
 							<Select.Trigger class="flex-1">
-								<Select.Value placeholder="Select contact…" />
+								<Select.Value placeholder={m.subscriptions_select_contact()} />
 							</Select.Trigger>
 							<Select.Content>
 								{#each availableContacts(memberTargetSub) as c}
@@ -475,16 +475,16 @@
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<Button type="submit" disabled={!selectedContactId}>Add</Button>
+						<Button type="submit" disabled={!selectedContactId}>{m.common_add()}</Button>
 					</form>
 				{:else}
-					<p class="text-sm text-muted-foreground">All contacts are already members.</p>
+					<p class="text-sm text-muted-foreground">{m.subscriptions_all_contacts_members()}</p>
 				{/if}
 			</div>
 		{/if}
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={() => (memberDialogOpen = false)}>Close</Button>
+			<Button variant="outline" onclick={() => (memberDialogOpen = false)}>{m.common_close()}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

@@ -3,16 +3,17 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const subscriptionSchema = z.object({
 	id: z.coerce.number().optional(),
-	name: z.string().min(1, 'Name is required'),
-	cost: z.coerce.number().positive('Cost must be greater than 0'),
+	name: z.string().min(1, m.validation_name_required()),
+	cost: z.coerce.number().positive(m.validation_cost_positive()),
 	billingCycle: z.enum(['MONTHLY', 'YEARLY']),
 	type: z.enum(['PERSONAL', 'SHARED']),
 	categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
-	nextBillingDate: z.string().min(1, 'Next billing date is required'),
+	nextBillingDate: z.string().min(1, m.validation_next_billing_required()),
 	ownerParticipates: z.boolean().optional(),
 });
 
@@ -135,16 +136,16 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[subscriptions] create: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 400) {
 			console.error('[subscriptions] create: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid subscription data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_subscription() } });
 		}
 		if (!res.ok) {
 			console.error(`[subscriptions] create: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error creating subscription.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_create_subscription() } });
 		}
 
 		console.log(
@@ -164,7 +165,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const id = form.data.id;
-		if (!id) return fail(400, { form: { ...form, message: 'Missing subscription id for update.' } });
+		if (!id) return fail(400, { form: { ...form, message: m.error_missing_subscription_id_update() } });
 
 		const categoryId = !form.data.categoryId ? null : form.data.categoryId;
 
@@ -185,18 +186,18 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[subscriptions] update: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 404)
-			return fail(404, { form: { ...form, message: 'Subscription not found.' } });
+			return fail(404, { form: { ...form, message: m.error_subscription_not_found() } });
 		if (res.status === 400) {
 			console.error('[subscriptions] update: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid subscription data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_subscription() } });
 		}
 		if (!res.ok) {
 			console.error(`[subscriptions] update: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error updating subscription.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_update_subscription() } });
 		}
 
 		console.log(`[subscriptions] update: success — id: ${id} name: ${form.data.name}`);
@@ -213,7 +214,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id');
 
-		if (!id) return fail(400, { message: 'Missing subscription id.' });
+		if (!id) return fail(400, { message: m.error_missing_subscription_id() });
 
 		let res: Response;
 		try {
@@ -223,13 +224,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[subscriptions] delete: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Subscription not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_subscription_not_found() });
 		if (!res.ok) {
 			console.error(`[subscriptions] delete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting subscription.' });
+			return fail(502, { message: m.error_unexpected_delete_subscription() });
 		}
 
 		console.log(`[subscriptions] delete: success — id: ${id}`);
@@ -248,7 +249,7 @@ export const actions: Actions = {
 		const contactId = data.get('contactId');
 
 		if (!subscriptionId || !contactId)
-			return fail(400, { message: 'Missing subscriptionId or contactId.' });
+			return fail(400, { message: m.error_missing_subscription_id() });
 
 		let res: Response;
 		try {
@@ -259,14 +260,14 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[subscriptions] addMember: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Subscription or contact not found.' });
-		if (res.status === 409) return fail(409, { message: 'Contact is already a member.' });
+		if (res.status === 404) return fail(404, { message: m.error_subscription_not_found() });
+		if (res.status === 409) return fail(409, { message: m.error_contact_already_member() });
 		if (!res.ok) {
 			console.error(`[subscriptions] addMember: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error adding member.' });
+			return fail(502, { message: m.subscriptions_member_add_failed() });
 		}
 
 		console.log(
@@ -287,7 +288,7 @@ export const actions: Actions = {
 		const memberId = data.get('memberId');
 
 		if (!subscriptionId || !memberId)
-			return fail(400, { message: 'Missing subscriptionId or memberId.' });
+			return fail(400, { message: m.error_missing_subscription_id() });
 
 		let res: Response;
 		try {
@@ -297,13 +298,13 @@ export const actions: Actions = {
 			);
 		} catch {
 			console.error('[subscriptions] removeMember: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Member not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_member_not_found() });
 		if (!res.ok) {
 			console.error(`[subscriptions] removeMember: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error removing member.' });
+			return fail(502, { message: m.subscriptions_member_remove_failed() });
 		}
 
 		console.log(

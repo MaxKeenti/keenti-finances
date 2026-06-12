@@ -15,13 +15,14 @@
   import { Badge } from "$lib/components/ui/badge";
   import { CategoryBadge } from "$lib/components/ui/category-badge";
   import { ColorPicker } from "$lib/components/ui/color-picker";
+  import { m } from "$lib/paraglide/messages.js";
   import type { PageData } from "./$types";
 
   const DIRECTION_DEFAULT_HUE = { INGRESS: 100, EGRESS: 10, BOTH: 220 } as const;
 
   const categorySchema = z.object({
     id: z.coerce.number().optional(),
-    name: z.string().min(1, "Name is required"),
+    name: z.string().min(1, m.validation_name_required()),
     type: z.enum(["INGRESS", "EGRESS", "BOTH"]),
     hue: z.coerce.number().int().min(0).max(359),
   });
@@ -39,7 +40,7 @@
     onResult({ result }) {
       if (result.type === "success") {
         dialogOpen = false;
-        toast.success(editMode ? "Category updated." : "Category created.");
+        toast.success(editMode ? m.categories_updated() : m.categories_created());
       } else if (result.type === "failure") {
         const msg = (result.data as Record<string, unknown> | undefined)
           ?.form as { message?: string } | undefined;
@@ -74,10 +75,10 @@
     deleteDialogOpen = true;
   }
 
-  const typeLabel: Record<string, string> = {
-    INGRESS: "Ingress",
-    EGRESS: "Egress",
-    BOTH: "Both",
+  const typeLabel: Record<string, () => string> = {
+    INGRESS: m.direction_ingress,
+    EGRESS: m.direction_egress,
+    BOTH: m.direction_both,
   };
 
   const typeBadgeVariant: Record<string, 'success' | 'destructive' | 'info'> = {
@@ -90,27 +91,27 @@
 <div class="space-y-6">
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Categories</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{m.categories_title()}</h1>
       <p class="text-sm text-muted-foreground">
-        Manage your income and expense categories.
+        {m.categories_description()}
       </p>
     </div>
-    <Button onclick={openCreate}>New Category</Button>
+    <Button onclick={openCreate}>{m.categories_new()}</Button>
   </div>
 
   {#if data.categories.length === 0}
     <Empty.Root class="border">
-      <Empty.Title>No categories yet.</Empty.Title>
-      <Empty.Description>Create one to get started.</Empty.Description>
+      <Empty.Title>{m.categories_empty_title()}</Empty.Title>
+      <Empty.Description>{m.categories_empty_description()}</Empty.Description>
     </Empty.Root>
   {:else}
     <div class="rounded-lg border">
       <Table.Root>
         <Table.Header>
           <Table.Row>
-            <Table.Head>Name</Table.Head>
-            <Table.Head>Type</Table.Head>
-            <Table.Head class="w-[120px] text-right">Actions</Table.Head>
+            <Table.Head>{m.common_name()}</Table.Head>
+            <Table.Head>{m.common_type()}</Table.Head>
+            <Table.Head class="w-[120px] text-right">{m.common_actions()}</Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -121,13 +122,13 @@
               </Table.Cell>
               <Table.Cell>
                 <Badge variant={typeBadgeVariant[cat.type]}>
-                  {typeLabel[cat.type] ?? cat.type}
+                  {typeLabel[cat.type]?.() ?? cat.type}
                 </Badge>
               </Table.Cell>
               <Table.Cell class="text-right">
                 <div class="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onclick={() => openEdit(cat)}>Edit</Button>
-                  <Button variant="destructive" size="sm" onclick={() => openDelete(cat)}>Delete</Button>
+                  <Button variant="outline" size="sm" onclick={() => openEdit(cat)}>{m.common_edit()}</Button>
+                  <Button variant="destructive" size="sm" onclick={() => openDelete(cat)}>{m.common_delete()}</Button>
                 </div>
               </Table.Cell>
             </Table.Row>
@@ -142,11 +143,11 @@
 <Dialog.Root bind:open={dialogOpen}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>{editMode ? "Edit Category" : "New Category"}</Dialog.Title>
+      <Dialog.Title>{editMode ? m.categories_edit_title() : m.categories_new_title()}</Dialog.Title>
       <Dialog.Description>
         {editMode
-          ? "Update the category details below."
-          : "Fill in the details for the new category."}
+          ? m.categories_edit_description()
+          : m.categories_new_description()}
       </Dialog.Description>
     </Dialog.Header>
 
@@ -169,8 +170,8 @@
       <Form.Field form={sf} name="name">
         <Form.Control>
           {#snippet children({ props })}
-            <Form.Label>Name</Form.Label>
-            <Input {...props} bind:value={$form.name} placeholder="e.g. Salary" />
+            <Form.Label>{m.common_name()}</Form.Label>
+            <Input {...props} bind:value={$form.name} placeholder={m.categories_placeholder_name()} />
           {/snippet}
         </Form.Control>
         <Form.FieldErrors />
@@ -180,7 +181,7 @@
         <Form.Control>
           {#snippet children({ props })}
             {@const { name: fieldName, ...triggerProps } = props}
-            <Form.Label>Type</Form.Label>
+            <Form.Label>{m.common_type()}</Form.Label>
             <NativeSelect
               name={fieldName}
               value={$form.type}
@@ -189,11 +190,11 @@
                 if (!editMode) $form.hue = DIRECTION_DEFAULT_HUE[next];
                 $form.type = next;
               }}
-              placeholder="Select type…"
+              placeholder={m.common_select_type()}
               items={[
-                { value: 'INGRESS', label: 'Ingress (income)' },
-                { value: 'EGRESS', label: 'Egress (expense)' },
-                { value: 'BOTH', label: 'Both' },
+                { value: 'INGRESS', label: m.direction_ingress_income() },
+                { value: 'EGRESS', label: m.direction_egress_expense() },
+                { value: 'BOTH', label: m.direction_both() },
               ]}
               {...triggerProps}
             />
@@ -203,7 +204,7 @@
       </Form.Field>
 
       <div class="grid gap-1.5">
-        <span class="text-sm font-medium leading-none">Colour</span>
+        <span class="text-sm font-medium leading-none">{m.common_colour()}</span>
         <input type="hidden" name="hue" value={$form.hue} />
         <ColorPicker
           name={$form.name}
@@ -214,9 +215,9 @@
       </div>
 
       <Dialog.Footer>
-        <Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
+        <Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
         <Button type="submit" disabled={$submitting}>
-          {$submitting ? "Saving…" : editMode ? "Update" : "Create"}
+          {$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
         </Button>
       </Dialog.Footer>
     </form>
@@ -227,10 +228,9 @@
 <Dialog.Root bind:open={deleteDialogOpen}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
-      <Dialog.Title>Delete Category</Dialog.Title>
+      <Dialog.Title>{m.categories_delete_title()}</Dialog.Title>
       <Dialog.Description>
-        Are you sure you want to delete <strong>{deleteTargetName}</strong>?
-        This action cannot be undone.
+        {m.delete_confirm_prefix()} <strong>{deleteTargetName}</strong>{m.delete_confirm_suffix()}
       </Dialog.Description>
     </Dialog.Header>
     <form
@@ -240,12 +240,12 @@
         return async ({ result, update }) => {
           if (result.type === "success") {
             deleteDialogOpen = false;
-            toast.success("Category moved to trash.");
+            toast.success(m.categories_trashed());
             await update();
           } else {
             const msg =
               (result as { data?: { message?: string } }).data?.message ??
-              "Failed to delete category.";
+              m.categories_delete_failed();
             toast.error(msg);
           }
         };
@@ -254,9 +254,9 @@
       <input type="hidden" name="id" value={deleteTargetId} />
       <Dialog.Footer>
         <Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-          Cancel
+          {m.common_cancel()}
         </Button>
-        <Button type="submit" variant="destructive">Delete</Button>
+        <Button type="submit" variant="destructive">{m.common_delete()}</Button>
       </Dialog.Footer>
     </form>
   </Dialog.Content>

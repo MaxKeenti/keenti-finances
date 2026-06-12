@@ -4,6 +4,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
+	import { m } from '$lib/paraglide/messages.js';
 
 	const { data }: { data: PageData } = $props();
 
@@ -86,36 +87,35 @@
 <div class="space-y-6 max-w-2xl">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
-			<p class="text-sm text-muted-foreground">Personalize the app's appearance.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{m.settings_title()}</h1>
+			<p class="text-sm text-muted-foreground">{m.settings_description()}</p>
 		</div>
 		<div class="text-sm text-muted-foreground min-w-24 text-right" aria-live="polite">
 			{#if saveState === 'saving'}
 				<span class="inline-flex items-center gap-1">
 					<Loader2 class="w-3.5 h-3.5 animate-spin" />
-					Saving…
+					{m.common_saving()}
 				</span>
 			{:else if saveState === 'saved'}
 				<span class="inline-flex items-center gap-1 text-foreground">
 					<Check class="w-3.5 h-3.5" />
-					Saved
+					{m.settings_saved()}
 				</span>
 			{:else if saveState === 'error'}
-				<span class="text-destructive">Could not save.</span>
+				<span class="text-destructive">{m.settings_could_not_save()}</span>
 			{/if}
 		</div>
 	</div>
 
 	<section class="space-y-3 rounded-lg border p-5">
 		<div>
-			<h2 class="font-heading text-lg font-medium">Primary colour</h2>
+			<h2 class="font-heading text-lg font-medium">{m.settings_primary_colour()}</h2>
 			<p class="text-sm text-muted-foreground">
-				The accent hue used for buttons, links, and highlights. Lightness and saturation are
-				fixed per theme — only the hue changes.
+				{m.settings_primary_colour_description()}
 			</p>
 		</div>
 		<ColorPicker
-			name="Primary"
+			name={m.settings_primary_colour()}
 			hue={primaryHue}
 			onchange={onHueChange}
 		/>
@@ -123,16 +123,15 @@
 
 	<section class="space-y-3 rounded-lg border p-5">
 		<div>
-			<h2 class="font-heading text-lg font-medium">Typography</h2>
+			<h2 class="font-heading text-lg font-medium">{m.settings_typography()}</h2>
 			<p class="text-sm text-muted-foreground">
-				Pick a heading font and a body font. Your current choice is preloaded; switching to a
-				different one briefly fetches it the first time.
+				{m.settings_typography_description()}
 			</p>
 		</div>
 
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div class="grid gap-1.5">
-				<label for="heading-font" class="text-sm font-medium leading-none">Heading font</label>
+				<label for="heading-font" class="text-sm font-medium leading-none">{m.settings_heading_font()}</label>
 				<NativeSelect
 					name="heading-font"
 					value={headingFont}
@@ -142,11 +141,11 @@
 						{ value: 'Playfair Display', label: 'Playfair Display' },
 					]}
 				/>
-				<p class="font-heading text-xl mt-1">The quick brown fox</p>
+				<p class="font-heading text-xl mt-1">{m.settings_font_preview_short()}</p>
 			</div>
 
 			<div class="grid gap-1.5">
-				<label for="body-font" class="text-sm font-medium leading-none">Body font</label>
+				<label for="body-font" class="text-sm font-medium leading-none">{m.settings_body_font()}</label>
 				<NativeSelect
 					name="body-font"
 					value={bodyFont}
@@ -157,7 +156,7 @@
 						{ value: 'System UI', label: 'System UI' },
 					]}
 				/>
-				<p class="text-sm mt-1">The quick brown fox jumps over the lazy dog.</p>
+				<p class="text-sm mt-1">{m.settings_font_preview_long()}</p>
 			</div>
 		</div>
 	</section>

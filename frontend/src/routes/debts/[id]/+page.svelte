@@ -14,12 +14,13 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	const paymentSchema = z.object({
-		amount: z.coerce.number().positive('Amount must be greater than 0'),
-		paymentDate: z.string().min(1, 'Payment date is required'),
-		categoryId: z.coerce.number().positive('Category is required'),
+		amount: z.coerce.number().positive(m.validation_amount_positive()),
+		paymentDate: z.string().min(1, m.validation_payment_date_required()),
+		categoryId: z.coerce.number().positive(m.validation_category_required()),
 		notes: z.string().optional(),
 	});
 
@@ -56,14 +57,14 @@
 		validators: zod4Client(paymentSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
-				toast.success('Payment recorded.');
+				toast.success(m.debts_payment_recorded());
 				invalidateAll();
 			} else if (result.type === 'failure') {
 				const msg = (result.data as Record<string, unknown> | undefined)?.form as
 					| { message?: string }
 					| undefined;
 				if (msg?.message) toast.error(msg.message);
-				else toast.error('Failed to record payment.');
+				else toast.error(m.debts_payment_record_failed());
 			}
 		},
 	});
@@ -76,12 +77,17 @@
 			.sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
+	function debtStatusLabel(status: string): string {
+		if (status === 'ACTIVE') return m.status_active();
+		if (status === 'PAID') return m.status_paid();
+		return status;
+	}
 </script>
 
 <div class="space-y-6 max-w-3xl">
 	<!-- Back link -->
 	<Button variant="link" href="/debts" class="h-auto p-0 text-muted-foreground hover:text-foreground">
-		← Back to Debts
+		{m.common_back_to_debts()}
 	</Button>
 
 	<!-- Header card -->
@@ -90,27 +96,30 @@
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div class="min-w-0">
 					<h1 class="text-2xl font-semibold tracking-tight">
-						{data.debt.contactName ?? `Contact #${data.debt.contactId}`}
+						{data.debt.contactName ??
+							(data.debt.contactId != null
+								? m.contact_number({ id: data.debt.contactId })
+								: m.entity_contact())}
 					</h1>
 					<p class="text-sm text-muted-foreground mt-0.5">{data.debt.description}</p>
 				</div>
-				<Badge variant={statusBadgeVariant[data.debt.status]}>{data.debt.status}</Badge>
+				<Badge variant={statusBadgeVariant[data.debt.status]}>{debtStatusLabel(data.debt.status)}</Badge>
 			</div>
 
 			<!-- Balance breakdown -->
 			<div class="grid grid-cols-3 gap-4 text-sm">
 				<div>
-					<p class="text-muted-foreground">Total</p>
+					<p class="text-muted-foreground">{m.common_total()}</p>
 					<p class="text-lg font-semibold">{fmt.format(data.debt.totalAmount)}</p>
 				</div>
 				<div>
-					<p class="text-muted-foreground">Paid</p>
+					<p class="text-muted-foreground">{m.common_paid()}</p>
 					<p class="text-lg font-semibold text-green-600 dark:text-green-400">
 						{fmt.format(data.debt.totalPaid)}
 					</p>
 				</div>
 				<div>
-					<p class="text-muted-foreground">Remaining</p>
+					<p class="text-muted-foreground">{m.common_remaining()}</p>
 					<p class="text-lg font-semibold text-amber-600 dark:text-amber-400">
 						{fmt.format(data.debt.remaining)}
 					</p>
@@ -120,7 +129,7 @@
 			<!-- Progress bar -->
 			<div class="space-y-1">
 				<div class="flex justify-between text-xs text-muted-foreground">
-					<span>Progress</span>
+					<span>{m.common_progress()}</span>
 					<span>{paidPercent}%</span>
 				</div>
 				<Progress value={paidPercent} class="h-2 bg-green-500" />
@@ -131,19 +140,19 @@
 	<!-- Payment history card -->
 	<Card.Root>
 		<Card.Content class="space-y-4">
-			<h2 class="font-semibold text-base">Payment History</h2>
+			<h2 class="font-semibold text-base">{m.debts_payment_history()}</h2>
 
 			{#if data.payments.length === 0}
-				<p class="text-sm text-muted-foreground">No payments recorded yet.</p>
+				<p class="text-sm text-muted-foreground">{m.debts_no_payments()}</p>
 			{:else}
 				<div class="rounded-md border overflow-hidden">
 					<Table.Root>
 						<Table.Header class="bg-muted/50">
 							<Table.Row>
-								<Table.Head>Date</Table.Head>
-								<Table.Head class="text-right">Amount</Table.Head>
-								<Table.Head>Notes</Table.Head>
-								<Table.Head class="text-right">Transaction</Table.Head>
+								<Table.Head>{m.common_date()}</Table.Head>
+								<Table.Head class="text-right">{m.common_amount()}</Table.Head>
+								<Table.Head>{m.common_notes()}</Table.Head>
+								<Table.Head class="text-right">{m.common_transaction()}</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -178,9 +187,9 @@
 	<Card.Root>
 		<Card.Content class="space-y-4">
 			<div class="flex items-center justify-between">
-				<h2 class="font-semibold text-base">Record Payment</h2>
+				<h2 class="font-semibold text-base">{m.debts_record_payment_title()}</h2>
 				{#if isPaid}
-					<span class="text-xs text-muted-foreground">Debt is fully paid</span>
+					<span class="text-xs text-muted-foreground">{m.debts_fully_paid()}</span>
 				{/if}
 			</div>
 
@@ -190,7 +199,7 @@
 						<Form.Field form={sf} name="amount">
 							<Form.Control>
 								{#snippet children({ props })}
-									<Form.Label>Amount (MXN)</Form.Label>
+									<Form.Label>{m.common_amount_mxn()}</Form.Label>
 									<Input
 										{...props}
 										type="number"
@@ -208,7 +217,7 @@
 							<Form.Control>
 								{#snippet children({ props })}
 									{@const { name: fieldName, ...triggerProps } = props}
-									<Form.Label>Payment Date</Form.Label>
+									<Form.Label>{m.debts_payment_date()}</Form.Label>
 									<NativeDatePicker
 										name={fieldName}
 										value={$form.paymentDate}
@@ -225,12 +234,12 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
-								<Form.Label>Ingress Category</Form.Label>
+								<Form.Label>{m.common_ingress_category()}</Form.Label>
 								<NativeSelect
 									name={fieldName}
 									value={$form.categoryId > 0 ? String($form.categoryId) : ''}
 									onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
-									placeholder="Select a category…"
+									placeholder={m.common_select_category()}
 									items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
 									{...triggerProps}
 								/>
@@ -244,12 +253,12 @@
 					<Form.Field form={sf} name="notes">
 						<Form.Control>
 							{#snippet children({ props })}
-								<Form.Label>Notes <span class="text-muted-foreground">(optional)</span></Form.Label>
+								<Form.Label>{m.common_notes()} <span class="text-muted-foreground">{m.common_optional()}</span></Form.Label>
 								<Textarea
 									{...props}
 									bind:value={$form.notes}
 									rows={2}
-									placeholder="Optional payment notes"
+									placeholder={m.debts_placeholder_payment_notes()}
 								/>
 							{/snippet}
 						</Form.Control>
@@ -257,7 +266,7 @@
 					</Form.Field>
 
 					<Button type="submit" disabled={isPaid || $submitting} class="w-full sm:w-auto">
-						{$submitting ? 'Recording…' : 'Record Payment'}
+						{$submitting ? m.common_recording() : m.common_record_payment()}
 					</Button>
 				</fieldset>
 			</form>

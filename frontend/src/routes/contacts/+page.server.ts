@@ -3,13 +3,14 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const contactSchema = z.object({
 	id: z.coerce.number().optional(),
-	name: z.string().min(1, 'Name is required'),
+	name: z.string().min(1, m.validation_name_required()),
 	phone: z.string().optional(),
-	email: z.string().email('Invalid email format').optional().or(z.literal('')),
+	email: z.string().email(m.validation_email_invalid()).optional().or(z.literal('')),
 });
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -62,12 +63,12 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[contacts] create: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (!res.ok) {
 			console.error(`[contacts] create: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error creating contact.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_create_contact() } });
 		}
 
 		console.log(`[contacts] create: success — name: ${form.data.name}`);
@@ -85,7 +86,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const id = form.data.id;
-		if (!id) return fail(400, { form: { ...form, message: 'Missing contact id for update.' } });
+		if (!id) return fail(400, { form: { ...form, message: m.error_missing_contact_id_update() } });
 
 		let res: Response;
 		try {
@@ -100,15 +101,15 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[contacts] update: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 404) {
-			return fail(404, { form: { ...form, message: 'Contact not found.' } });
+			return fail(404, { form: { ...form, message: m.error_contact_not_found() } });
 		}
 		if (!res.ok) {
 			console.error(`[contacts] update: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error updating contact.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_update_contact() } });
 		}
 
 		console.log(`[contacts] update: success — id: ${id} name: ${form.data.name}`);
@@ -125,7 +126,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id');
 
-		if (!id) return fail(400, { message: 'Missing contact id.' });
+		if (!id) return fail(400, { message: m.error_missing_contact_id() });
 
 		let res: Response;
 		try {
@@ -135,13 +136,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[contacts] delete: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Contact not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_contact_not_found() });
 		if (!res.ok) {
 			console.error(`[contacts] delete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting contact.' });
+			return fail(502, { message: m.error_unexpected_delete_contact() });
 		}
 
 		console.log(`[contacts] delete: success — id: ${id}`);

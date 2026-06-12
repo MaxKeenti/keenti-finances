@@ -1,6 +1,7 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.MonthSummary;
+import com.keenti.finances.domain.model.PagedResult;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.out.TransactionRepository;
@@ -35,6 +36,28 @@ public class PanacheTransactionRepository implements TransactionRepository {
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    public PagedResult<Transaction> findPage(int pageIndex, int pageSize, String sortBy, boolean descending) {
+        String orderBy = transactionOrderBy(sortBy, descending);
+        long totalItems = em.createQuery("SELECT COUNT(t) FROM TransactionEntity t", Long.class)
+                .getSingleResult();
+        int totalPages = pageSize <= 0 ? 0 : (int) Math.ceil(totalItems / (double) pageSize);
+        int effectivePageIndex = totalPages == 0 ? 0 : Math.min(pageIndex, totalPages - 1);
+
+        List<Transaction> items = em.createQuery(
+                    "SELECT t FROM TransactionEntity t " +
+                    "LEFT JOIN t.category cat " +
+                    "LEFT JOIN t.contact c " +
+                    "ORDER BY " + orderBy,
+                    TransactionEntity.class)
+                .setFirstResult(effectivePageIndex * pageSize)
+                .setMaxResults(pageSize)
+                .getResultStream()
+                .map(this::toDomain)
+                .toList();
+        return new PagedResult<>(items, effectivePageIndex, pageSize, totalItems, totalPages);
     }
 
     @Override
@@ -195,6 +218,20 @@ public class PanacheTransactionRepository implements TransactionRepository {
                 : null;
         e.user = UserEntity.findById(userContext.getUserId());
         return e;
+    }
+
+    private String transactionOrderBy(String sortBy, boolean descending) {
+        String direction = descending ? "DESC" : "ASC";
+        String expression = switch (sortBy) {
+            case "amount" -> "t.amount";
+            case "direction" -> "t.direction";
+            case "description" -> "COALESCE(t.description, '')";
+            case "categoryName" -> "cat.name";
+            case "contactName" -> "COALESCE(c.name, '')";
+            case "transactionDate" -> "t.transactionDate";
+            default -> "t.transactionDate";
+        };
+        return expression + " " + direction + ", t.transactionDate DESC, t.createdAt DESC, t.id DESC";
     }
 
     private Transaction toDomain(TransactionEntity e) {

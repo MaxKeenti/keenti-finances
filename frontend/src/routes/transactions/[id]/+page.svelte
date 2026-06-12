@@ -14,15 +14,16 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	const transactionSchema = z.object({
 		id: z.coerce.number().optional(),
-		amount: z.coerce.number().positive('Amount must be greater than 0'),
+		amount: z.coerce.number().positive(m.validation_amount_positive()),
 		direction: z.enum(['INGRESS', 'EGRESS']),
 		description: z.string().max(500).optional(),
-		transactionDate: z.string().min(1, 'Date is required'),
-		categoryId: z.coerce.number().min(1, 'Category is required'),
+		transactionDate: z.string().min(1, m.validation_date_required()),
+		categoryId: z.coerce.number().min(1, m.validation_category_required()),
 		contactId: z.union([z.coerce.number(), z.literal('')]).optional(),
 	});
 
@@ -44,13 +45,13 @@
 		onResult({ result }) {
 			if (result.type === 'success') {
 				editDialogOpen = false;
-				toast.success('Transaction updated.');
+				toast.success(m.transactions_updated());
 			} else if (result.type === 'failure') {
 				const msg = (result.data as Record<string, unknown> | undefined)?.form as
 					| { message?: string }
 					| undefined;
 				if (msg?.message) toast.error(msg.message);
-				else toast.error('Failed to update transaction.');
+				else toast.error(m.transactions_update_failed());
 			}
 		},
 	});
@@ -79,12 +80,20 @@
 			? 'text-green-600 dark:text-green-400'
 			: 'text-red-600 dark:text-red-400',
 	);
+
+	const directionLabel = $derived(
+		tx.direction === 'INGRESS'
+			? m.direction_ingress()
+			: tx.direction === 'EGRESS'
+				? m.direction_egress()
+				: tx.direction,
+	);
 </script>
 
 <div class="space-y-6 max-w-2xl">
 	<!-- Back link -->
 	<Button variant="link" href="/transactions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
-		← Back to Transactions
+		{m.common_back_to_transactions()}
 	</Button>
 
 	<!-- Detail card -->
@@ -93,7 +102,7 @@
 			<!-- Amount + direction -->
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<p class="text-sm text-muted-foreground">Amount</p>
+					<p class="text-sm text-muted-foreground">{m.common_amount()}</p>
 					<p class="text-3xl font-bold tabular-nums {amountClass}">
 						{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
 					</p>
@@ -103,25 +112,25 @@
 						? 'border-green-500 text-green-700 dark:text-green-400'
 						: 'border-red-500 text-red-700 dark:text-red-400'}"
 				>
-					{tx.direction}
+					{directionLabel}
 				</span>
 			</div>
 
 			<!-- Description -->
 			<div>
-				<p class="text-sm text-muted-foreground">Description</p>
+				<p class="text-sm text-muted-foreground">{m.common_description()}</p>
 				<p class="text-base">{tx.description ?? '—'}</p>
 			</div>
 
 			<!-- Date -->
 			<div>
-				<p class="text-sm text-muted-foreground">Date</p>
+				<p class="text-sm text-muted-foreground">{m.common_date()}</p>
 				<p class="text-base tabular-nums">{tx.transactionDate}</p>
 			</div>
 
 			<!-- Category -->
 			<div>
-				<p class="text-sm text-muted-foreground">Category</p>
+				<p class="text-sm text-muted-foreground">{m.common_category()}</p>
 				<div class="mt-1">
 					{#if tx.categoryName}
 						<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
@@ -133,14 +142,14 @@
 
 			<!-- Contact -->
 			<div>
-				<p class="text-sm text-muted-foreground">Contact</p>
+				<p class="text-sm text-muted-foreground">{m.common_contact()}</p>
 				<p class="text-base">{tx.contactName ?? '—'}</p>
 			</div>
 
 			<!-- Actions -->
 			<div class="flex gap-3 pt-2">
-				<Button onclick={() => (editDialogOpen = true)}>Edit</Button>
-				<Button variant="destructive" onclick={() => (deleteDialogOpen = true)}>Delete</Button>
+				<Button onclick={() => (editDialogOpen = true)}>{m.common_edit()}</Button>
+				<Button variant="destructive" onclick={() => (deleteDialogOpen = true)}>{m.common_delete()}</Button>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -150,8 +159,8 @@
 <Dialog.Root bind:open={editDialogOpen}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>Edit Transaction</Dialog.Title>
-			<Dialog.Description>Update the transaction details below.</Dialog.Description>
+			<Dialog.Title>{m.transactions_edit_title()}</Dialog.Title>
+			<Dialog.Description>{m.transactions_edit_description()}</Dialog.Description>
 		</Dialog.Header>
 
 		{#if $message}
@@ -167,7 +176,7 @@
 				<Form.Field form={sf} name="amount">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Form.Label>Amount (MXN)</Form.Label>
+							<Form.Label>{m.common_amount_mxn()}</Form.Label>
 							<Input
 								{...props}
 								type="number"
@@ -185,15 +194,15 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Direction</Form.Label>
+							<Form.Label>{m.common_direction()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$form.direction}
 								onValueChange={(v) => { $form.direction = v as 'INGRESS' | 'EGRESS'; }}
-								placeholder="Select direction…"
+								placeholder={m.common_select_direction()}
 								items={[
-									{ value: 'INGRESS', label: 'Ingress (income)' },
-									{ value: 'EGRESS', label: 'Egress (expense)' },
+									{ value: 'INGRESS', label: m.direction_ingress_income() },
+									{ value: 'EGRESS', label: m.direction_egress_expense() },
 								]}
 								{...triggerProps}
 							/>
@@ -206,8 +215,8 @@
 			<Form.Field form={sf} name="description">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>Description</Form.Label>
-						<Input {...props} bind:value={$form.description} placeholder="e.g. Monthly salary" />
+						<Form.Label>{m.common_description()}</Form.Label>
+						<Input {...props} bind:value={$form.description} placeholder={m.transactions_placeholder_description()} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -217,7 +226,7 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Date</Form.Label>
+						<Form.Label>{m.common_date()}</Form.Label>
 						<NativeDatePicker
 							name={fieldName}
 							value={$form.transactionDate}
@@ -233,12 +242,12 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Category</Form.Label>
+						<Form.Label>{m.common_category()}</Form.Label>
 						<NativeSelect
 							name={fieldName}
 							value={$form.categoryId ? String($form.categoryId) : ''}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
-							placeholder="Select category…"
+							placeholder={m.common_select_category()}
 							items={filteredCategories.map(c => ({ value: String(c.id), label: c.name }))}
 							{...triggerProps}
 						/>
@@ -251,12 +260,12 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Contact (optional)</Form.Label>
+						<Form.Label>{m.common_contact_optional()}</Form.Label>
 						<NativeSelect
 							name={fieldName}
 							value={$form.contactId !== '' ? String($form.contactId) : ''}
 							onValueChange={(v) => { $form.contactId = v ? Number(v) : ''; }}
-							placeholder="— None —"
+							placeholder={m.common_none()}
 							items={sortedContacts.map(c => ({ value: String(c.id), label: c.name }))}
 							{...triggerProps}
 						/>
@@ -266,9 +275,9 @@
 			</Form.Field>
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (editDialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="outline" onclick={() => (editDialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={$submitting}>
-					{$submitting ? 'Saving…' : 'Update'}
+					{$submitting ? m.common_saving() : m.common_update()}
 				</Button>
 			</Dialog.Footer>
 		</form>
@@ -279,10 +288,9 @@
 <Dialog.Root bind:open={deleteDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Delete Transaction</Dialog.Title>
+			<Dialog.Title>{m.transactions_delete_title()}</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to delete <strong>{tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</strong>?
-				This action cannot be undone.
+				{m.delete_confirm_prefix()} <strong>{tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</strong>{m.delete_confirm_suffix()}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -291,12 +299,12 @@
 			use:kitEnhance={async () => {
 				return async ({ result }) => {
 					if (result.type === 'redirect') {
-						toast.success('Transaction moved to trash.');
+						toast.success(m.transactions_trashed());
 						goto(result.location);
 					} else if (result.type === 'failure') {
 						const msg =
 							(result as { data?: { message?: string } }).data?.message ??
-							'Failed to delete transaction.';
+							m.transactions_delete_failed();
 						toast.error(msg);
 					}
 				};
@@ -304,9 +312,9 @@
 		>
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					Cancel
+					{m.common_cancel()}
 				</Button>
-				<Button type="submit" variant="destructive">Delete</Button>
+				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

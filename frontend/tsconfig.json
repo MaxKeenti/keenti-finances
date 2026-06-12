@@ -4,6 +4,23 @@
 		"allowJs": true,
 		"checkJs": true,
 		"forceConsistentCasingInFileNames": true,
+		"paths": {
+			"$app/types": [
+				"./.svelte-kit/types/index.d.ts"
+			],
+			"$lib": [
+				"./src/lib"
+			],
+			"$lib/*": [
+				"./src/lib/*"
+			],
+			"effect": [
+				"./src/lib/types/effect-shim.d.ts"
+			],
+			"effect/SchemaAST": [
+				"./src/lib/types/effect-schema-ast-shim.d.ts"
+			]
+		},
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
 		"sourceMap": true,
