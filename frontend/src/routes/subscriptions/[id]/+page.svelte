@@ -6,6 +6,9 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as RadioGroup from '$lib/components/ui/radio-group';
+	import * as ScrollArea from '$lib/components/ui/scroll-area';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -118,11 +121,11 @@
 	// Link a single transaction to a specific Payment Record (marks it PAID).
 	let payLinkDialogOpen = $state(false);
 	let payLinkPaymentId = $state<number | null>(null);
-	let payLinkTxId = $state<number | null>(null);
+	let payLinkTxId = $state('');
 
 	function openPayLink(paymentId: number) {
 		payLinkPaymentId = paymentId;
-		payLinkTxId = null;
+		payLinkTxId = '';
 		payLinkDialogOpen = true;
 	}
 
@@ -403,28 +406,36 @@
 			{#if data.unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
-				<ul class="divide-y rounded-md border max-h-72 overflow-y-auto">
+				<ScrollArea.Root class="h-72 rounded-md border">
+					<ul class="divide-y">
 					{#each data.unlinkedTransactions as tx (tx.id)}
-						<li class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50" onclick={() => toggleTx(tx.id)}>
-							<input
-								type="checkbox"
-								class="h-4 w-4 rounded border border-input shrink-0"
+						<li class="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+							<Checkbox
 								checked={selectedTxIds.has(tx.id)}
-								onchange={() => toggleTx(tx.id)}
+								onclick={() => toggleTx(tx.id)}
+								aria-label={tx.description}
 							/>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-medium truncate">{tx.description}</p>
-								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
-							</div>
-							<div class="flex items-center gap-2 shrink-0">
-								{#if tx.categoryName}
-									<Badge variant="secondary">{tx.categoryName}</Badge>
-								{/if}
-								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
-							</div>
+							<button
+								type="button"
+								class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+								aria-pressed={selectedTxIds.has(tx.id)}
+								onclick={() => toggleTx(tx.id)}
+							>
+								<span class="min-w-0 flex-1 space-y-0.5">
+									<span class="block truncate text-sm font-medium">{tx.description}</span>
+									<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+								</span>
+								<span class="flex shrink-0 items-center gap-2">
+									{#if tx.categoryName}
+										<Badge variant="secondary">{tx.categoryName}</Badge>
+									{/if}
+									<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+								</span>
+							</button>
 						</li>
 					{/each}
-				</ul>
+					</ul>
+				</ScrollArea.Root>
 			{/if}
 
 			<Dialog.Footer>
@@ -455,7 +466,7 @@
 					if (result.type === 'success') {
 						payLinkDialogOpen = false;
 						payLinkPaymentId = null;
-						payLinkTxId = null;
+						payLinkTxId = '';
 						toast.success(m.subscriptions_transaction_linked_payment_recorded());
 						await update();
 					} else {
@@ -474,37 +485,37 @@
 			{#if data.unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
-				<ul class="divide-y rounded-md border max-h-72 overflow-y-auto">
-					{#each data.unlinkedTransactions as tx (tx.id)}
-						<li
-							class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50"
-							onclick={() => (payLinkTxId = tx.id)}
-						>
-							<input
-								type="radio"
-								name="txChoice"
-								class="h-4 w-4 shrink-0"
-								checked={payLinkTxId === tx.id}
-								onchange={() => (payLinkTxId = tx.id)}
-							/>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-medium truncate">{tx.description}</p>
-								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
+				<ScrollArea.Root class="h-72 rounded-md border">
+					<RadioGroup.Root bind:value={payLinkTxId} class="gap-0">
+						{#each data.unlinkedTransactions as tx (tx.id)}
+							<div class="flex items-center gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/50">
+								<RadioGroup.Item value={String(tx.id)} aria-label={tx.description} />
+								<button
+									type="button"
+									class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+									aria-pressed={payLinkTxId === String(tx.id)}
+									onclick={() => (payLinkTxId = String(tx.id))}
+								>
+									<span class="min-w-0 flex-1 space-y-0.5">
+										<span class="block truncate text-sm font-medium">{tx.description}</span>
+										<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+									</span>
+									<span class="flex shrink-0 items-center gap-2">
+										{#if tx.categoryName}
+											<Badge variant="secondary">{tx.categoryName}</Badge>
+										{/if}
+										<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+									</span>
+								</button>
 							</div>
-							<div class="flex items-center gap-2 shrink-0">
-								{#if tx.categoryName}
-									<Badge variant="secondary">{tx.categoryName}</Badge>
-								{/if}
-								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
-							</div>
-						</li>
-					{/each}
-				</ul>
+						{/each}
+					</RadioGroup.Root>
+				</ScrollArea.Root>
 			{/if}
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (payLinkDialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={payLinkTxId === null}>{m.subscriptions_link_mark_paid()}</Button>
+				<Button type="submit" disabled={!payLinkTxId}>{m.subscriptions_link_mark_paid()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

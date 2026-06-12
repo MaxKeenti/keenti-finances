@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Check, Loader2 } from '@lucide/svelte';
 	import { ColorPicker } from '$lib/components/ui/color-picker';
+	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect } from '$lib/components/native-select';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
@@ -131,7 +132,7 @@
 
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div class="grid gap-1.5">
-				<label for="heading-font" class="text-sm font-medium leading-none">{m.settings_heading_font()}</label>
+				<Label for="heading-font">{m.settings_heading_font()}</Label>
 				<NativeSelect
 					name="heading-font"
 					value={headingFont}
@@ -145,7 +146,7 @@
 			</div>
 
 			<div class="grid gap-1.5">
-				<label for="body-font" class="text-sm font-medium leading-none">{m.settings_body_font()}</label>
+				<Label for="body-font">{m.settings_body_font()}</Label>
 				<NativeSelect
 					name="body-font"
 					value={bodyFont}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { Separator } from '$lib/components/ui/separator';
 	import { LogOut } from '@lucide/svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Component } from 'svelte';
@@ -41,7 +42,7 @@
 				</a>
 			{/each}
 
-			<div class="w-full h-px bg-sidebar-border my-1" aria-hidden="true"></div>
+			<Separator class="my-1 bg-sidebar-border" />
 
 			<a
 				href="/logout"

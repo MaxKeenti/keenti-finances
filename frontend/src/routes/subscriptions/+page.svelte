@@ -10,6 +10,7 @@
 	import * as Empty from '$lib/components/ui/empty';
 	import * as Card from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
@@ -336,11 +337,9 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							<div class="flex items-center gap-2">
-								<input
-									type="checkbox"
+								<Checkbox
 									id={props.id}
 									bind:checked={$form.ownerParticipates}
-									class="h-4 w-4 rounded border border-input"
 								/>
 								<Form.Label>{m.subscriptions_owner_participates()}</Form.Label>
 							</div>

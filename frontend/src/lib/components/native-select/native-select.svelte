@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as Select from '$lib/components/ui/select';
+	import * as NativeSelectPrimitive from '$lib/components/ui/native-select';
 	import { cn } from '$lib/utils';
 
 	type Item = { value: string; label: string };
@@ -36,20 +37,18 @@
 </script>
 
 {#if isMobile}
-	<select
+	<NativeSelectPrimitive.Root
 		{name}
-		class={cn(
-			'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-			className,
-		)}
+		value={value}
+		class={cn('w-full', className)}
 		onchange={(e) => onValueChange((e.target as HTMLSelectElement).value)}
 		{...rest}
 	>
-		<option value="" disabled selected={!value}>{placeholder}</option>
+		<NativeSelectPrimitive.Option value="" disabled>{placeholder}</NativeSelectPrimitive.Option>
 		{#each items as item (item.value)}
-			<option value={item.value} selected={item.value === value}>{item.label}</option>
+			<NativeSelectPrimitive.Option value={item.value}>{item.label}</NativeSelectPrimitive.Option>
 		{/each}
-	</select>
+	</NativeSelectPrimitive.Root>
 {:else}
 	<Select.Root {name} {value} {onValueChange} {items}>
 		<Select.Trigger class={className} {...rest}>

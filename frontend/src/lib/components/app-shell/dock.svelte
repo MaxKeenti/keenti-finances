@@ -13,6 +13,9 @@
 		EllipsisVertical
 	} from '@lucide/svelte';
 	import DockOverflowDialog from './dock-overflow-dialog.svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { Separator } from '$lib/components/ui/separator';
+	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages.js';
 
 	const allNavItems = [
@@ -44,43 +47,51 @@
 	aria-label={m.nav_main()}
 >
 	<!-- Desktop: all items centered -->
-	<div class="hidden sm:flex items-center gap-1 py-2">
-		{#each allNavItems as item}
-			{@const active = $page.url.pathname === item.href}
-			<a
-				href={item.href}
-				title={item.label}
-				aria-label={item.label}
-				class="relative group flex items-center justify-center w-10 h-10 rounded-lg transition-colors
-					{active
-					? 'bg-sidebar-accent text-sidebar-accent-foreground'
-					: 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
-			>
-				<item.icon class="w-5 h-5 shrink-0" />
-				<span
-					class="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-popover text-popover-foreground text-xs px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md border border-border"
-				>
-					{item.label}
-				</span>
-			</a>
-		{/each}
+	<Tooltip.Provider delayDuration={150}>
+		<div class="hidden sm:flex items-center gap-1 py-2">
+			{#each allNavItems as item}
+				{@const active = $page.url.pathname === item.href}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							{@const { type: _triggerType, ...triggerProps } = props}
+							<a
+								{...triggerProps}
+								href={item.href}
+								aria-label={item.label}
+								class="flex items-center justify-center w-10 h-10 rounded-lg transition-colors
+									{active
+									? 'bg-sidebar-accent text-sidebar-accent-foreground'
+									: 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
+							>
+								<item.icon class="w-5 h-5 shrink-0" />
+							</a>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content side="top" sideOffset={8}>{item.label}</Tooltip.Content>
+				</Tooltip.Root>
+			{/each}
 
-		<div class="w-px h-6 bg-sidebar-border mx-1" aria-hidden="true"></div>
+			<Separator orientation="vertical" class="h-6 bg-sidebar-border mx-1" />
 
-		<a
-			href="/logout"
-			title={m.nav_logout()}
-			aria-label={m.nav_logout()}
-			class="relative group flex items-center justify-center w-10 h-10 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-		>
-			<LogOut class="w-5 h-5 shrink-0" />
-			<span
-				class="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-popover text-popover-foreground text-xs px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md border border-border"
-			>
-				{m.nav_logout()}
-			</span>
-		</a>
-	</div>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						{@const { type: _triggerType, ...triggerProps } = props}
+						<a
+							{...triggerProps}
+							href="/logout"
+							aria-label={m.nav_logout()}
+							class="flex items-center justify-center w-10 h-10 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+						>
+							<LogOut class="w-5 h-5 shrink-0" />
+						</a>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content side="top" sideOffset={8}>{m.nav_logout()}</Tooltip.Content>
+			</Tooltip.Root>
+		</div>
+	</Tooltip.Provider>
 
 	<!-- Mobile: 3 pinned + overflow menu button -->
 	<div class="flex sm:hidden items-center w-full py-2 px-2">
@@ -99,14 +110,16 @@
 			</a>
 		{/each}
 
-		<button
+		<Button
+			type="button"
+			variant="ghost"
 			onclick={() => (overflowOpen = true)}
 			aria-label={m.nav_more_options()}
-			class="flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-colors text-xs font-medium text-sidebar-foreground hover:text-sidebar-accent-foreground"
+			class="h-auto flex-1 flex-col gap-1 py-1 text-xs text-sidebar-foreground hover:bg-transparent hover:text-sidebar-accent-foreground"
 		>
 			<EllipsisVertical class="w-5 h-5 shrink-0" />
 			<span>{m.nav_more()}</span>
-		</button>
+		</Button>
 	</div>
 </nav>
 

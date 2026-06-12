@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Input } from '$lib/components/ui/input';
   import { CategoryBadge } from '$lib/components/ui/category-badge';
   import { hexToOklchHue, oklchHueToRepresentativeHex } from '$lib/utils/color';
 
@@ -66,13 +67,13 @@
       style="background:{sliderBg};"
       aria-label="Hue"
     />
-    <input
+    <Input
       type="text"
       bind:value={hexInput}
       onblur={onHexBlur}
       onkeydown={onHexKeydown}
-      class="h-9 w-24 rounded-md border border-input bg-background px-3 font-mono text-sm uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      maxlength="7"
+      class="h-9 w-24 font-mono uppercase"
+      maxlength={7}
       aria-label="Hex color"
     />
   </div>
