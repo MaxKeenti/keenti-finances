@@ -1,7 +1,9 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.PaymentRecord;
+import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.PaymentRecordUseCase;
+import com.keenti.finances.domain.port.in.TransactionUseCase;
 import com.keenti.finances.domain.port.out.PaymentRecordRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -22,6 +24,9 @@ public class PaymentRecordService implements PaymentRecordUseCase {
 
     @Inject
     SubscriptionRepository subscriptionRepository;
+
+    @Inject
+    TransactionUseCase transactionUseCase;
 
     @Override
     public List<PaymentRecord> listBySubscription(Long subscriptionId) {
@@ -57,9 +62,46 @@ public class PaymentRecordService implements PaymentRecordUseCase {
         }
         PaymentRecord updated = paymentRecordRepository.update(new PaymentRecord(
             record.getId(), record.getSubscriptionId(), record.getMemberId(),
-            record.getBillingDate(), record.getAmount(), "PAID", LocalDate.now(), record.getCreatedAt()
+            record.getBillingDate(), record.getAmount(), "PAID", LocalDate.now(),
+            record.getTransactionId(), record.getCreatedAt()
         ));
         LOG.infof("payment.record paymentId=%d subscriptionId=%d status=PAID", paymentId, subscriptionId);
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public PaymentRecord linkTransaction(Long subscriptionId, Long paymentId, Long transactionId) {
+        // Same ownership guard as recordPayment: resolve the @UserScoped subscription
+        // first so the by-id Payment Record load below cannot reach another User's row.
+        subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
+        PaymentRecord record = paymentRecordRepository.findById(paymentId)
+            .orElseThrow(() -> new NotFoundException("Payment record not found: " + paymentId));
+        if (!record.getSubscriptionId().equals(subscriptionId)) {
+            throw new NotFoundException("Payment record not found for subscription: " + subscriptionId);
+        }
+        if ("PAID".equals(record.getStatus())) {
+            throw new jakarta.ws.rs.WebApplicationException(
+                jakarta.ws.rs.core.Response.status(409)
+                    .entity("{\"error\":\"Payment record is already PAID\"}")
+                    .build());
+        }
+        // getById is User-scoped: an unknown/foreign transaction id 404s.
+        Transaction tx = transactionUseCase.getById(transactionId)
+            .orElseThrow(() -> new NotFoundException("Transaction not found: " + transactionId));
+
+        // Linking ties the real money movement to the period: mark PAID, dated to
+        // the transaction, and record which Transaction settled it.
+        PaymentRecord updated = paymentRecordRepository.update(new PaymentRecord(
+            record.getId(), record.getSubscriptionId(), record.getMemberId(),
+            record.getBillingDate(), record.getAmount(), "PAID", tx.getTransactionDate(),
+            tx.getId(), record.getCreatedAt()
+        ));
+        // Surface the transaction under the subscription's "Linked Transactions" too.
+        transactionUseCase.linkSubscription(transactionId, subscriptionId);
+        LOG.infof("payment.link paymentId=%d subscriptionId=%d transactionId=%d status=PAID",
+            paymentId, subscriptionId, transactionId);
         return updated;
     }
 }

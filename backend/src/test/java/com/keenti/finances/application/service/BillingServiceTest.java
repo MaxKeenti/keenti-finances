@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 class BillingServiceTest {
@@ -28,57 +29,75 @@ class BillingServiceTest {
     EntityManager em;
 
     /**
-     * The manual per-subscription trigger has no lead-time window (ADR-0019):
-     * generating must work even when the next billing date is far in the future.
-     * This is the exact case the old scheduler skipped. A record is created and
-     * nextBillingDate advances by one cycle.
+     * Backfill (ADR-0019): a single click catches up every overdue period from
+     * nextBillingDate through today, so past payment history is built in one
+     * action. A subscription ~90 days overdue gets at least 3 monthly records and
+     * nextBillingDate lands on the first period strictly after today.
      */
     @Test
     @Transactional
-    void generatesForSubscriptionBeyondLeadWindow() {
-        UserEntity user = ensureUser("test-billing-beyond-window");
+    void backfillsOverduePeriodsInOneClick() {
+        UserEntity user = ensureUser("test-billing-backfill");
+        SubscriptionEntity sub = personalSubscriptionDueIn(user, -90);
+
+        OptionalInt created = billingService.generateForSubscription(sub.id);
+
+        assertTrue(created.getAsInt() >= 3, "catches up at least three overdue monthly periods");
+        assertEquals(created.getAsInt(), PaymentRecordEntity.count("subscription.id = ?1", sub.id),
+            "one record per caught-up period");
+        assertTrue(reload(sub).nextBillingDate.isAfter(LocalDate.now()),
+            "nextBillingDate advances past today");
+    }
+
+    /**
+     * After catching up, a second click is a safe no-op: nothing is created and
+     * nextBillingDate (now in the future) does not advance.
+     */
+    @Test
+    @Transactional
+    void secondClickAfterCatchUpIsNoOp() {
+        UserEntity user = ensureUser("test-billing-idempotent");
+        SubscriptionEntity sub = personalSubscriptionDueIn(user, -40);
+        billingService.generateForSubscription(sub.id);
+        long countAfterFirst = PaymentRecordEntity.count("subscription.id = ?1", sub.id);
+        LocalDate dateAfterFirst = reload(sub).nextBillingDate;
+
+        OptionalInt created = billingService.generateForSubscription(sub.id);
+
+        assertEquals(OptionalInt.of(0), created, "already caught up — nothing created");
+        assertEquals(countAfterFirst, PaymentRecordEntity.count("subscription.id = ?1", sub.id),
+            "no duplicate Payment Records");
+        assertEquals(dateAfterFirst, reload(sub).nextBillingDate,
+            "nextBillingDate must not advance when nothing was generated");
+    }
+
+    /**
+     * A future-dated subscription generates nothing until it falls due — backfill
+     * never creates records ahead of today (ADR-0019).
+     */
+    @Test
+    @Transactional
+    void futureDatedSubscriptionGeneratesNothing() {
+        UserEntity user = ensureUser("test-billing-future");
         SubscriptionEntity sub = personalSubscriptionDueIn(user, 30);
         LocalDate originalDate = sub.nextBillingDate;
 
         OptionalInt created = billingService.generateForSubscription(sub.id);
 
-        assertEquals(OptionalInt.of(1), created, "one record generated regardless of date");
-        assertEquals(1, PaymentRecordEntity.count("subscription.id = ?1", sub.id));
-        assertEquals(originalDate.plusMonths(1), reload(sub).nextBillingDate,
-            "nextBillingDate advances one monthly cycle after generation");
+        assertEquals(OptionalInt.of(0), created, "future period is not generated yet");
+        assertEquals(0, PaymentRecordEntity.count("subscription.id = ?1", sub.id));
+        assertEquals(originalDate, reload(sub).nextBillingDate, "nextBillingDate unchanged");
     }
 
     /**
-     * Idempotent per period: re-triggering a period whose Payment Record already
-     * exists creates nothing and does NOT advance nextBillingDate — so a second
-     * click is a safe no-op rather than a runaway that keeps rolling the date.
-     */
-    @Test
-    @Transactional
-    void idempotentWhenPeriodAlreadyGenerated() {
-        UserEntity user = ensureUser("test-billing-idempotent");
-        SubscriptionEntity sub = personalSubscriptionDueIn(user, 3);
-        LocalDate originalDate = sub.nextBillingDate;
-        existingRecord(sub);
-
-        OptionalInt created = billingService.generateForSubscription(sub.id);
-
-        assertEquals(OptionalInt.of(0), created, "already-generated period creates nothing");
-        assertEquals(1, PaymentRecordEntity.count("subscription.id = ?1", sub.id),
-            "no duplicate Payment Record");
-        assertEquals(originalDate, reload(sub).nextBillingDate,
-            "nextBillingDate must not advance when nothing was generated");
-    }
-
-    /**
-     * A SHARED subscription generates one PENDING record per member, each for
-     * that member's share.
+     * A SHARED subscription due today generates one PENDING record per member,
+     * each for that member's share.
      */
     @Test
     @Transactional
     void generatesOneRecordPerMemberForSharedSubscription() {
         UserEntity user = ensureUser("test-billing-shared");
-        SubscriptionEntity sub = sharedSubscriptionDueIn(user, 5);
+        SubscriptionEntity sub = sharedSubscriptionDueIn(user, 0);
         member(sub, contact(user, "Member A"), "50.00");
         member(sub, contact(user, "Member B"), "50.00");
 
@@ -155,18 +174,6 @@ class BillingServiceTest {
         return m;
     }
 
-    private PaymentRecordEntity existingRecord(SubscriptionEntity sub) {
-        PaymentRecordEntity pr = new PaymentRecordEntity();
-        pr.subscription = sub;
-        pr.member = null;
-        pr.billingDate = sub.nextBillingDate;
-        pr.amount = sub.cost;
-        pr.status = "PENDING";
-        pr.createdAt = LocalDateTime.now();
-        pr.persist();
-        em.flush();
-        return pr;
-    }
 
     private SubscriptionEntity reload(SubscriptionEntity sub) {
         em.flush();

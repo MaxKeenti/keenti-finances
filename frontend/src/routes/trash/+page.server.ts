@@ -1,5 +1,6 @@
 import { fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -45,7 +46,7 @@ export const actions: Actions = {
 		const id = data.get('id');
 		const entityType = data.get('entityType');
 
-		if (!id || !entityType) return fail(400, { message: 'Missing id or entityType.' });
+		if (!id || !entityType) return fail(400, { message: m.error_missing_id_or_entity_type() });
 
 		let res: Response;
 		try {
@@ -55,13 +56,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[trash] restore: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Item not found in trash.' });
+		if (res.status === 404) return fail(404, { message: m.error_item_not_found() });
 		if (!res.ok) {
 			console.error(`[trash] restore: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error restoring item.' });
+			return fail(502, { message: m.error_unexpected_restore_item() });
 		}
 
 		console.log(`[trash] restore: success — type: ${entityType} id: ${id}`);
@@ -79,7 +80,7 @@ export const actions: Actions = {
 		const id = data.get('id');
 		const entityType = data.get('entityType');
 
-		if (!id || !entityType) return fail(400, { message: 'Missing id or entityType.' });
+		if (!id || !entityType) return fail(400, { message: m.error_missing_id_or_entity_type() });
 
 		let res: Response;
 		try {
@@ -89,13 +90,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[trash] permanentDelete: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Item not found in trash.' });
+		if (res.status === 404) return fail(404, { message: m.error_item_not_found() });
 		if (!res.ok) {
 			console.error(`[trash] permanentDelete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting item.' });
+			return fail(502, { message: m.error_unexpected_delete_item() });
 		}
 
 		console.log(`[trash] permanentDelete: success — type: ${entityType} id: ${id}`);

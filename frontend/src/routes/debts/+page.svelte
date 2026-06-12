@@ -17,21 +17,22 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	const debtSchema = z.object({
 		id: z.coerce.number().optional(),
-		contactId: z.coerce.number().positive('Contact is required'),
-		description: z.string().min(1, 'Description is required'),
-		totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
-		createdAt: z.string().min(1, 'Date is required'),
+		contactId: z.coerce.number().positive(m.validation_contact_required()),
+		description: z.string().min(1, m.validation_description_required()),
+		totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
+		createdAt: z.string().min(1, m.validation_date_required()),
 	});
 
 	const bulkPaymentSchema = z.object({
-		contactId: z.coerce.number().positive('Contact is required'),
-		totalAmount: z.coerce.number().positive('Amount must be greater than 0'),
-		paymentDate: z.string().min(1, 'Payment date is required'),
-		categoryId: z.coerce.number().positive('Category is required'),
+		contactId: z.coerce.number().positive(m.validation_contact_required()),
+		totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
+		paymentDate: z.string().min(1, m.validation_payment_date_required()),
+		categoryId: z.coerce.number().positive(m.validation_category_required()),
 		notes: z.string().optional(),
 	});
 
@@ -81,7 +82,7 @@
 		onResult({ result }) {
 			if (result.type === 'success') {
 				dialogOpen = false;
-				toast.success(editMode ? 'Debt updated.' : 'Debt created.');
+				toast.success(editMode ? m.debts_updated() : m.debts_created());
 			} else if (result.type === 'failure') {
 				const msg = (result.data as Record<string, unknown> | undefined)?.form as
 					| { message?: string }
@@ -99,7 +100,10 @@
 				const r = (result.data as Record<string, unknown> | undefined)?.bulkResult as BulkResult | undefined;
 				if (r) {
 					bulkResult = r;
-					toast.success(`Bulk payment applied: ${fmt.format(r.totalApplied)} across ${r.payments.length} debt(s).`);
+					toast.success(m.debts_bulk_payment_applied({
+						amount: fmt.format(r.totalApplied),
+						count: r.payments.length,
+					}));
 					invalidateAll();
 				}
 			} else if (result.type === 'failure') {
@@ -107,7 +111,7 @@
 					| { message?: string }
 					| undefined;
 				if (msg?.message) toast.error(msg.message);
-				else toast.error('Failed to process bulk payment.');
+				else toast.error(m.debts_bulk_payment_failed());
 			}
 		},
 	});
@@ -166,24 +170,30 @@
 		ACTIVE: 'warning',
 		PAID: 'success',
 	};
+
+	function debtStatusLabel(status: string): string {
+		if (status === 'ACTIVE') return m.status_active();
+		if (status === 'PAID') return m.status_paid();
+		return status;
+	}
 </script>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Debts</h1>
-			<p class="text-sm text-muted-foreground">Track embroidery job debts and payments per debtor.</p>
+			<h1 class="text-2xl font-semibold tracking-tight">{m.debts_title()}</h1>
+			<p class="text-sm text-muted-foreground">{m.debts_description()}</p>
 		</div>
 		<div class="flex gap-2">
-			<Button variant="outline" onclick={openBulkPayment}>Bulk Payment</Button>
-			<Button onclick={openCreate}>New Debt</Button>
+			<Button variant="outline" onclick={openBulkPayment}>{m.debts_bulk_payment()}</Button>
+			<Button onclick={openCreate}>{m.debts_new()}</Button>
 		</div>
 	</div>
 
 	{#if data.debts.length === 0}
 		<Empty.Root class="border">
-			<Empty.Title>No debts yet.</Empty.Title>
-			<Empty.Description>Create one to get started.</Empty.Description>
+			<Empty.Title>{m.debts_empty_title()}</Empty.Title>
+			<Empty.Description>{m.debts_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -192,40 +202,40 @@
 					<a
 						href="/debts/{debt.id}"
 						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-						aria-label="View debt for {debt.contactName ?? `Contact #${debt.contactId}`}"
+						aria-label={m.debts_view_aria({ name: debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }) })}
 					></a>
 					<Card.Content class="flex flex-1 flex-col space-y-3">
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
 								<p class="font-semibold text-base truncate">
-									{debt.contactName ?? `Contact #${debt.contactId}`}
+									{debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id })}
 								</p>
 								<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
 							</div>
-							<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debt.status}</Badge>
+							<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
 						</div>
 
 						<div class="space-y-1 text-sm">
 							{#if debt.createdAt}
 								<div class="flex justify-between">
-									<span class="text-muted-foreground">Date</span>
+									<span class="text-muted-foreground">{m.common_date()}</span>
 									<span class="font-medium tabular-nums">
 										{new Date(debt.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
 									</span>
 								</div>
 							{/if}
 							<div class="flex justify-between">
-								<span class="text-muted-foreground">Total</span>
+								<span class="text-muted-foreground">{m.common_total()}</span>
 								<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
 							</div>
 							<div class="flex justify-between">
-								<span class="text-muted-foreground">Paid</span>
+								<span class="text-muted-foreground">{m.common_paid()}</span>
 								<span class="font-medium text-green-600 dark:text-green-400">
 									{fmt.format(debt.totalPaid)}
 								</span>
 							</div>
 							<div class="flex justify-between border-t pt-1">
-								<span class="text-muted-foreground font-medium">Remaining</span>
+								<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
 								<span
 									class="font-bold {debt.status === 'PAID'
 										? 'text-green-600 dark:text-green-400'
@@ -238,10 +248,10 @@
 
 						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
 							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
-								Payments
+								{m.debts_payments()}
 							</Button>
-							<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>Edit</Button>
-							<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>Delete</Button>
+							<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>{m.common_edit()}</Button>
+							<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>{m.common_delete()}</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>
@@ -254,9 +264,9 @@
 <Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>{editMode ? 'Edit Debt' : 'New Debt'}</Dialog.Title>
+			<Dialog.Title>{editMode ? m.debts_edit_title() : m.debts_new_title()}</Dialog.Title>
 			<Dialog.Description>
-				{editMode ? 'Update the debt details below.' : 'Fill in the details for the new debt.'}
+				{editMode ? m.debts_edit_description() : m.debts_new_description()}
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -280,12 +290,12 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Debtor (Contact)</Form.Label>
+						<Form.Label>{m.debts_debtor_contact()}</Form.Label>
 						<NativeSelect
 							name={fieldName}
 							value={$form.contactId > 0 ? String($form.contactId) : ''}
 							onValueChange={(v) => { $form.contactId = v ? Number(v) : 0; }}
-							placeholder="— Select contact —"
+							placeholder={m.common_select_contact()}
 							items={[...data.contacts].sort((a, b) => a.name.localeCompare(b.name)).map(c => ({ value: String(c.id), label: c.name }))}
 							{...triggerProps}
 						/>
@@ -297,12 +307,12 @@
 			<Form.Field form={sf} name="description">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>Description</Form.Label>
+						<Form.Label>{m.common_description()}</Form.Label>
 						<Textarea
 							{...props}
 							bind:value={$form.description}
 							rows={3}
-							placeholder="e.g. Embroidery job — 5 polo shirts"
+							placeholder={m.debts_placeholder_description()}
 						/>
 					{/snippet}
 				</Form.Control>
@@ -312,7 +322,7 @@
 			<Form.Field form={sf} name="totalAmount">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>Total Amount (MXN)</Form.Label>
+						<Form.Label>{m.debts_total_amount_mxn()}</Form.Label>
 						<Input {...props} type="number" step="0.01" min="0.01" bind:value={$form.totalAmount} />
 					{/snippet}
 				</Form.Control>
@@ -323,7 +333,7 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>Debt Date</Form.Label>
+						<Form.Label>{m.debts_date()}</Form.Label>
 						<NativeDatePicker
 							name={fieldName}
 							value={$form.createdAt}
@@ -336,9 +346,9 @@
 			</Form.Field>
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={$submitting}>
-					{$submitting ? 'Saving…' : editMode ? 'Update' : 'Create'}
+					{$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
 				</Button>
 			</Dialog.Footer>
 		</form>
@@ -349,10 +359,8 @@
 <Dialog.Root bind:open={bulkDialogOpen}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>Bulk Payment</Dialog.Title>
-			<Dialog.Description>
-				Apply a lump sum to a contact's oldest active debts first, including partial payments.
-			</Dialog.Description>
+			<Dialog.Title>{m.debts_bulk_payment()}</Dialog.Title>
+			<Dialog.Description>{m.debts_bulk_description()}</Dialog.Description>
 		</Dialog.Header>
 
 		{#if bulkResult}
@@ -360,15 +368,15 @@
 			<div class="space-y-4">
 				<div class="grid grid-cols-3 gap-3 text-sm">
 					<div>
-						<p class="text-muted-foreground">Total</p>
+						<p class="text-muted-foreground">{m.common_total()}</p>
 						<p class="font-semibold">{fmt.format(bulkResult.totalAmount)}</p>
 					</div>
 					<div>
-						<p class="text-muted-foreground">Applied</p>
+						<p class="text-muted-foreground">{m.common_applied()}</p>
 						<p class="font-semibold text-green-600 dark:text-green-400">{fmt.format(bulkResult.totalApplied)}</p>
 					</div>
 					<div>
-						<p class="text-muted-foreground">Unused</p>
+						<p class="text-muted-foreground">{m.common_unused()}</p>
 						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-amber-600 dark:text-amber-400' : ''}">{fmt.format(bulkResult.totalUnused)}</p>
 					</div>
 				</div>
@@ -377,10 +385,10 @@
 					<Table.Root>
 						<Table.Header class="bg-muted/50">
 							<Table.Row>
-								<Table.Head>Debt</Table.Head>
-								<Table.Head class="text-right">Applied</Table.Head>
-								<Table.Head class="text-right">Remaining</Table.Head>
-								<Table.Head>Status</Table.Head>
+								<Table.Head>{m.common_debt()}</Table.Head>
+								<Table.Head class="text-right">{m.common_applied()}</Table.Head>
+								<Table.Head class="text-right">{m.common_remaining()}</Table.Head>
+								<Table.Head>{m.common_status()}</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -395,7 +403,7 @@
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant={item.debtStatus === 'PAID' ? 'success' : 'warning'} class="text-xs">
-											{item.debtStatus}
+											{debtStatusLabel(item.debtStatus)}
 										</Badge>
 									</Table.Cell>
 								</Table.Row>
@@ -405,8 +413,8 @@
 				</div>
 
 				<Dialog.Footer>
-					<Button onclick={() => (bulkDialogOpen = false)}>Close</Button>
-					<Button variant="outline" onclick={openBulkPayment}>New Bulk Payment</Button>
+					<Button onclick={() => (bulkDialogOpen = false)}>{m.common_close()}</Button>
+					<Button variant="outline" onclick={openBulkPayment}>{m.debts_new_bulk_payment()}</Button>
 				</Dialog.Footer>
 			</div>
 		{:else}
@@ -415,12 +423,12 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Contact (Debtor)</Form.Label>
+							<Form.Label>{m.debts_contact_debtor()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$bulkForm.contactId > 0 ? String($bulkForm.contactId) : ''}
 								onValueChange={(v) => { $bulkForm.contactId = v ? Number(v) : 0; }}
-								placeholder="— Select contact —"
+								placeholder={m.common_select_contact()}
 								items={[...data.contacts].sort((a, b) => a.name.localeCompare(b.name)).map(c => ({ value: String(c.id), label: c.name }))}
 								{...triggerProps}
 							/>
@@ -433,7 +441,7 @@
 					<Form.Field form={bulkSf} name="totalAmount">
 						<Form.Control>
 							{#snippet children({ props })}
-								<Form.Label>Total Amount (MXN)</Form.Label>
+								<Form.Label>{m.debts_total_amount_mxn()}</Form.Label>
 								<Input {...props} type="number" step="0.01" min="0.01" bind:value={$bulkForm.totalAmount} />
 							{/snippet}
 						</Form.Control>
@@ -444,7 +452,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
-								<Form.Label>Payment Date</Form.Label>
+								<Form.Label>{m.debts_payment_date()}</Form.Label>
 								<NativeDatePicker
 									name={fieldName}
 									value={$bulkForm.paymentDate}
@@ -461,12 +469,12 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Ingress Category</Form.Label>
+							<Form.Label>{m.common_ingress_category()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$bulkForm.categoryId > 0 ? String($bulkForm.categoryId) : ''}
 								onValueChange={(v) => { $bulkForm.categoryId = v ? Number(v) : 0; }}
-								placeholder="Select a category…"
+								placeholder={m.common_select_category()}
 								items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
 								{...triggerProps}
 							/>
@@ -478,12 +486,12 @@
 				<Form.Field form={bulkSf} name="notes">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Form.Label>Notes <span class="text-muted-foreground">(optional)</span></Form.Label>
+							<Form.Label>{m.common_notes()} <span class="text-muted-foreground">{m.common_optional()}</span></Form.Label>
 							<Textarea
 								{...props}
 								bind:value={$bulkForm.notes}
 								rows={2}
-								placeholder="Optional notes applied to each sub-payment"
+								placeholder={m.debts_placeholder_notes()}
 							/>
 						{/snippet}
 					</Form.Control>
@@ -491,9 +499,9 @@
 				</Form.Field>
 
 				<Dialog.Footer>
-					<Button type="button" variant="outline" onclick={() => (bulkDialogOpen = false)}>Cancel</Button>
+					<Button type="button" variant="outline" onclick={() => (bulkDialogOpen = false)}>{m.common_cancel()}</Button>
 					<Button type="submit" disabled={$bulkSubmitting}>
-						{$bulkSubmitting ? 'Processing…' : 'Apply Bulk Payment'}
+						{$bulkSubmitting ? m.common_processing() : m.debts_apply_bulk_payment()}
 					</Button>
 				</Dialog.Footer>
 			</form>
@@ -505,10 +513,9 @@
 <Dialog.Root bind:open={deleteDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Delete Debt</Dialog.Title>
+			<Dialog.Title>{m.debts_delete_title()}</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to delete the debt for <strong>{deleteTargetDescription}</strong>? This
-				action cannot be undone.
+				{m.delete_confirm_debt_prefix()} <strong>{deleteTargetDescription}</strong>{m.delete_confirm_suffix()}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -518,11 +525,11 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						deleteDialogOpen = false;
-						toast.success('Debt moved to trash.');
+						toast.success(m.debts_trashed());
 						await update();
 					} else {
 						const msg =
-							(result as { data?: { message?: string } }).data?.message ?? 'Failed to delete debt.';
+							(result as { data?: { message?: string } }).data?.message ?? m.debts_delete_failed();
 						toast.error(msg);
 					}
 				};
@@ -531,9 +538,9 @@
 			<input type="hidden" name="id" value={deleteTargetId} />
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					Cancel
+					{m.common_cancel()}
 				</Button>
-				<Button type="submit" variant="destructive">Delete</Button>
+				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

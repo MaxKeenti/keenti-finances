@@ -4,13 +4,13 @@ import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
+import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.hibernate.Session;
 
 @ApplicationScoped
@@ -26,7 +26,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     @Override
     public List<Subscription> findAll() {
         return SubscriptionEntity.<SubscriptionEntity>find("ORDER BY createdAt DESC")
-            .stream().map(this::toDomain).collect(Collectors.toList());
+            .stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -75,7 +75,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
 
     @Override
     public void restoreById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             SubscriptionEntity entity = SubscriptionEntity.findById(id);
@@ -88,8 +88,9 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public Optional<TrashItem> findDeletedById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return SubscriptionEntity.<SubscriptionEntity>find(
@@ -102,15 +103,16 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public List<TrashItem> findAllDeleted() {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return SubscriptionEntity.<SubscriptionEntity>find(
                     "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
                     .stream()
                     .map(e -> new TrashItem(e.id, "subscription", e.name, e.deletedAt))
-                    .collect(Collectors.toList());
+                    .toList();
         } finally {
             session.enableFilter("softDelete");
         }

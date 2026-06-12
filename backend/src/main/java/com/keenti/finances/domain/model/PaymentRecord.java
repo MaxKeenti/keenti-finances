@@ -13,10 +13,12 @@ public class PaymentRecord {
     private BigDecimal amount;
     private String status;
     private LocalDate paidDate;
+    private Long transactionId;
     private LocalDateTime createdAt;
 
     public PaymentRecord(Long id, Long subscriptionId, Long memberId, LocalDate billingDate,
-                         BigDecimal amount, String status, LocalDate paidDate, LocalDateTime createdAt) {
+                         BigDecimal amount, String status, LocalDate paidDate, Long transactionId,
+                         LocalDateTime createdAt) {
         this.id = id;
         this.subscriptionId = subscriptionId;
         this.memberId = memberId;
@@ -24,6 +26,7 @@ public class PaymentRecord {
         this.amount = amount;
         this.status = status;
         this.paidDate = paidDate;
+        this.transactionId = transactionId;
         this.createdAt = createdAt;
     }
 
@@ -34,5 +37,6 @@ public class PaymentRecord {
     public BigDecimal getAmount() { return amount; }
     public String getStatus() { return status; }
     public LocalDate getPaidDate() { return paidDate; }
+    public Long getTransactionId() { return transactionId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

@@ -3,21 +3,22 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const debtSchema = z.object({
 	id: z.coerce.number().optional(),
-	contactId: z.coerce.number().positive('Contact is required'),
-	description: z.string().min(1, 'Description is required'),
-	totalAmount: z.coerce.number().positive('Total amount must be greater than 0'),
-	createdAt: z.string().min(1, 'Date is required'),
+	contactId: z.coerce.number().positive(m.validation_contact_required()),
+	description: z.string().min(1, m.validation_description_required()),
+	totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
+	createdAt: z.string().min(1, m.validation_date_required()),
 });
 
 const bulkPaymentSchema = z.object({
-	contactId: z.coerce.number().positive('Contact is required'),
-	totalAmount: z.coerce.number().positive('Amount must be greater than 0'),
-	paymentDate: z.string().min(1, 'Payment date is required'),
-	categoryId: z.coerce.number().positive('Category is required'),
+	contactId: z.coerce.number().positive(m.validation_contact_required()),
+	totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
+	paymentDate: z.string().min(1, m.validation_payment_date_required()),
+	categoryId: z.coerce.number().positive(m.validation_category_required()),
 	notes: z.string().optional(),
 });
 
@@ -104,19 +105,19 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[debts] create: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 400) {
 			console.error('[debts] create: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid debt data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_debt() } });
 		}
 		if (res.status === 404) {
-			return fail(404, { form: { ...form, message: 'Contact not found.' } });
+			return fail(404, { form: { ...form, message: m.error_contact_not_found() } });
 		}
 		if (!res.ok) {
 			console.error(`[debts] create: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error creating debt.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_create_debt() } });
 		}
 
 		console.log(
@@ -136,7 +137,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const id = form.data.id;
-		if (!id) return fail(400, { form: { ...form, message: 'Missing debt id for update.' } });
+		if (!id) return fail(400, { form: { ...form, message: m.error_missing_debt_id_update() } });
 
 		let res: Response;
 		try {
@@ -152,17 +153,17 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[debts] update: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
-		if (res.status === 404) return fail(404, { form: { ...form, message: 'Debt or contact not found.' } });
+		if (res.status === 404) return fail(404, { form: { ...form, message: m.error_debt_or_contact_not_found() } });
 		if (res.status === 400) {
 			console.error('[debts] update: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid debt data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_debt() } });
 		}
 		if (!res.ok) {
 			console.error(`[debts] update: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error updating debt.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_update_debt() } });
 		}
 
 		console.log(`[debts] update: success — id: ${id} contactId: ${form.data.contactId}`);
@@ -194,21 +195,21 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[debts] bulkPayment: backend unreachable');
-			return fail(502, { bulkForm: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { bulkForm: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 400) {
 			const body = await res.json().catch(() => ({}));
-			const msg = body?.error ?? 'Invalid bulk payment data.';
-			console.error(`[debts] bulkPayment: validation error — ${msg}`);
-			return fail(400, { bulkForm: { ...form, message: msg } });
+			const backendMessage = body?.error ?? m.error_invalid_bulk_payment();
+			console.error(`[debts] bulkPayment: validation error — ${backendMessage}`);
+			return fail(400, { bulkForm: { ...form, message: m.error_invalid_bulk_payment() } });
 		}
 		if (res.status === 404) {
-			return fail(404, { bulkForm: { ...form, message: 'Contact not found.' } });
+			return fail(404, { bulkForm: { ...form, message: m.error_contact_not_found() } });
 		}
 		if (!res.ok) {
 			console.error(`[debts] bulkPayment: backend error ${res.status}`);
-			return fail(502, { bulkForm: { ...form, message: 'Unexpected error processing bulk payment.' } });
+			return fail(502, { bulkForm: { ...form, message: m.error_unexpected_bulk_payment() } });
 		}
 
 		const result = await res.json();
@@ -228,7 +229,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id');
 
-		if (!id) return fail(400, { message: 'Missing debt id.' });
+		if (!id) return fail(400, { message: m.error_missing_debt_id() });
 
 		let res: Response;
 		try {
@@ -238,13 +239,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[debts] delete: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Debt not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_debt_not_found() });
 		if (!res.ok) {
 			console.error(`[debts] delete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting debt.' });
+			return fail(502, { message: m.error_unexpected_delete_debt() });
 		}
 
 		console.log(`[debts] delete: success — id: ${id}`);

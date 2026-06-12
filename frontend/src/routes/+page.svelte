@@ -2,11 +2,25 @@
 	import { scaleBand, scaleLinear } from 'd3-scale';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	const MONTH_NAMES = [
+		m.month_jan,
+		m.month_feb,
+		m.month_mar,
+		m.month_apr,
+		m.month_may,
+		m.month_jun,
+		m.month_jul,
+		m.month_aug,
+		m.month_sep,
+		m.month_oct,
+		m.month_nov,
+		m.month_dec,
+	];
 
 	const mxn = (v: number) =>
 		new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v);
@@ -116,29 +130,29 @@
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Net Balance</Card.Description>
+				<Card.Description>{m.dashboard_net_balance()}</Card.Description>
 				<Card.Title class="text-2xl font-bold">{mxn(data.summary.netBalance)}</Card.Title>
 			</Card.Header>
 			<Card.Content>
-				<p class="text-muted-foreground text-xs">All-time income minus expenses</p>
+				<p class="text-muted-foreground text-xs">{m.dashboard_net_balance_description()}</p>
 			</Card.Content>
 		</Card.Root>
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Total Income ({data.year})</Card.Description>
+				<Card.Description>{m.dashboard_total_income({ year: data.year })}</Card.Description>
 				<Card.Title class="text-2xl font-bold text-green-600">{mxn(data.summary.totalIngress)}</Card.Title>
 			</Card.Header>
 			<Card.Content>
-				<p class="text-muted-foreground text-xs">Sum of all income this year</p>
+				<p class="text-muted-foreground text-xs">{m.dashboard_total_income_description()}</p>
 			</Card.Content>
 		</Card.Root>
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Total Expenses ({data.year})</Card.Description>
+				<Card.Description>{m.dashboard_total_expenses({ year: data.year })}</Card.Description>
 				<Card.Title class="text-2xl font-bold text-red-600">{mxn(data.summary.totalEgress)}</Card.Title>
 			</Card.Header>
 			<Card.Content>
-				<p class="text-muted-foreground text-xs">Sum of all expenses this year</p>
+				<p class="text-muted-foreground text-xs">{m.dashboard_total_expenses_description()}</p>
 			</Card.Content>
 		</Card.Root>
 	</div>
@@ -160,15 +174,15 @@
 	<!-- Monthly Bar Chart -->
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Monthly Income vs Expenses</Card.Title>
+			<Card.Title>{m.dashboard_monthly_income_expenses()}</Card.Title>
 			<Card.Description>{data.year}</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			{#if isEmpty}
-				<p class="text-muted-foreground py-2 text-center text-sm">No transactions yet</p>
+				<p class="text-muted-foreground py-2 text-center text-sm">{m.dashboard_no_transactions()}</p>
 			{/if}
 			<div class="overflow-x-auto">
-				<svg width={BAR_W} height={BAR_H} aria-label="Monthly income vs expenses bar chart">
+				<svg width={BAR_W} height={BAR_H} aria-label={m.dashboard_chart_monthly_income_expenses()}>
 					<g transform="translate({PAD.left},{PAD.top})">
 						{#each bc.yTicks as tick}
 							<line
@@ -231,7 +245,7 @@
 								fill="currentColor"
 								opacity="0.6"
 							>
-								{MONTH_NAMES[mc.month - 1]}
+								{MONTH_NAMES[mc.month - 1]()}
 							</text>
 						{/each}
 					</g>
@@ -239,10 +253,10 @@
 			</div>
 			<div class="mt-2 flex gap-4 text-xs">
 				<span class="flex items-center gap-1">
-					<span class="inline-block h-3 w-3 rounded-sm bg-green-500"></span> Income
+					<span class="inline-block h-3 w-3 rounded-sm bg-green-500"></span> {m.dashboard_income()}
 				</span>
 				<span class="flex items-center gap-1">
-					<span class="inline-block h-3 w-3 rounded-sm bg-red-500"></span> Expenses
+					<span class="inline-block h-3 w-3 rounded-sm bg-red-500"></span> {m.dashboard_expenses()}
 				</span>
 			</div>
 		</Card.Content>
@@ -251,15 +265,15 @@
 	<!-- Yearly Trend Line -->
 	<Card.Root>
 		<Card.Header>
-			<Card.Title>Monthly Net Trend</Card.Title>
-			<Card.Description>Income − expenses per month — {data.year}</Card.Description>
+			<Card.Title>{m.dashboard_monthly_net_trend()}</Card.Title>
+			<Card.Description>{m.dashboard_monthly_net_trend_description({ year: data.year })}</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			{#if isEmpty}
-				<p class="text-muted-foreground py-2 text-center text-sm">No transactions yet</p>
+				<p class="text-muted-foreground py-2 text-center text-sm">{m.dashboard_no_transactions()}</p>
 			{/if}
 			<div class="overflow-x-auto">
-				<svg width={LINE_W} height={LINE_H} aria-label="Monthly net trend line chart">
+				<svg width={LINE_W} height={LINE_H} aria-label={m.dashboard_chart_monthly_net_trend()}>
 					<g transform="translate({LINE_PAD.left},{LINE_PAD.top})">
 						<line
 							x1="0"
@@ -325,7 +339,7 @@
 								fill="currentColor"
 								opacity="0.6"
 							>
-								{MONTH_NAMES[ml.month - 1]}
+								{MONTH_NAMES[ml.month - 1]()}
 							</text>
 						{/each}
 					</g>

@@ -2,19 +2,20 @@ import { redirect, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getWorkOS } from '$lib/server/workos';
 import { setSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
 
 	if (!code) {
 		console.error('[workos-auth] callback — missing code param');
-		error(400, 'Missing authorization code');
+		error(400, m.error_missing_authorization_code());
 	}
 
 	const clientId = process.env.WORKOS_CLIENT_ID;
 	if (!clientId) {
 		console.error('[workos-auth] callback — WORKOS_CLIENT_ID not set');
-		error(500, 'Server configuration error');
+		error(500, m.error_server_configuration());
 	}
 
 	let result;

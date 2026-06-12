@@ -6,6 +6,7 @@
 	import * as Empty from '$lib/components/ui/empty';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -22,12 +23,12 @@
 		permanentDeleteDialogOpen = true;
 	}
 
-	const typeLabel: Record<string, string> = {
-		transaction: 'Transaction',
-		category: 'Category',
-		contact: 'Contact',
-		subscription: 'Subscription',
-		debt: 'Debt',
+	const typeLabel: Record<string, () => string> = {
+		transaction: m.entity_transaction,
+		category: m.entity_category,
+		contact: m.entity_contact,
+		subscription: m.entity_subscription,
+		debt: m.entity_debt,
 	};
 
 	const typeBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -39,7 +40,7 @@
 	};
 
 	function formatDate(iso: string) {
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString('es-MX', {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
@@ -49,26 +50,26 @@
 
 <div class="space-y-6">
 	<div>
-		<h1 class="text-2xl font-semibold tracking-tight">Trash</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{m.trash_title()}</h1>
 		<p class="text-sm text-muted-foreground">
-			Items moved to trash are kept here. Restore them or permanently delete.
+			{m.trash_description()}
 		</p>
 	</div>
 
 	{#if data.items.length === 0}
 		<Empty.Root class="border">
-			<Empty.Title>Trash is empty.</Empty.Title>
-			<Empty.Description>Deleted items will appear here.</Empty.Description>
+			<Empty.Title>{m.trash_empty_title()}</Empty.Title>
+			<Empty.Description>{m.trash_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
 		<div class="rounded-lg border">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
-						<Table.Head>Name</Table.Head>
-						<Table.Head>Type</Table.Head>
-						<Table.Head>Deleted</Table.Head>
-						<Table.Head class="w-[160px] text-right">Actions</Table.Head>
+						<Table.Head>{m.common_name()}</Table.Head>
+						<Table.Head>{m.common_type()}</Table.Head>
+						<Table.Head>{m.common_deleted()}</Table.Head>
+						<Table.Head class="w-[160px] text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
@@ -77,7 +78,7 @@
 							<Table.Cell class="font-medium">{item.label}</Table.Cell>
 							<Table.Cell>
 								<Badge variant={typeBadgeVariant[item.entityType] ?? 'secondary'}>
-									{typeLabel[item.entityType] ?? item.entityType}
+									{typeLabel[item.entityType]?.() ?? item.entityType}
 								</Badge>
 							</Table.Cell>
 							<Table.Cell class="text-muted-foreground text-sm">{formatDate(item.deletedAt)}</Table.Cell>
@@ -89,12 +90,14 @@
 										use:kitEnhance={async () => {
 											return async ({ result, update }) => {
 												if (result.type === 'success') {
-													toast.success(`${typeLabel[item.entityType] ?? 'Item'} restored.`);
+													toast.success(m.trash_item_restored({
+														type: typeLabel[item.entityType]?.() ?? m.entity_item(),
+													}));
 													await update();
 												} else {
 													const msg =
 														(result as { data?: { message?: string } }).data?.message ??
-														'Failed to restore item.';
+														m.trash_restore_failed();
 													toast.error(msg);
 												}
 											};
@@ -102,13 +105,13 @@
 									>
 										<input type="hidden" name="id" value={item.id} />
 										<input type="hidden" name="entityType" value={item.entityType} />
-										<Button type="submit" variant="outline" size="sm">Restore</Button>
+										<Button type="submit" variant="outline" size="sm">{m.common_restore()}</Button>
 									</form>
 									<Button
 										variant="destructive"
 										size="sm"
 										onclick={() => openPermanentDelete(item)}
-									>Delete</Button>
+									>{m.common_delete()}</Button>
 								</div>
 							</Table.Cell>
 						</Table.Row>
@@ -123,10 +126,9 @@
 <Dialog.Root bind:open={permanentDeleteDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Permanently Delete</Dialog.Title>
+			<Dialog.Title>{m.trash_permanently_delete_title()}</Dialog.Title>
 			<Dialog.Description>
-				Are you sure you want to permanently delete <strong>{deleteTargetLabel}</strong>?
-				This action cannot be undone.
+				{m.delete_confirm_permanent_prefix()} <strong>{deleteTargetLabel}</strong>{m.delete_confirm_suffix()}
 			</Dialog.Description>
 		</Dialog.Header>
 		<form
@@ -136,12 +138,12 @@
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
 						permanentDeleteDialogOpen = false;
-						toast.success('Item permanently deleted.');
+						toast.success(m.trash_item_permanently_deleted());
 						await update();
 					} else {
 						const msg =
 							(result as { data?: { message?: string } }).data?.message ??
-							'Failed to delete item.';
+							m.trash_delete_failed();
 						toast.error(msg);
 					}
 				};
@@ -155,9 +157,9 @@
 					variant="outline"
 					onclick={() => (permanentDeleteDialogOpen = false)}
 				>
-					Cancel
+					{m.common_cancel()}
 				</Button>
-				<Button type="submit" variant="destructive">Delete permanently</Button>
+				<Button type="submit" variant="destructive">{m.common_delete_permanently()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

@@ -6,7 +6,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanachePaymentRecordRepository implements PaymentRecordRepository {
@@ -15,7 +14,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
     public List<PaymentRecord> findBySubscriptionId(Long subscriptionId) {
         return PaymentRecordEntity.<PaymentRecordEntity>find(
             "subscription.id = ?1 ORDER BY billingDate DESC", subscriptionId)
-            .stream().map(this::toDomain).collect(Collectors.toList());
+            .stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -35,6 +34,8 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
         PaymentRecordEntity entity = PaymentRecordEntity.findById(record.getId());
         entity.status = record.getStatus();
         entity.paidDate = record.getPaidDate();
+        entity.transaction = record.getTransactionId() != null
+            ? TransactionEntity.findById(record.getTransactionId()) : null;
         return toDomain(entity);
     }
 
@@ -58,6 +59,8 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
         e.amount = r.getAmount();
         e.status = r.getStatus();
         e.paidDate = r.getPaidDate();
+        e.transaction = r.getTransactionId() != null
+            ? TransactionEntity.findById(r.getTransactionId()) : null;
         e.createdAt = r.getCreatedAt();
         return e;
     }
@@ -71,6 +74,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
             e.amount,
             e.status,
             e.paidDate,
+            e.transaction != null ? e.transaction.id : null,
             e.createdAt
         );
     }

@@ -1,5 +1,6 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.model.PagedResult;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
@@ -32,6 +33,16 @@ public class TransactionService implements TransactionUseCase {
         List<Transaction> transactions = transactionRepository.findAll();
         LOG.infof("transaction.list count=%d", transactions.size());
         return transactions;
+    }
+
+    @Override
+    public PagedResult<Transaction> listPage(int pageIndex, int pageSize, String sortBy, boolean descending) {
+        PagedResult<Transaction> page = transactionRepository.findPage(pageIndex, pageSize, sortBy, descending);
+        LOG.infof(
+            "transaction.listPage pageIndex=%d pageSize=%d sortBy=%s descending=%b total=%d",
+            pageIndex, pageSize, sortBy, descending, page.totalItems()
+        );
+        return page;
     }
 
     @Override

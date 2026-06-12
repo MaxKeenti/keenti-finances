@@ -6,4 +6,5 @@ import java.util.List;
 public interface PaymentRecordUseCase {
     List<PaymentRecord> listBySubscription(Long subscriptionId);
     PaymentRecord recordPayment(Long subscriptionId, Long paymentId);
+    PaymentRecord linkTransaction(Long subscriptionId, Long paymentId, Long transactionId);
 }

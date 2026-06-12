@@ -21,8 +21,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Path("/api/debts")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -40,9 +38,9 @@ public class DebtResource {
 
     @GET
     public Response list() {
-        List<DebtResponse> body = debtUseCase.list().stream()
+        var body = debtUseCase.list().stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
         return Response.ok(body).build();
     }
 
@@ -111,14 +109,15 @@ public class DebtResource {
     @GET
     @Path("/{id}/payments")
     public Response listPayments(@PathParam("id") Long id) {
-        List<DebtPaymentResponse> body = debtUseCase.listPayments(id).stream()
+        var body = debtUseCase.listPayments(id).stream()
                 .map(this::toPaymentResponse)
-                .collect(Collectors.toList());
+                .toList();
         return Response.ok(body).build();
     }
 
     @POST
     @Path("/bulk-payment")
+    @SuppressWarnings("null")
     public Response bulkPayment(@Valid BulkPaymentRequest request) {
         contactUseCase.getById(request.contactId())
                 .orElseThrow(() -> new jakarta.ws.rs.NotFoundException(
@@ -142,7 +141,7 @@ public class DebtResource {
             result.payments().stream()
                 .map(p -> new BulkPaymentItemResponse(
                     p.debtId(), p.description(), p.applied(), p.remaining(), p.debtStatus()))
-                .collect(Collectors.toList()));
+                .toList());
 
         return Response.ok(response).build();
     }

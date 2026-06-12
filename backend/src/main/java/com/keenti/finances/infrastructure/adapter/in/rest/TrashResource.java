@@ -18,7 +18,6 @@ import jakarta.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Path("/api/trash")
 @Produces(MediaType.APPLICATION_JSON)
@@ -42,9 +41,9 @@ public class TrashResource {
         all.addAll(debtUseCase.listDeleted());
         all.sort((a, b) -> b.deletedAt().compareTo(a.deletedAt()));
 
-        List<TrashResponse> body = all.stream()
+        var body = all.stream()
             .map(i -> new TrashResponse(i.id(), i.entityType(), i.label(), i.deletedAt()))
-            .collect(Collectors.toList());
+            .toList();
         return Response.ok(body).build();
     }
 

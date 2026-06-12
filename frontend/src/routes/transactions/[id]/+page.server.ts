@@ -2,15 +2,16 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const transactionSchema = z.object({
 	id: z.coerce.number().optional(),
-	amount: z.coerce.number().positive('Amount must be greater than 0'),
+	amount: z.coerce.number().positive(m.validation_amount_positive()),
 	direction: z.enum(['INGRESS', 'EGRESS']),
 	description: z.string().max(500).optional(),
-	transactionDate: z.string().min(1, 'Date is required'),
-	categoryId: z.coerce.number().min(1, 'Category is required'),
+	transactionDate: z.string().min(1, m.validation_date_required()),
+	categoryId: z.coerce.number().min(1, m.validation_category_required()),
 	contactId: z.union([z.coerce.number(), z.literal('')]).optional(),
 });
 
@@ -40,16 +41,16 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
 	try {
 		const txRes = await fetch(`${BACKEND}/api/transactions/${id}`);
-		if (txRes.status === 404) error(404, 'Transaction not found');
+		if (txRes.status === 404) error(404, m.error_transaction_not_found());
 		if (!txRes.ok) {
 			console.error(`[transactions/${id}] load: backend returned ${txRes.status}`);
-			error(502, 'Could not load transaction');
+			error(502, m.error_could_not_load_transaction());
 		}
 		transaction = await txRes.json();
 	} catch (e) {
 		if ((e as { status?: number }).status) throw e;
 		console.error(`[transactions/${id}] load: backend unreachable`);
-		error(502, 'Backend unreachable');
+		error(502, m.error_backend_unreachable());
 	}
 
 	try {
@@ -107,17 +108,17 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error(`[transactions/${id}] update: backend unreachable`);
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
-		if (res.status === 404) return fail(404, { form: { ...form, message: 'Transaction not found.' } });
+		if (res.status === 404) return fail(404, { form: { ...form, message: m.error_transaction_not_found() } });
 		if (res.status === 400) {
 			console.error(`[transactions/${id}] update: validation error from backend`);
-			return fail(400, { form: { ...form, message: 'Invalid transaction data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_transaction() } });
 		}
 		if (!res.ok) {
 			console.error(`[transactions/${id}] update: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error updating transaction.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_update_transaction() } });
 		}
 
 		console.log(`[transactions/${id}] update: success — amount: ${form.data.amount}`);
@@ -132,13 +133,13 @@ export const actions: Actions = {
 			res = await fetch(`${BACKEND}/api/transactions/${id}`, { method: 'DELETE' });
 		} catch {
 			console.error(`[transactions/${id}] delete: backend unreachable`);
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Transaction not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_transaction_not_found() });
 		if (!res.ok) {
 			console.error(`[transactions/${id}] delete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting transaction.' });
+			return fail(502, { message: m.error_unexpected_delete_transaction() });
 		}
 
 		console.log(`[transactions/${id}] delete: success`);

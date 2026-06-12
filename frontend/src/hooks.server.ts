@@ -1,5 +1,7 @@
 import type { Handle, HandleFetch } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
+import { paraglideMiddleware } from '$lib/paraglide/server';
+import { getTextDirection } from '$lib/paraglide/runtime';
 import { getWorkOS, getAuthorizationUrl } from '$lib/server/workos';
 import {
 	getSession,
@@ -45,7 +47,7 @@ async function refreshSession(session: WorkOSSession): Promise<WorkOSSession | n
 	}
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const authHandle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
 	const isPublic =
 		PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/')) ||
@@ -81,6 +83,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	console.log(`[workos-auth] redirect — unauthenticated request to ${path}`);
 	redirect(303, authUrl);
 };
+
+export const handle: Handle = ({ event, resolve }) =>
+	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
+		event.request = localizedRequest;
+		return authHandle({
+			event,
+			resolve: (event, options) =>
+				resolve(event, {
+					...options,
+					transformPageChunk: ({ html, done }) => {
+						const transformed = html
+							.replace('%lang%', locale)
+							.replace('%dir%', getTextDirection(locale));
+						return options?.transformPageChunk?.({ html: transformed, done }) ?? transformed;
+					},
+				}),
+		});
+	});
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080';
 

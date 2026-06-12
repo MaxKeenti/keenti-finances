@@ -8,7 +8,6 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class PanacheDebtPaymentRepository implements DebtPaymentRepository {
@@ -25,7 +24,7 @@ public class PanacheDebtPaymentRepository implements DebtPaymentRepository {
                 "debt.id = ?1 ORDER BY paymentDate DESC", debtId)
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

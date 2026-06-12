@@ -3,12 +3,13 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const paymentSchema = z.object({
-	amount: z.coerce.number().positive('Amount must be greater than 0'),
-	paymentDate: z.string().min(1, 'Payment date is required'),
-	categoryId: z.coerce.number().positive('Category is required'),
+	amount: z.coerce.number().positive(m.validation_amount_positive()),
+	paymentDate: z.string().min(1, m.validation_payment_date_required()),
+	categoryId: z.coerce.number().positive(m.validation_category_required()),
 	notes: z.string().optional(),
 });
 
@@ -53,16 +54,16 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 
 	try {
 		const debtRes = await fetch(`${BACKEND}/api/debts/${id}`, { headers: authHeaders });
-		if (debtRes.status === 404) error(404, 'Debt not found');
+		if (debtRes.status === 404) error(404, m.error_debt_not_found());
 		if (!debtRes.ok) {
 			console.error(`[debts/${id}] load: backend returned ${debtRes.status}`);
-			error(502, 'Could not load debt');
+			error(502, m.error_could_not_load_debt());
 		}
 		debt = await debtRes.json();
 	} catch (e) {
 		if ((e as { status?: number }).status) throw e;
 		console.error(`[debts/${id}] load: backend unreachable`);
-		error(502, 'Backend unreachable');
+		error(502, m.error_backend_unreachable());
 	}
 
 	try {
@@ -115,21 +116,21 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error(`[debts/${id}] recordPayment: backend unreachable`);
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 400) {
 			const body = await res.json().catch(() => ({}));
-			const msg = body?.error ?? 'Invalid payment data.';
-			console.error(`[debts/${id}] recordPayment: validation error — ${msg}`);
-			return fail(400, { form: { ...form, message: msg } });
+			const backendMessage = body?.error ?? m.error_invalid_payment();
+			console.error(`[debts/${id}] recordPayment: validation error — ${backendMessage}`);
+			return fail(400, { form: { ...form, message: m.error_invalid_payment() } });
 		}
 		if (res.status === 404) {
-			return fail(404, { form: { ...form, message: 'Debt not found.' } });
+			return fail(404, { form: { ...form, message: m.error_debt_not_found() } });
 		}
 		if (!res.ok) {
 			console.error(`[debts/${id}] recordPayment: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error recording payment.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_record_payment() } });
 		}
 
 		const payment = await res.json();

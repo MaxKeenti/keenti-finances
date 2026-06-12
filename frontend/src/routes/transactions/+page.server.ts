@@ -3,15 +3,16 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 
 const transactionSchema = z.object({
 	id: z.coerce.number().optional(),
-	amount: z.coerce.number().positive('Amount must be greater than 0'),
+	amount: z.coerce.number().positive(m.validation_amount_positive()),
 	direction: z.enum(['INGRESS', 'EGRESS']),
 	description: z.string().max(500).optional(),
-	transactionDate: z.string().min(1, 'Date is required'),
-	categoryId: z.coerce.number().min(1, 'Category is required'),
+	transactionDate: z.string().min(1, m.validation_date_required()),
+	categoryId: z.coerce.number().min(1, m.validation_category_required()),
 	contactId: z.union([z.coerce.number(), z.literal('')]).optional(),
 });
 
@@ -32,25 +33,93 @@ type Transaction = {
 	contactName: string | null;
 };
 
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
+type TransactionPage = {
+	items: Transaction[];
+	pageIndex: number;
+	pageSize: number;
+	totalItems: number;
+	totalPages: number;
+	sortBy: TransactionSortBy;
+	sortDirection: TransactionSortDirection;
+};
+
+type TransactionSortBy =
+	| 'transactionDate'
+	| 'amount'
+	| 'direction'
+	| 'description'
+	| 'categoryName'
+	| 'contactName';
+type TransactionSortDirection = 'asc' | 'desc';
+
+const SORT_FIELDS = new Set<TransactionSortBy>([
+	'transactionDate',
+	'amount',
+	'direction',
+	'description',
+	'categoryName',
+	'contactName',
+]);
+const PAGE_SIZES = new Set([10, 25, 50, 100]);
+
+function positiveInt(value: string | null, fallback: number) {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function pageSizeParam(value: string | null) {
+	const parsed = Number(value);
+	return PAGE_SIZES.has(parsed) ? parsed : 25;
+}
+
+function sortByParam(value: string | null): TransactionSortBy {
+	return value && SORT_FIELDS.has(value as TransactionSortBy)
+		? (value as TransactionSortBy)
+		: 'transactionDate';
+}
+
+function sortDirectionParam(value: string | null): TransactionSortDirection {
+	return value === 'asc' ? 'asc' : 'desc';
+}
+
+export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
 	const session = getSession(cookies);
 	const accessToken = session?.accessToken;
 	const authHeaders: Record<string, string> = accessToken
 		? { Authorization: `Bearer ${accessToken}` }
 		: {};
 
-	let transactions: Transaction[] = [];
+	const pageIndex = positiveInt(url.searchParams.get('page'), 0);
+	const pageSize = pageSizeParam(url.searchParams.get('pageSize'));
+	const sortBy = sortByParam(url.searchParams.get('sortBy'));
+	const sortDirection = sortDirectionParam(url.searchParams.get('sortDirection'));
+	const txParams = new URLSearchParams({
+		page: String(pageIndex),
+		pageSize: String(pageSize),
+		sortBy,
+		sortDirection,
+	});
+
+	let transactionPage: TransactionPage = {
+		items: [],
+		pageIndex,
+		pageSize,
+		totalItems: 0,
+		totalPages: 0,
+		sortBy,
+		sortDirection,
+	};
 	let categories: Category[] = [];
 	let contacts: Contact[] = [];
 
 	try {
 		const [txRes, catRes, conRes] = await Promise.all([
-			fetch(`${BACKEND}/api/transactions`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/transactions?${txParams}`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 		]);
 
-		if (txRes.ok) transactions = await txRes.json();
+		if (txRes.ok) transactionPage = await txRes.json();
 		else console.error(`[transactions] load: backend returned ${txRes.status} for transactions`);
 
 		if (catRes.ok) categories = await catRes.json();
@@ -66,9 +135,9 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	const form = await superValidate(
 		{ amount: 0, direction: 'INGRESS' as const, description: '', transactionDate: today, categoryId: 0, contactId: '' as '' },
 		zod4(transactionSchema),
-	);
+		);
 
-	return { transactions, categories, contacts, form };
+	return { transactions: transactionPage.items, transactionPage, categories, contacts, form };
 };
 
 export const actions: Actions = {
@@ -100,16 +169,16 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[transactions] create: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
 		if (res.status === 400) {
 			console.error('[transactions] create: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid transaction data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_transaction() } });
 		}
 		if (!res.ok) {
 			console.error(`[transactions] create: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error creating transaction.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_create_transaction() } });
 		}
 
 		console.log(`[transactions] create: success — amount: ${form.data.amount} direction: ${form.data.direction}`);
@@ -127,7 +196,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const id = form.data.id;
-		if (!id) return fail(400, { form: { ...form, message: 'Missing transaction id for update.' } });
+		if (!id) return fail(400, { form: { ...form, message: m.error_missing_transaction_id_update() } });
 
 		const contactId = !form.data.contactId ? null : form.data.contactId;
 
@@ -147,17 +216,17 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[transactions] update: backend unreachable');
-			return fail(502, { form: { ...form, message: 'Could not reach backend service.' } });
+			return fail(502, { form: { ...form, message: m.error_backend_unreachable() } });
 		}
 
-		if (res.status === 404) return fail(404, { form: { ...form, message: 'Transaction not found.' } });
+		if (res.status === 404) return fail(404, { form: { ...form, message: m.error_transaction_not_found() } });
 		if (res.status === 400) {
 			console.error('[transactions] update: validation error from backend');
-			return fail(400, { form: { ...form, message: 'Invalid transaction data.' } });
+			return fail(400, { form: { ...form, message: m.error_invalid_transaction() } });
 		}
 		if (!res.ok) {
 			console.error(`[transactions] update: backend error ${res.status}`);
-			return fail(502, { form: { ...form, message: 'Unexpected error updating transaction.' } });
+			return fail(502, { form: { ...form, message: m.error_unexpected_update_transaction() } });
 		}
 
 		console.log(`[transactions] update: success — id: ${id} amount: ${form.data.amount}`);
@@ -174,7 +243,7 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id');
 
-		if (!id) return fail(400, { message: 'Missing transaction id.' });
+		if (!id) return fail(400, { message: m.error_missing_transaction_id() });
 
 		let res: Response;
 		try {
@@ -184,13 +253,13 @@ export const actions: Actions = {
 			});
 		} catch {
 			console.error('[transactions] delete: backend unreachable');
-			return fail(502, { message: 'Could not reach backend service.' });
+			return fail(502, { message: m.error_backend_unreachable() });
 		}
 
-		if (res.status === 404) return fail(404, { message: 'Transaction not found.' });
+		if (res.status === 404) return fail(404, { message: m.error_transaction_not_found() });
 		if (!res.ok) {
 			console.error(`[transactions] delete: backend error ${res.status}`);
-			return fail(502, { message: 'Unexpected error deleting transaction.' });
+			return fail(502, { message: m.error_unexpected_delete_transaction() });
 		}
 
 		console.log(`[transactions] delete: success — id: ${id}`);

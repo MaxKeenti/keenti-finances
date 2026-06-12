@@ -3,8 +3,13 @@
 	import { enhance as kitEnhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as RadioGroup from '$lib/components/ui/radio-group';
+	import * as ScrollArea from '$lib/components/ui/scroll-area';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	type MemberResponse = {
@@ -24,6 +29,7 @@
 		amount: number;
 		status: string;
 		paidDate: string | null;
+		transactionId: number | null;
 		createdAt: string;
 	};
 
@@ -44,6 +50,11 @@
 	let { data }: { data: PageData } = $props();
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const monthFmt = new Intl.DateTimeFormat('es-MX', { month: 'short', year: 'numeric' });
+
+	function periodLabel(billingDate: string): string {
+		return monthFmt.format(new Date(`${billingDate}T00:00:00`));
+	}
 
 	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
 		MONTHLY: 'info',
@@ -61,26 +72,62 @@
 	};
 
 	function memberName(memberId: number | null): string {
-		if (memberId === null) return 'Owner';
-		const m = data.members.find((x: MemberResponse) => x.id === memberId);
-		return m?.contactName ?? `Member #${memberId}`;
+		if (memberId === null) return m.common_owner();
+		const member = data.members.find((x: MemberResponse) => x.id === memberId);
+		return member?.contactName ?? m.member_number({ id: memberId });
 	}
 
-	// Group payments by billingDate
-	const paymentsByDate = $derived(() => {
-		const groups = new Map<string, PaymentRecord[]>();
-		for (const p of data.payments) {
-			const key = p.billingDate;
-			if (!groups.has(key)) groups.set(key, []);
-			groups.get(key)!.push(p);
+	function statusLabel(status: string): string {
+		if (status === 'PAID') return m.status_paid();
+		if (status === 'PENDING') return m.status_pending();
+		return status;
+	}
+
+	// Distinct billing periods, newest first — one tab per period.
+	const periods = $derived.by(() => {
+		const seen = new Set<string>();
+		for (const p of data.payments) seen.add(p.billingDate);
+		return Array.from(seen).sort((a, b) => b.localeCompare(a));
+	});
+
+	// Records for one period.
+	function recordsForPeriod(billingDate: string): PaymentRecord[] {
+		return data.payments.filter((p: PaymentRecord) => p.billingDate === billingDate);
+	}
+
+	// Find the transaction that settled a PAID record (for the "paid via" hint).
+	function linkedTransaction(transactionId: number | null): TransactionResponse | undefined {
+		if (transactionId === null) return undefined;
+		return data.linkedTransactions.find((t: TransactionResponse) => t.id === transactionId);
+	}
+
+	// Eager init (so SSR has an active tab); the effect re-points it when the set
+	// of periods changes, e.g. after generating billing or linking a payment.
+	let selectedPeriod = $state(
+		[...new Set(data.payments.map((p: PaymentRecord) => p.billingDate))].sort((a, b) =>
+			b.localeCompare(a),
+		)[0] ?? '',
+	);
+	$effect(() => {
+		if (periods.length > 0 && !periods.includes(selectedPeriod)) {
+			selectedPeriod = periods[0];
 		}
-		// Sort dates descending
-		return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
 	});
 
 	let copyFeedback = $state(false);
 	let linkDialogOpen = $state(false);
 	let selectedTxIds = $state<Set<number>>(new Set());
+
+	// Link a single transaction to a specific Payment Record (marks it PAID).
+	let payLinkDialogOpen = $state(false);
+	let payLinkPaymentId = $state<number | null>(null);
+	let payLinkTxId = $state('');
+
+	function openPayLink(paymentId: number) {
+		payLinkPaymentId = paymentId;
+		payLinkTxId = '';
+		payLinkDialogOpen = true;
+	}
 
 	function toggleTx(id: number) {
 		const next = new Set(selectedTxIds);
@@ -101,7 +148,7 @@
 <div class="space-y-6 max-w-3xl">
 	<!-- Back link -->
 	<Button variant="link" href="/subscriptions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
-		← Back to Subscriptions
+		{m.common_back_to_subscriptions()}
 	</Button>
 
 	<!-- Header -->
@@ -114,22 +161,22 @@
 				</div>
 				<div class="flex flex-wrap gap-2 shrink-0">
 					<Badge variant={typeBadgeVariant[data.subscription.type]}>
-						{data.subscription.type === 'PERSONAL' ? 'Personal' : 'Shared'}
+						{data.subscription.type === 'PERSONAL' ? m.subscription_personal() : m.subscription_shared()}
 					</Badge>
 					<Badge variant={cycleBadgeVariant[data.subscription.billingCycle]}>
-						{data.subscription.billingCycle === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+						{data.subscription.billingCycle === 'MONTHLY' ? m.billing_monthly() : m.billing_yearly()}
 					</Badge>
 				</div>
 			</div>
 
 			<div class="grid gap-1 text-sm">
 				<p class="text-muted-foreground">
-					Next billing: <span class="font-medium text-foreground">{data.subscription.nextBillingDate}</span>
+					{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{data.subscription.nextBillingDate}</span>
 				</p>
 				{#if data.subscription.type === 'SHARED'}
 					<p class="text-muted-foreground">
-						Owner participates: <span class="font-medium text-foreground">
-							{data.subscription.ownerParticipates === false ? 'No' : 'Yes'}
+						{m.subscriptions_owner_participates_label()} <span class="font-medium text-foreground">
+							{data.subscription.ownerParticipates === false ? m.common_no() : m.common_yes()}
 						</span>
 					</p>
 				{/if}
@@ -141,10 +188,10 @@
 						/public/subscription/{data.subscription.tokenUuid}
 					</span>
 					<Button variant="ghost" size="sm" onclick={copyShareLink} class="shrink-0 text-xs h-7 px-2">
-						{copyFeedback ? 'Copied!' : 'Copy link'}
+						{copyFeedback ? m.subscriptions_share_copied() : m.subscriptions_copy_link()}
 					</Button>
 					<Button variant="ghost" size="sm" href="/public/subscription/{data.subscription.tokenUuid}" target="_blank" class="shrink-0 text-xs h-7 px-2">
-						Preview
+						{m.common_preview()}
 					</Button>
 				</div>
 			{/if}
@@ -155,14 +202,14 @@
 	{#if data.subscription.type === 'SHARED'}
 		<Card.Root>
 			<Card.Content class="space-y-3">
-				<h2 class="font-semibold text-base">Members</h2>
+				<h2 class="font-semibold text-base">{m.subscriptions_members()}</h2>
 				{#if data.members.length === 0}
-					<p class="text-sm text-muted-foreground">No members assigned yet.</p>
+					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members_assigned()}</p>
 				{:else}
 					<ul class="divide-y">
 						{#each data.members as member (member.id)}
 							<li class="flex items-center justify-between py-2">
-								<span class="text-sm">{member.contactName ?? `Contact #${member.contactId}`}</span>
+								<span class="text-sm">{member.contactName ?? m.contact_number({ id: member.contactId ?? member.id })}</span>
 								{#if member.shareAmount != null}
 									<span class="text-sm font-medium">{fmt.format(member.shareAmount)}</span>
 								{/if}
@@ -178,15 +225,15 @@
 	<Card.Root>
 		<Card.Content class="space-y-3">
 			<div class="flex items-center justify-between">
-				<h2 class="font-semibold text-base">Linked Transactions</h2>
+				<h2 class="font-semibold text-base">{m.subscriptions_linked_transactions()}</h2>
 				{#if data.unlinkedTransactions.length > 0}
 					<Button variant="outline" size="sm" onclick={() => { selectedTxIds = new Set(); linkDialogOpen = true; }}>
-						Link Transactions
+						{m.subscriptions_link_transactions()}
 					</Button>
 				{/if}
 			</div>
 			{#if data.linkedTransactions.length === 0}
-				<p class="text-sm text-muted-foreground">No transactions linked yet.</p>
+				<p class="text-sm text-muted-foreground">{m.subscriptions_no_linked_transactions()}</p>
 			{:else}
 				<ul class="divide-y rounded-md border">
 					{#each data.linkedTransactions as tx (tx.id)}
@@ -212,7 +259,7 @@
 	<Card.Root>
 		<Card.Content class="space-y-4">
 			<div class="flex items-center justify-between">
-				<h2 class="font-semibold text-base">Payment Records</h2>
+				<h2 class="font-semibold text-base">{m.subscriptions_payment_records()}</h2>
 				<form
 					method="POST"
 					action="?/generateBilling"
@@ -222,79 +269,103 @@
 								const count = (result.data as { generated?: number })?.generated ?? 0;
 								toast.success(
 									count > 0
-										? `Billing generated: ${count} record${count === 1 ? '' : 's'} created.`
-										: 'Already up to date — no new records.',
+										? count === 1
+											? m.subscriptions_billing_generated_one()
+											: m.subscriptions_billing_generated_many({ count })
+										: m.subscriptions_billing_up_to_date(),
 								);
 								await update();
 							} else {
 								const msg =
 									(result as { data?: { message?: string } }).data?.message ??
-									'Failed to generate billing.';
+									m.subscriptions_billing_failed();
 								toast.error(msg);
 							}
 						};
 					}}
 				>
 					<Button type="submit" variant="outline" size="sm" class="h-7 text-xs px-3">
-						Generate billing
+						{m.subscriptions_generate_billing()}
 					</Button>
 				</form>
 			</div>
 
 			{#if data.payments.length === 0}
 				<p class="text-sm text-muted-foreground">
-					No payment records yet. Use “Generate billing” to create the upcoming period’s records.
+					{m.subscriptions_no_payment_records()}
 				</p>
 			{:else}
-				{#each paymentsByDate() as [date, records] (date)}
-					<div class="space-y-2">
-						<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-							Billing period: {date}
-						</p>
-						<ul class="divide-y rounded-md border">
-							{#each records as payment (payment.id)}
-								<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-									<div class="min-w-0 space-y-0.5">
-										<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
-										<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
-										{#if payment.paidDate}
-											<p class="text-xs text-muted-foreground">Paid: {payment.paidDate}</p>
-										{/if}
-									</div>
-									<div class="flex items-center gap-3 shrink-0">
-										<Badge variant={statusBadgeVariant[payment.status]}>
-											{payment.status}
-										</Badge>
-										{#if payment.status === 'PENDING'}
-											<form
-												method="POST"
-												action="?/recordPayment"
-												use:kitEnhance={async () => {
-													return async ({ result, update }) => {
-														if (result.type === 'success') {
-															toast.success('Payment recorded.');
-															await update();
-														} else {
-															const msg =
-																(result as { data?: { message?: string } }).data?.message ??
-																'Failed to record payment.';
-															toast.error(msg);
-														}
-													};
-												}}
-											>
-												<input type="hidden" name="paymentId" value={payment.id} />
-												<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
-													Record Payment
-												</Button>
-											</form>
-										{/if}
-									</div>
-								</li>
+				<Tabs.Root bind:value={selectedPeriod} class="w-full">
+					<div class="overflow-x-auto pb-1">
+						<Tabs.List>
+							{#each periods as period (period)}
+								<Tabs.Trigger value={period}>{periodLabel(period)}</Tabs.Trigger>
 							{/each}
-						</ul>
+						</Tabs.List>
 					</div>
-				{/each}
+
+					{#each periods as period (period)}
+						<Tabs.Content value={period}>
+							<ul class="divide-y rounded-md border">
+								{#each recordsForPeriod(period) as payment (payment.id)}
+									{@const tx = linkedTransaction(payment.transactionId)}
+									<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+										<div class="min-w-0 space-y-0.5">
+											<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
+											<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
+											{#if payment.paidDate}
+												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: payment.paidDate })}</p>
+											{/if}
+											{#if tx}
+												<p class="text-xs text-muted-foreground truncate">
+													{m.subscriptions_paid_via_transaction({ description: tx.description })}
+												</p>
+											{/if}
+										</div>
+										<div class="flex items-center gap-2 shrink-0">
+											<Badge variant={statusBadgeVariant[payment.status]}>
+												{statusLabel(payment.status)}
+											</Badge>
+											{#if payment.status === 'PENDING'}
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													class="h-7 text-xs px-3"
+													onclick={() => openPayLink(payment.id)}
+												>
+													{m.subscriptions_link_transaction()}
+												</Button>
+												<form
+													method="POST"
+													action="?/recordPayment"
+													use:kitEnhance={async () => {
+														return async ({ result, update }) => {
+															if (result.type === 'success') {
+																toast.success(m.subscriptions_payment_recorded());
+																await update();
+															} else {
+																const msg =
+																	(result as { data?: { message?: string } }).data?.message ??
+																	m.subscriptions_payment_record_failed();
+																toast.error(msg);
+															}
+														};
+													}}
+												>
+													<input type="hidden" name="paymentId" value={payment.id} />
+													<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
+														{m.subscriptions_record_payment()}
+													</Button>
+												</form>
+											{/if}
+										</div>
+									</li>
+								{/each}
+							</ul>
+						</Tabs.Content>
+					{/each}
+				</Tabs.Root>
 			{/if}
 		</Card.Content>
 	</Card.Root>
@@ -304,8 +375,8 @@
 <Dialog.Root bind:open={linkDialogOpen}>
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>Link Transactions</Dialog.Title>
-			<Dialog.Description>Select transactions to link to this subscription.</Dialog.Description>
+			<Dialog.Title>{m.subscriptions_link_transactions_title()}</Dialog.Title>
+			<Dialog.Description>{m.subscriptions_link_transactions_description()}</Dialog.Description>
 		</Dialog.Header>
 
 		<form
@@ -316,12 +387,12 @@
 					if (result.type === 'success') {
 						linkDialogOpen = false;
 						selectedTxIds = new Set();
-						toast.success('Transactions linked.');
+						toast.success(m.subscriptions_transactions_linked());
 						await update();
 					} else {
 						const msg =
 							(result as { data?: { message?: string } }).data?.message ??
-							'Failed to link transactions.';
+							m.subscriptions_transactions_link_failed();
 						toast.error(msg);
 					}
 				};
@@ -333,37 +404,118 @@
 			{/each}
 
 			{#if data.unlinkedTransactions.length === 0}
-				<p class="text-sm text-muted-foreground">No unlinked transactions available.</p>
+				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
-				<ul class="divide-y rounded-md border max-h-72 overflow-y-auto">
+				<ScrollArea.Root class="h-72 rounded-md border">
+					<ul class="divide-y">
 					{#each data.unlinkedTransactions as tx (tx.id)}
-						<li class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50" onclick={() => toggleTx(tx.id)}>
-							<input
-								type="checkbox"
-								class="h-4 w-4 rounded border border-input shrink-0"
+						<li class="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+							<Checkbox
 								checked={selectedTxIds.has(tx.id)}
-								onchange={() => toggleTx(tx.id)}
+								onclick={() => toggleTx(tx.id)}
+								aria-label={tx.description}
 							/>
-							<div class="min-w-0 flex-1">
-								<p class="text-sm font-medium truncate">{tx.description}</p>
-								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
-							</div>
-							<div class="flex items-center gap-2 shrink-0">
-								{#if tx.categoryName}
-									<Badge variant="secondary">{tx.categoryName}</Badge>
-								{/if}
-								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
-							</div>
+							<button
+								type="button"
+								class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+								aria-pressed={selectedTxIds.has(tx.id)}
+								onclick={() => toggleTx(tx.id)}
+							>
+								<span class="min-w-0 flex-1 space-y-0.5">
+									<span class="block truncate text-sm font-medium">{tx.description}</span>
+									<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+								</span>
+								<span class="flex shrink-0 items-center gap-2">
+									{#if tx.categoryName}
+										<Badge variant="secondary">{tx.categoryName}</Badge>
+									{/if}
+									<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+								</span>
+							</button>
 						</li>
 					{/each}
-				</ul>
+					</ul>
+				</ScrollArea.Root>
 			{/if}
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (linkDialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="outline" onclick={() => (linkDialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={selectedTxIds.size === 0}>
-					Link {selectedTxIds.size > 0 ? `(${selectedTxIds.size})` : ''}
+					{selectedTxIds.size > 0
+						? m.subscriptions_link_selected({ count: `(${selectedTxIds.size})` })
+						: m.subscriptions_link_selected({ count: '' })}
 				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Link a single transaction to a Payment Record (marks it paid) -->
+<Dialog.Root bind:open={payLinkDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>{m.subscriptions_link_one_payment_title()}</Dialog.Title>
+			<Dialog.Description>{m.subscriptions_link_one_payment_description()}</Dialog.Description>
+		</Dialog.Header>
+
+		<form
+			method="POST"
+			action="?/linkTransactionToPayment"
+			use:kitEnhance={async () => {
+				return async ({ result, update }) => {
+					if (result.type === 'success') {
+						payLinkDialogOpen = false;
+						payLinkPaymentId = null;
+						payLinkTxId = '';
+						toast.success(m.subscriptions_transaction_linked_payment_recorded());
+						await update();
+					} else {
+						const msg =
+							(result as { data?: { message?: string } }).data?.message ??
+							m.subscriptions_transaction_link_failed();
+						toast.error(msg);
+					}
+				};
+			}}
+			class="space-y-4"
+		>
+			<input type="hidden" name="paymentId" value={payLinkPaymentId} />
+			<input type="hidden" name="transactionId" value={payLinkTxId} />
+
+			{#if data.unlinkedTransactions.length === 0}
+				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
+			{:else}
+				<ScrollArea.Root class="h-72 rounded-md border">
+					<RadioGroup.Root bind:value={payLinkTxId} class="gap-0">
+						{#each data.unlinkedTransactions as tx (tx.id)}
+							<div class="flex items-center gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/50">
+								<RadioGroup.Item value={String(tx.id)} aria-label={tx.description} />
+								<button
+									type="button"
+									class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+									aria-pressed={payLinkTxId === String(tx.id)}
+									onclick={() => (payLinkTxId = String(tx.id))}
+								>
+									<span class="min-w-0 flex-1 space-y-0.5">
+										<span class="block truncate text-sm font-medium">{tx.description}</span>
+										<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+									</span>
+									<span class="flex shrink-0 items-center gap-2">
+										{#if tx.categoryName}
+											<Badge variant="secondary">{tx.categoryName}</Badge>
+										{/if}
+										<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+									</span>
+								</button>
+							</div>
+						{/each}
+					</RadioGroup.Root>
+				</ScrollArea.Root>
+			{/if}
+
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => (payLinkDialogOpen = false)}>{m.common_cancel()}</Button>
+				<Button type="submit" disabled={!payLinkTxId}>{m.subscriptions_link_mark_paid()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

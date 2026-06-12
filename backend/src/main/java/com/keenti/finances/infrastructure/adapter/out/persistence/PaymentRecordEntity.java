@@ -42,6 +42,10 @@ public class PaymentRecordEntity extends PanacheEntityBase {
     @Column(name = "paid_date")
     public LocalDate paidDate;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transaction_id")
+    public TransactionEntity transaction;
+
     @Column(name = "created_at")
     public LocalDateTime createdAt;
 }

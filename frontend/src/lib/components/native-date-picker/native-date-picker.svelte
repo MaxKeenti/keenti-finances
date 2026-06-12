@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Popover from '$lib/components/ui/popover';
 	import { Calendar } from '$lib/components/ui/calendar';
+	import { Input } from '$lib/components/ui/input';
 	import { parseDate } from '@internationalized/date';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { cn } from '$lib/utils';
@@ -41,14 +42,11 @@
 </script>
 
 {#if isMobile}
-	<input
+	<Input
 		type="date"
 		{name}
 		{value}
-		class={cn(
-			'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-			className,
-		)}
+		class={cn('h-9', className)}
 		onchange={(e) => onValueChange((e.target as HTMLInputElement).value)}
 		{...rest}
 	/>

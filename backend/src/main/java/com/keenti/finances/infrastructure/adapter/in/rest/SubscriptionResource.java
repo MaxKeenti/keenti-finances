@@ -21,9 +21,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Path("/api/subscriptions")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -44,8 +42,8 @@ public class SubscriptionResource {
 
     @GET
     public Response list() {
-        List<SubscriptionResponse> body = subscriptionUseCase.list().stream()
-            .map(this::toResponse).collect(Collectors.toList());
+        var body = subscriptionUseCase.list().stream()
+            .map(this::toResponse).toList();
         return Response.ok(body).build();
     }
 
@@ -82,8 +80,8 @@ public class SubscriptionResource {
     @GET
     @Path("/{id}/members")
     public Response listMembers(@PathParam("id") Long id) {
-        List<MemberResponse> members = subscriptionUseCase.listMembers(id).stream()
-            .map(this::toMemberResponse).collect(Collectors.toList());
+        var members = subscriptionUseCase.listMembers(id).stream()
+            .map(this::toMemberResponse).toList();
         return Response.ok(members).build();
     }
 
@@ -109,9 +107,9 @@ public class SubscriptionResource {
     @GET
     @Path("/{id}/linked-transactions")
     public Response listLinkedTransactions(@PathParam("id") Long id) {
-        List<TransactionResponse> body = transactionUseCase.listBySubscriptionId(id).stream()
+        var body = transactionUseCase.listBySubscriptionId(id).stream()
             .map(this::toTransactionResponse)
-            .collect(Collectors.toList());
+            .toList();
         return Response.ok(body).build();
     }
 

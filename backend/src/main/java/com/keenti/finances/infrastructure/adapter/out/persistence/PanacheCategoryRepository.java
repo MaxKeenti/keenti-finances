@@ -4,13 +4,13 @@ import com.keenti.finances.domain.model.Category;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.out.CategoryRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
+import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.hibernate.Session;
 
 @ApplicationScoped
@@ -28,7 +28,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
         return CategoryEntity.<CategoryEntity>find("deletedAt IS NULL")
                 .stream()
                 .map(this::toDomain)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -71,7 +71,7 @@ public class PanacheCategoryRepository implements CategoryRepository {
 
     @Override
     public void restoreById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             CategoryEntity entity = CategoryEntity.findById(id);
@@ -84,8 +84,9 @@ public class PanacheCategoryRepository implements CategoryRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public Optional<TrashItem> findDeletedById(Long id) {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return CategoryEntity.<CategoryEntity>find(
@@ -98,15 +99,16 @@ public class PanacheCategoryRepository implements CategoryRepository {
     }
 
     @Override
+    @SuppressWarnings("null")
     public List<TrashItem> findAllDeleted() {
-        Session session = em.unwrap(Session.class);
+        Session session = HibernateSessions.unwrap(em);
         session.disableFilter("softDelete");
         try {
             return CategoryEntity.<CategoryEntity>find(
                     "deletedAt IS NOT NULL ORDER BY deletedAt DESC")
                     .stream()
                     .map(e -> new TrashItem(e.id, "category", e.name, e.deletedAt))
-                    .collect(Collectors.toList());
+                    .toList();
         } finally {
             session.enableFilter("softDelete");
         }

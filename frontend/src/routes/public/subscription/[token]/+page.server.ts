@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { m } from '$lib/paraglide/messages.js';
 import type { PageServerLoad } from './$types';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -35,17 +36,17 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		res = await fetch(`${BACKEND}/api/public/subscriptions/${token}`);
 	} catch {
 		console.error(`[public/subscription/${token}] load: backend unreachable`);
-		error(502, 'Backend unreachable');
+		error(502, m.error_backend_unreachable());
 	}
 
 	if (res.status === 404) {
 		console.info(`[public/subscription/${token}] load: token not found`);
-		error(404, 'Subscription not found');
+		error(404, m.error_subscription_not_found());
 	}
 
 	if (!res.ok) {
 		console.error(`[public/subscription/${token}] load: backend returned ${res.status}`);
-		error(502, 'Could not load subscription');
+		error(502, m.error_could_not_load_subscription());
 	}
 
 	const data: PublicSubscriptionData = await res.json();
