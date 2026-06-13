@@ -67,22 +67,26 @@ function positiveInt(value: string | null, fallback: number) {
 	return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function pageSizeParam(value: string | null) {
+function pageSizeParam(value: string | null, fallback: number) {
 	const parsed = Number(value);
-	return PAGE_SIZES.has(parsed) ? parsed : 25;
+	return PAGE_SIZES.has(parsed) ? parsed : PAGE_SIZES.has(fallback) ? fallback : 25;
 }
 
-function sortByParam(value: string | null): TransactionSortBy {
+function sortByParam(value: string | null, fallback: string): TransactionSortBy {
 	return value && SORT_FIELDS.has(value as TransactionSortBy)
 		? (value as TransactionSortBy)
-		: 'transactionDate';
+		: SORT_FIELDS.has(fallback as TransactionSortBy)
+			? (fallback as TransactionSortBy)
+			: 'transactionDate';
 }
 
-function sortDirectionParam(value: string | null): TransactionSortDirection {
-	return value === 'asc' ? 'asc' : 'desc';
+function sortDirectionParam(value: string | null, fallback: string): TransactionSortDirection {
+	if (value === 'asc' || value === 'desc') return value;
+	return fallback === 'asc' ? 'asc' : 'desc';
 }
 
-export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
+export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
+	const { preferences } = await parent();
 	const session = getSession(cookies);
 	const accessToken = session?.accessToken;
 	const authHeaders: Record<string, string> = accessToken
@@ -90,9 +94,12 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
 		: {};
 
 	const pageIndex = positiveInt(url.searchParams.get('page'), 0);
-	const pageSize = pageSizeParam(url.searchParams.get('pageSize'));
-	const sortBy = sortByParam(url.searchParams.get('sortBy'));
-	const sortDirection = sortDirectionParam(url.searchParams.get('sortDirection'));
+	const pageSize = pageSizeParam(url.searchParams.get('pageSize'), preferences.transactionPageSize);
+	const sortBy = sortByParam(url.searchParams.get('sortBy'), preferences.transactionSortBy);
+	const sortDirection = sortDirectionParam(
+		url.searchParams.get('sortDirection'),
+		preferences.transactionSortDirection,
+	);
 	const txParams = new URLSearchParams({
 		page: String(pageIndex),
 		pageSize: String(pageSize),

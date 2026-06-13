@@ -14,6 +14,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -38,7 +39,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
 
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
 		ACTIVE: 'warning',

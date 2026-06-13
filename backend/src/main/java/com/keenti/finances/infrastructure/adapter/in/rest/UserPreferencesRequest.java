@@ -12,5 +12,19 @@ public record UserPreferencesRequest(
     String headingFont,
     @NotBlank @Pattern(regexp = FontPresets.BODY_REGEX,
         message = "bodyFont must be one of the allowed presets")
-    String bodyFont
+    String bodyFont,
+    @NotBlank @Pattern(regexp = "en|es",
+        message = "locale must be one of the allowed locales")
+    String locale,
+    @Min(10) @Max(100)
+    int transactionPageSize,
+    @NotBlank @Pattern(regexp = "transactionDate|amount|direction|description|categoryName|contactName",
+        message = "transactionSortBy must be one of the allowed fields")
+    String transactionSortBy,
+    @NotBlank @Pattern(regexp = "asc|desc",
+        message = "transactionSortDirection must be asc or desc")
+    String transactionSortDirection,
+    @NotBlank
+    String mobilePinnedNavItems,
+    boolean dockMagnification
 ) {}

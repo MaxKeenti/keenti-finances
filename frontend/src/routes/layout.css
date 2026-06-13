@@ -38,7 +38,10 @@
 	--chart-3: oklch(0.681 0.162 75.834);
 	--chart-4: oklch(0.554 0.135 66.442);
 	--chart-5: oklch(0.476 0.114 61.907);
-	--radius: 0rem;
+	/* Primitive radius root: every --radius-* step (and thus every rounded-*
+	 * utility on the shadcn primitives + the dock) scales from this single
+	 * value. Was 0rem (fully square); now matches the rounded dock language. */
+	--radius: 0.875rem;
 	--sidebar: oklch(0.985 0.001 106.423);
 	--sidebar-foreground: oklch(0.147 0.004 49.25);
 	--sidebar-primary: oklch(0.681 0.162 75.834);

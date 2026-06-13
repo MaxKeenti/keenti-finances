@@ -102,4 +102,66 @@ export const actions: Actions = {
 		console.log(`[trash] permanentDelete: success — type: ${entityType} id: ${id}`);
 		return {};
 	},
+
+	bulkRestore: async ({ request, fetch, cookies }) =>
+		bulkOperate(request, fetch, cookies, 'restore'),
+
+	bulkPermanentDelete: async ({ request, fetch, cookies }) =>
+		bulkOperate(request, fetch, cookies, 'delete'),
 };
+
+type SelectedItem = { id: number; entityType: string };
+
+// Runs the same single-item backend call for each selected item, tolerating
+// partial failure so one bad item doesn't sink the whole batch. Returns the
+// done/failed/total counts for the client to surface.
+async function bulkOperate(
+	request: Request,
+	fetch: typeof globalThis.fetch,
+	cookies: Parameters<PageServerLoad>[0]['cookies'],
+	op: 'restore' | 'delete',
+) {
+	const session = getSession(cookies);
+	const accessToken = session?.accessToken;
+	const authHeaders: Record<string, string> = accessToken
+		? { Authorization: `Bearer ${accessToken}` }
+		: {};
+
+	const data = await request.formData();
+	let items: SelectedItem[];
+	try {
+		items = JSON.parse(String(data.get('items') ?? '[]'));
+	} catch {
+		return fail(400, { message: m.error_missing_id_or_entity_type() });
+	}
+
+	if (!Array.isArray(items) || items.length === 0) {
+		return fail(400, { message: m.error_missing_id_or_entity_type() });
+	}
+
+	let done = 0;
+	let failed = 0;
+	for (const item of items) {
+		if (!item?.id || !item?.entityType) {
+			failed++;
+			continue;
+		}
+		const url =
+			op === 'restore'
+				? `${BACKEND}/api/trash/${item.entityType}/${item.id}/restore`
+				: `${BACKEND}/api/trash/${item.entityType}/${item.id}`;
+		try {
+			const res = await fetch(url, {
+				method: op === 'restore' ? 'POST' : 'DELETE',
+				headers: authHeaders,
+			});
+			if (res.ok) done++;
+			else failed++;
+		} catch {
+			failed++;
+		}
+	}
+
+	console.log(`[trash] bulk ${op}: done ${done}, failed ${failed}, total ${items.length}`);
+	return { done, failed, total: items.length };
+}

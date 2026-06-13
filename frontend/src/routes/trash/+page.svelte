@@ -1,13 +1,21 @@
 <script lang="ts">
-	import { enhance as kitEnhance } from '$app/forms';
+	import { enhance as kitEnhance, deserialize } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { RotateCcw, Trash2 } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
-	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
+	import { adaptiveConfirm, submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
+	import { dockActionStore } from '$lib/components/app-shell/dock-action.svelte';
 	import * as Table from '$lib/components/ui/table';
 	import * as Empty from '$lib/components/ui/empty';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import type { ActionResult } from '@sveltejs/kit';
 	import type { PageData } from './$types';
+	import type { TrashItem } from './+page.server';
 
 	let { data }: { data: PageData } = $props();
 
@@ -27,6 +35,125 @@
 		});
 	}
 
+	// --- Bulk selection ---------------------------------------------------
+	const itemKey = (item: { id: number; entityType: string }) => `${item.entityType}-${item.id}`;
+
+	const selectedKeys = new SvelteSet<string>();
+	let busy = $state(false);
+
+	const selectedItems = $derived(data.items.filter((item) => selectedKeys.has(itemKey(item))));
+	const allSelected = $derived(
+		data.items.length > 0 && data.items.every((item) => selectedKeys.has(itemKey(item))),
+	);
+	const someSelected = $derived(selectedKeys.size > 0 && !allSelected);
+
+	function toggleItem(item: TrashItem) {
+		const key = itemKey(item);
+		if (selectedKeys.has(key)) selectedKeys.delete(key);
+		else selectedKeys.add(key);
+	}
+
+	function toggleAll() {
+		if (allSelected) selectedKeys.clear();
+		else for (const item of data.items) selectedKeys.add(itemKey(item));
+	}
+
+	async function runBulk(action: 'bulkRestore' | 'bulkPermanentDelete', items: TrashItem[]) {
+		const body = new FormData();
+		body.set('items', JSON.stringify(items.map((i) => ({ id: i.id, entityType: i.entityType }))));
+		const res = await fetch(`?/${action}`, { method: 'POST', body });
+		return deserialize(await res.text()) as ActionResult<{
+			done: number;
+			failed: number;
+			total: number;
+		}>;
+	}
+
+	function reportBulk(result: ActionResult, successMessage: (count: number) => string) {
+		if (result.type === 'success' && result.data) {
+			const { done, failed, total } = result.data as {
+				done: number;
+				failed: number;
+				total: number;
+			};
+			if (failed > 0) toast.warning(m.trash_bulk_partial({ done, total, failed }));
+			else toast.success(successMessage(done));
+		} else if (result.type === 'failure') {
+			toast.error((result.data as { message?: string })?.message ?? m.trash_delete_failed());
+		} else {
+			toast.error(m.trash_delete_failed());
+		}
+	}
+
+	async function handleBulkRestore() {
+		if (busy) return;
+		const items = selectedItems;
+		if (items.length === 0) return;
+		busy = true;
+		try {
+			const result = await runBulk('bulkRestore', items);
+			reportBulk(result, (count) => m.trash_bulk_restored({ count }));
+			selectedKeys.clear();
+			await invalidateAll();
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function handleBulkDelete() {
+		if (busy) return;
+		const items = selectedItems;
+		if (items.length === 0) return;
+		const confirmed = await adaptiveConfirm({
+			title: m.trash_bulk_delete_title(),
+			description: m.trash_bulk_delete_description({ count: items.length }),
+			confirmLabel: m.common_delete_permanently(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
+		if (!confirmed) return;
+		busy = true;
+		try {
+			const result = await runBulk('bulkPermanentDelete', items);
+			reportBulk(result, (count) => m.trash_bulk_deleted({ count }));
+			selectedKeys.clear();
+			await invalidateAll();
+		} finally {
+			busy = false;
+		}
+	}
+
+	// Register the contextual bulk-action bar (which swaps the dock) whenever a
+	// selection is active; clear it when empty or on navigating away.
+	$effect(() => {
+		const count = selectedItems.length;
+		if (count === 0) {
+			dockActionStore.clear();
+			return;
+		}
+		dockActionStore.set({
+			count,
+			actions: [
+				{
+					label: m.common_restore(),
+					icon: RotateCcw,
+					variant: 'outline',
+					disabled: busy,
+					onClick: handleBulkRestore,
+				},
+				{
+					label: m.common_delete(),
+					icon: Trash2,
+					variant: 'destructive',
+					disabled: busy,
+					onClick: handleBulkDelete,
+				},
+			],
+			onCancel: () => selectedKeys.clear(),
+		});
+		return () => dockActionStore.clear();
+	});
+
 	const typeLabel: Record<string, () => string> = {
 		transaction: m.entity_transaction,
 		category: m.entity_category,
@@ -43,12 +170,10 @@
 		debt: 'destructive',
 	};
 
+	const shortDate = $derived(shortDateFormatter(data.preferences.locale));
+
 	function formatDate(iso: string) {
-		return new Date(iso).toLocaleDateString('es-MX', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		});
+		return shortDate.format(new Date(iso));
 	}
 </script>
 
@@ -70,6 +195,14 @@
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
+						<Table.Head class="w-[40px]">
+							<Checkbox
+								checked={allSelected}
+								indeterminate={someSelected}
+								onclick={toggleAll}
+								aria-label={m.trash_select_all()}
+							/>
+						</Table.Head>
 						<Table.Head>{m.common_name()}</Table.Head>
 						<Table.Head>{m.common_type()}</Table.Head>
 						<Table.Head>{m.common_deleted()}</Table.Head>
@@ -78,7 +211,14 @@
 				</Table.Header>
 				<Table.Body>
 					{#each data.items as item (item.entityType + '-' + item.id)}
-						<Table.Row>
+						<Table.Row data-state={selectedKeys.has(item.entityType + '-' + item.id) ? 'selected' : undefined}>
+							<Table.Cell>
+								<Checkbox
+									checked={selectedKeys.has(item.entityType + '-' + item.id)}
+									onclick={() => toggleItem(item)}
+									aria-label={m.trash_select_row()}
+								/>
+							</Table.Cell>
 							<Table.Cell class="font-medium">{item.label}</Table.Cell>
 							<Table.Cell>
 								<Badge variant={typeBadgeVariant[item.entityType] ?? 'secondary'}>

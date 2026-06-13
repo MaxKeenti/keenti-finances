@@ -15,6 +15,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
+	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -33,7 +34,7 @@
 	let editDialogOpen = $state(false);
 	let deleteForm = $state<HTMLFormElement | null>(null);
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';

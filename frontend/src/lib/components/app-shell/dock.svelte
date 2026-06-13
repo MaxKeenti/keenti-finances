@@ -6,15 +6,11 @@
 		ArrowLeftRight,
 		CreditCard,
 		HandCoins,
-		Layers,
-		Users,
-		Trash2,
 		Settings,
 		LogOut,
 		EllipsisVertical
 	} from '@lucide/svelte';
 	import DockOverflowDialog from './dock-overflow-dialog.svelte';
-	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages.js';
@@ -24,28 +20,45 @@
 		href: string;
 		label: string;
 		icon: Component<{ class?: string }>;
+		activeHrefs?: string[];
 	};
 
-	const allNavItems: NavItem[] = [
+	const dockNavItems: NavItem[] = [
 		{ href: '/', label: m.nav_dashboard(), icon: LayoutDashboard },
 		{ href: '/transactions', label: m.nav_transactions(), icon: ArrowLeftRight },
 		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
 		{ href: '/debts', label: m.nav_debts(), icon: HandCoins },
-		{ href: '/categories', label: m.nav_categories(), icon: Layers },
-		{ href: '/contacts', label: m.nav_contacts(), icon: Users },
-		{ href: '/trash', label: m.nav_trash(), icon: Trash2 },
-		{ href: '/settings', label: m.nav_settings(), icon: Settings }
+		{
+			href: '/settings',
+			label: m.nav_settings(),
+			icon: Settings,
+			activeHrefs: ['/categories', '/contacts', '/trash'],
+		}
 	];
+	const defaultPinnedHrefs = ['/transactions', '/subscriptions', '/debts'];
 
-	// Mobile: 3 pinned items
-	const pinnedItems = allNavItems.filter((item) =>
-		['/transactions', '/subscriptions', '/debts'].includes(item.href)
-	);
+	function normalizePinnedHrefs(csv: string | undefined) {
+		const allowed = new Set(dockNavItems.map((item) => item.href));
+		const requested = (csv ?? '')
+			.split(',')
+			.filter((href) => allowed.has(href));
+		return [...requested, ...defaultPinnedHrefs]
+			.filter((href, index, all) => all.indexOf(href) === index)
+			.slice(0, 3);
+	}
 
-	// Mobile overflow: remaining items
-	const overflowItems = allNavItems.filter(
-		(item) => !['/transactions', '/subscriptions', '/debts'].includes(item.href)
+	const pinnedHrefs = $derived(
+		normalizePinnedHrefs($page.data.preferences?.mobilePinnedNavItems as string | undefined),
 	);
+	const pinnedItems = $derived(
+		pinnedHrefs
+			.map((href) => dockNavItems.find((item) => item.href === href))
+			.filter((item): item is NavItem => Boolean(item)),
+	);
+	const overflowItems = $derived(
+		dockNavItems.filter((item) => !pinnedHrefs.includes(item.href))
+	);
+	const dockMagnification = $derived($page.data.preferences?.dockMagnification ?? true);
 
 	const RECENTS_KEY = 'keenti.nav.recents';
 
@@ -53,22 +66,30 @@
 	let recentsLoaded = $state(false);
 	let recentHrefs = $state<string[]>([]);
 
-	function isActive(href: string) {
-		const pathname = $page.url.pathname;
+	function isPathMatch(href: string, pathname: string) {
 		return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 	}
 
-	function matchingNavItem(pathname: string) {
-		return allNavItems.find((item) =>
-			item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`),
+	function isItemActiveForPath(item: NavItem, pathname: string) {
+		return (
+			isPathMatch(item.href, pathname) ||
+			(item.activeHrefs?.some((href) => isPathMatch(href, pathname)) ?? false)
 		);
+	}
+
+	function isActive(item: NavItem) {
+		return isItemActiveForPath(item, $page.url.pathname);
+	}
+
+	function matchingNavItem(pathname: string) {
+		return dockNavItems.find((item) => isItemActiveForPath(item, pathname));
 	}
 
 	function readStoredRecents() {
 		try {
 			const value = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
 			return Array.isArray(value)
-				? value.filter((href): href is string => allNavItems.some((item) => item.href === href)).slice(0, 4)
+				? value.filter((href): href is string => dockNavItems.some((item) => item.href === href)).slice(0, 4)
 				: [];
 		} catch {
 			return [];
@@ -94,94 +115,128 @@
 
 	const recentItems = $derived(
 		recentHrefs
-			.filter((href) => !isActive(href))
-			.map((href) => allNavItems.find((item) => item.href === href))
+			.map((href) => dockNavItems.find((item) => item.href === href))
 			.filter((item): item is NavItem => Boolean(item))
+			.filter((item) => !isActive(item))
 			.slice(0, 3),
 	);
+
+	// macOS-style dock magnification: each icon's width follows a cosine bell
+	// centered on the cursor, so neighbours swell too and push each other apart
+	// while their bottoms stay anchored to the shelf. Width (not transform) is
+	// animated so siblings genuinely displace, like the real dock. Mouse-only —
+	// the mobile dock is a separate, non-magnified layout.
+	const MAGNIFY = 0.6; // extra scale at the cursor (1x -> 1.6x)
+	const MAGNIFY_RANGE = 120; // px of influence to each side of the cursor
+	let dockEl = $state<HTMLElement | undefined>(undefined);
+	let magnifyRaf = 0;
+
+	function magnifyDock(e: PointerEvent) {
+		if (!dockMagnification || e.pointerType !== 'mouse' || !dockEl) return;
+		const x = e.clientX;
+		cancelAnimationFrame(magnifyRaf);
+		magnifyRaf = requestAnimationFrame(() => {
+			if (!dockEl) return;
+			for (const el of dockEl.querySelectorAll<HTMLElement>('[data-dock-icon]')) {
+				const rect = el.getBoundingClientRect();
+				const t = Math.min(Math.abs(x - rect.left - rect.width / 2) / MAGNIFY_RANGE, 1);
+				const scale = 1 + MAGNIFY * Math.cos((t * Math.PI) / 2) ** 2;
+				el.style.setProperty('--scale', scale.toFixed(3));
+			}
+		});
+	}
+
+	function resetDockMagnify() {
+		cancelAnimationFrame(magnifyRaf);
+		if (!dockEl) return;
+		for (const el of dockEl.querySelectorAll<HTMLElement>('[data-dock-icon]')) {
+			el.style.removeProperty('--scale');
+		}
+	}
+
+	$effect(() => {
+		if (!dockMagnification) resetDockMagnify();
+	});
+
+	$effect(() => {
+		function handleRecentsCleared() {
+			recentHrefs = [];
+		}
+
+		window.addEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
+		return () => {
+			window.removeEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
+			cancelAnimationFrame(magnifyRaf);
+		};
+	});
 </script>
 
 <nav
+	bind:this={dockEl}
+	onpointermove={magnifyDock}
+	onpointerleave={resetDockMagnify}
 	class="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex justify-center sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2"
 	aria-label={m.nav_main()}
 >
-	<!-- Desktop: all items centered -->
-	<Tooltip.Provider delayDuration={150}>
-		<div
-			class="hidden items-end gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/80 px-2.5 py-2 shadow-2xl shadow-black/10 backdrop-blur-xl sm:flex"
+	<!-- Desktop: macOS-style magnifying dock -->
+	{#snippet dockIcon(href: string, label: string, Icon: NavItem['icon'], active: boolean, small = false)}
+		<a
+			data-dock-icon
+			{href}
+			aria-label={label}
+			class="group relative flex shrink-0 flex-col items-center justify-end outline-none transition-[width] duration-150 ease-out will-change-[width]
+				{small ? 'w-[calc(var(--scale,1)*36px)]' : 'w-[calc(var(--scale,1)*44px)]'}"
 		>
-			{#each allNavItems as item}
-				{@const active = isActive(item.href)}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							{@const { type: _triggerType, ...triggerProps } = props}
-							<a
-								{...triggerProps}
-								href={item.href}
-								aria-label={item.label}
-								class="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110
-									{active
-									? 'bg-sidebar-accent text-sidebar-accent-foreground'
-									: 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
-							>
-								<item.icon class="w-5 h-5 shrink-0" />
-							</a>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content side="top" sideOffset={8}>{item.label}</Tooltip.Content>
-				</Tooltip.Root>
-			{/each}
-
-			{#if recentItems.length > 0}
-				<Separator orientation="vertical" class="mx-1 h-6 bg-sidebar-border" />
-				{#each recentItems as item}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							{#snippet child({ props })}
-								{@const { type: _triggerType, ...triggerProps } = props}
-								<a
-									{...triggerProps}
-									href={item.href}
-									aria-label={item.label}
-									class="flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-foreground/75 transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-								>
-									<item.icon class="h-4.5 w-4.5 shrink-0" />
-								</a>
-							{/snippet}
-						</Tooltip.Trigger>
-						<Tooltip.Content side="top" sideOffset={10}>{item.label}</Tooltip.Content>
-					</Tooltip.Root>
-				{/each}
+			<!-- Floating name label above the magnified icon -->
+			<span
+				aria-hidden="true"
+				class="pointer-events-none absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 scale-90 whitespace-nowrap rounded-lg border border-sidebar-border/60 bg-popover/90 px-2.5 py-1 text-xs font-medium text-popover-foreground opacity-0 shadow-lg backdrop-blur-md transition-all duration-150 group-hover:scale-100 group-hover:opacity-100"
+			>
+				{label}
+				<span
+					class="absolute left-1/2 top-full -mt-1 size-2 -translate-x-1/2 rotate-45 rounded-[2px] border-b border-r border-sidebar-border/60 bg-popover/90"
+				></span>
+			</span>
+			<div
+				class="flex aspect-square w-full items-center justify-center rounded-[28%] border transition-shadow group-hover:shadow-md group-active:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-sidebar-ring
+					{active
+					? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-md'
+					: 'border-sidebar-border/50 bg-background/50 text-sidebar-foreground group-hover:text-sidebar-accent-foreground'}"
+			>
+				<Icon class="size-1/2 shrink-0" />
+			</div>
+			{#if active}
+				<!-- Running-app dot -->
+				<span class="absolute -bottom-[5px] left-1/2 size-1 -translate-x-1/2 rounded-full bg-sidebar-foreground/60"></span>
 			{/if}
+		</a>
+	{/snippet}
 
-			<Separator orientation="vertical" class="mx-1 h-6 bg-sidebar-border" />
+	<div
+		class="hidden items-end gap-1.5 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 pb-2 pt-2.5 shadow-2xl shadow-black/10 backdrop-blur-xl sm:flex"
+	>
+		{#each dockNavItems as item}
+			{@render dockIcon(item.href, item.label, item.icon, isActive(item))}
+		{/each}
 
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					{#snippet child({ props })}
-						{@const { type: _triggerType, ...triggerProps } = props}
-						<a
-							{...triggerProps}
-							href="/logout"
-							aria-label={m.nav_logout()}
-							class="flex h-10 w-10 items-center justify-center rounded-xl text-sidebar-foreground transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-						>
-							<LogOut class="w-5 h-5 shrink-0" />
-						</a>
-					{/snippet}
-				</Tooltip.Trigger>
-				<Tooltip.Content side="top" sideOffset={8}>{m.nav_logout()}</Tooltip.Content>
-			</Tooltip.Root>
-		</div>
-	</Tooltip.Provider>
+		{#if recentItems.length > 0}
+			<Separator orientation="vertical" class="mx-0.5 h-7 self-center bg-sidebar-border" />
+			{#each recentItems as item}
+				{@render dockIcon(item.href, item.label, item.icon, false, true)}
+			{/each}
+		{/if}
+
+		<Separator orientation="vertical" class="mx-0.5 h-7 self-center bg-sidebar-border" />
+
+		{@render dockIcon('/logout', m.nav_logout(), LogOut, false)}
+	</div>
 
 	<!-- Mobile: 3 pinned + overflow menu button -->
 	<div
 		class="flex w-full items-center gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-2 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:hidden"
 	>
 		{#each pinnedItems as item}
-			{@const active = isActive(item.href)}
+			{@const active = isActive(item)}
 			<a
 				href={item.href}
 				aria-label={item.label}

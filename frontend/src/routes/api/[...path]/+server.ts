@@ -12,6 +12,9 @@ async function proxy(event: Parameters<RequestHandler>[0]): Promise<Response> {
 		if (['host', 'connection', 'transfer-encoding'].includes(key.toLowerCase())) continue;
 		headers.set(key, value);
 	}
+	if (event.locals.session) {
+		headers.set('X-WorkOS-User-Id', event.locals.session.user.id);
+	}
 
 	const hasBody = !['GET', 'HEAD'].includes(event.request.method);
 	const controller = new AbortController();
