@@ -17,6 +17,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
+	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -131,7 +132,7 @@
 		memberDialogOpen = true;
 	}
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
 
 	function availableContacts(sub: Subscription) {
 		const memberContactIds = new Set((sub.members ?? []).map((m) => m.contactId));

@@ -11,6 +11,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { ActionResult } from '@sveltejs/kit';
 	import type { PageData } from './$types';
@@ -169,12 +170,10 @@
 		debt: 'destructive',
 	};
 
+	const shortDate = $derived(shortDateFormatter(data.preferences.locale));
+
 	function formatDate(iso: string) {
-		return new Date(iso).toLocaleDateString('es-MX', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		});
+		return shortDate.format(new Date(iso));
 	}
 </script>
 

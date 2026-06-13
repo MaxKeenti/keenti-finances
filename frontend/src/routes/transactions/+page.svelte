@@ -32,6 +32,7 @@
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
 	import * as Card from '$lib/components/ui/card';
+	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -126,7 +127,7 @@
 		});
 	}
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const sortItems: { value: TransactionSortBy; label: string }[] = [
 		{ value: 'transactionDate', label: m.common_date() },
 		{ value: 'amount', label: m.common_amount() },

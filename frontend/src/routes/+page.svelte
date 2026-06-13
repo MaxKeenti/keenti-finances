@@ -2,6 +2,7 @@
 	import { scaleBand, scaleLinear } from 'd3-scale';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -22,8 +23,8 @@
 		m.month_dec,
 	];
 
-	const mxn = (v: number) =>
-		new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v);
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const mxn = (v: number) => fmt.format(v);
 
 	const BAR_W = 560;
 	const BAR_H = 220;

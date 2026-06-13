@@ -6,9 +6,6 @@
 		ArrowLeftRight,
 		CreditCard,
 		HandCoins,
-		Layers,
-		Users,
-		Trash2,
 		Settings,
 		LogOut,
 		EllipsisVertical
@@ -23,28 +20,45 @@
 		href: string;
 		label: string;
 		icon: Component<{ class?: string }>;
+		activeHrefs?: string[];
 	};
 
-	const allNavItems: NavItem[] = [
+	const dockNavItems: NavItem[] = [
 		{ href: '/', label: m.nav_dashboard(), icon: LayoutDashboard },
 		{ href: '/transactions', label: m.nav_transactions(), icon: ArrowLeftRight },
 		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
 		{ href: '/debts', label: m.nav_debts(), icon: HandCoins },
-		{ href: '/categories', label: m.nav_categories(), icon: Layers },
-		{ href: '/contacts', label: m.nav_contacts(), icon: Users },
-		{ href: '/trash', label: m.nav_trash(), icon: Trash2 },
-		{ href: '/settings', label: m.nav_settings(), icon: Settings }
+		{
+			href: '/settings',
+			label: m.nav_settings(),
+			icon: Settings,
+			activeHrefs: ['/categories', '/contacts', '/trash'],
+		}
 	];
+	const defaultPinnedHrefs = ['/transactions', '/subscriptions', '/debts'];
 
-	// Mobile: 3 pinned items
-	const pinnedItems = allNavItems.filter((item) =>
-		['/transactions', '/subscriptions', '/debts'].includes(item.href)
-	);
+	function normalizePinnedHrefs(csv: string | undefined) {
+		const allowed = new Set(dockNavItems.map((item) => item.href));
+		const requested = (csv ?? '')
+			.split(',')
+			.filter((href) => allowed.has(href));
+		return [...requested, ...defaultPinnedHrefs]
+			.filter((href, index, all) => all.indexOf(href) === index)
+			.slice(0, 3);
+	}
 
-	// Mobile overflow: remaining items
-	const overflowItems = allNavItems.filter(
-		(item) => !['/transactions', '/subscriptions', '/debts'].includes(item.href)
+	const pinnedHrefs = $derived(
+		normalizePinnedHrefs($page.data.preferences?.mobilePinnedNavItems as string | undefined),
 	);
+	const pinnedItems = $derived(
+		pinnedHrefs
+			.map((href) => dockNavItems.find((item) => item.href === href))
+			.filter((item): item is NavItem => Boolean(item)),
+	);
+	const overflowItems = $derived(
+		dockNavItems.filter((item) => !pinnedHrefs.includes(item.href))
+	);
+	const dockMagnification = $derived($page.data.preferences?.dockMagnification ?? true);
 
 	const RECENTS_KEY = 'keenti.nav.recents';
 
@@ -52,22 +66,30 @@
 	let recentsLoaded = $state(false);
 	let recentHrefs = $state<string[]>([]);
 
-	function isActive(href: string) {
-		const pathname = $page.url.pathname;
+	function isPathMatch(href: string, pathname: string) {
 		return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 	}
 
-	function matchingNavItem(pathname: string) {
-		return allNavItems.find((item) =>
-			item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`),
+	function isItemActiveForPath(item: NavItem, pathname: string) {
+		return (
+			isPathMatch(item.href, pathname) ||
+			(item.activeHrefs?.some((href) => isPathMatch(href, pathname)) ?? false)
 		);
+	}
+
+	function isActive(item: NavItem) {
+		return isItemActiveForPath(item, $page.url.pathname);
+	}
+
+	function matchingNavItem(pathname: string) {
+		return dockNavItems.find((item) => isItemActiveForPath(item, pathname));
 	}
 
 	function readStoredRecents() {
 		try {
 			const value = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
 			return Array.isArray(value)
-				? value.filter((href): href is string => allNavItems.some((item) => item.href === href)).slice(0, 4)
+				? value.filter((href): href is string => dockNavItems.some((item) => item.href === href)).slice(0, 4)
 				: [];
 		} catch {
 			return [];
@@ -93,9 +115,9 @@
 
 	const recentItems = $derived(
 		recentHrefs
-			.filter((href) => !isActive(href))
-			.map((href) => allNavItems.find((item) => item.href === href))
+			.map((href) => dockNavItems.find((item) => item.href === href))
 			.filter((item): item is NavItem => Boolean(item))
+			.filter((item) => !isActive(item))
 			.slice(0, 3),
 	);
 
@@ -110,7 +132,7 @@
 	let magnifyRaf = 0;
 
 	function magnifyDock(e: PointerEvent) {
-		if (e.pointerType !== 'mouse' || !dockEl) return;
+		if (!dockMagnification || e.pointerType !== 'mouse' || !dockEl) return;
 		const x = e.clientX;
 		cancelAnimationFrame(magnifyRaf);
 		magnifyRaf = requestAnimationFrame(() => {
@@ -132,7 +154,21 @@
 		}
 	}
 
-	$effect(() => () => cancelAnimationFrame(magnifyRaf));
+	$effect(() => {
+		if (!dockMagnification) resetDockMagnify();
+	});
+
+	$effect(() => {
+		function handleRecentsCleared() {
+			recentHrefs = [];
+		}
+
+		window.addEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
+		return () => {
+			window.removeEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
+			cancelAnimationFrame(magnifyRaf);
+		};
+	});
 </script>
 
 <nav
@@ -179,8 +215,8 @@
 	<div
 		class="hidden items-end gap-1.5 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 pb-2 pt-2.5 shadow-2xl shadow-black/10 backdrop-blur-xl sm:flex"
 	>
-		{#each allNavItems as item}
-			{@render dockIcon(item.href, item.label, item.icon, isActive(item.href))}
+		{#each dockNavItems as item}
+			{@render dockIcon(item.href, item.label, item.icon, isActive(item))}
 		{/each}
 
 		{#if recentItems.length > 0}
@@ -200,7 +236,7 @@
 		class="flex w-full items-center gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-2 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:hidden"
 	>
 		{#each pinnedItems as item}
-			{@const active = isActive(item.href)}
+			{@const active = isActive(item)}
 			<a
 				href={item.href}
 				aria-label={item.label}

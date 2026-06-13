@@ -9,6 +9,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import * as ScrollArea from '$lib/components/ui/scroll-area';
+	import { monthYearFormatter, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -49,8 +50,8 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
-	const monthFmt = new Intl.DateTimeFormat('es-MX', { month: 'short', year: 'numeric' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const monthFmt = $derived(monthYearFormatter(data.preferences.locale));
 
 	function periodLabel(billingDate: string): string {
 		return monthFmt.format(new Date(`${billingDate}T00:00:00`));

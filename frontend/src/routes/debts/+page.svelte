@@ -18,6 +18,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { mxnFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -169,7 +170,8 @@
 		});
 	}
 
-	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const shortDate = $derived(shortDateFormatter(data.preferences.locale));
 
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
 		ACTIVE: 'warning',
@@ -225,7 +227,7 @@
 								<div class="flex justify-between">
 									<span class="text-muted-foreground">{m.common_date()}</span>
 									<span class="font-medium tabular-nums">
-										{new Date(debt.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+										{shortDate.format(new Date(debt.createdAt))}
 									</span>
 								</div>
 							{/if}

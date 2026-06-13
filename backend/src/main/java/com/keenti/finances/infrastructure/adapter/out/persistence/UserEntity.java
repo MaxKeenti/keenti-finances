@@ -24,6 +24,12 @@ public class UserEntity extends PanacheEntityBase {
     public static final int DEFAULT_PRIMARY_HUE = 91;
     public static final String DEFAULT_HEADING_FONT = "Fraunces";
     public static final String DEFAULT_BODY_FONT = "Geist";
+    public static final String DEFAULT_LOCALE = "es";
+    public static final int DEFAULT_TRANSACTION_PAGE_SIZE = 25;
+    public static final String DEFAULT_TRANSACTION_SORT_BY = "transactionDate";
+    public static final String DEFAULT_TRANSACTION_SORT_DIRECTION = "desc";
+    public static final String DEFAULT_MOBILE_PINNED_NAV_ITEMS = "/transactions,/subscriptions,/debts";
+    public static final boolean DEFAULT_DOCK_MAGNIFICATION = true;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,6 +52,24 @@ public class UserEntity extends PanacheEntityBase {
 
     @Column(name = "body_font", nullable = false, length = 50)
     public String bodyFont = DEFAULT_BODY_FONT;
+
+    @Column(name = "locale", nullable = false, length = 2)
+    public String locale = DEFAULT_LOCALE;
+
+    @Column(name = "transaction_page_size", nullable = false)
+    public int transactionPageSize = DEFAULT_TRANSACTION_PAGE_SIZE;
+
+    @Column(name = "transaction_sort_by", nullable = false, length = 50)
+    public String transactionSortBy = DEFAULT_TRANSACTION_SORT_BY;
+
+    @Column(name = "transaction_sort_direction", nullable = false, length = 4)
+    public String transactionSortDirection = DEFAULT_TRANSACTION_SORT_DIRECTION;
+
+    @Column(name = "mobile_pinned_nav_items", nullable = false, length = 160)
+    public String mobilePinnedNavItems = DEFAULT_MOBILE_PINNED_NAV_ITEMS;
+
+    @Column(name = "dock_magnification", nullable = false)
+    public boolean dockMagnification = DEFAULT_DOCK_MAGNIFICATION;
 
     public static Optional<UserEntity> findByWorkosId(String workosId) {
         return find("workosId", workosId).firstResultOptional();
