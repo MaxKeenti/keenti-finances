@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Check, Loader2 } from '@lucide/svelte';
 	import { ColorPicker } from '$lib/components/ui/color-picker';
+	import * as Card from '$lib/components/ui/card';
 	import { Label } from '$lib/components/ui/label';
-	import { NativeSelect } from '$lib/components/native-select';
+	import * as NativeSelect from '$lib/components/ui/native-select';
+	import { Badge } from '$lib/components/ui/badge';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
@@ -93,72 +95,78 @@
 		</div>
 		<div class="text-sm text-muted-foreground min-w-24 text-right" aria-live="polite">
 			{#if saveState === 'saving'}
-				<span class="inline-flex items-center gap-1">
+				<Badge variant="secondary" class="gap-1">
 					<Loader2 class="w-3.5 h-3.5 animate-spin" />
 					{m.common_saving()}
-				</span>
+				</Badge>
 			{:else if saveState === 'saved'}
-				<span class="inline-flex items-center gap-1 text-foreground">
+				<Badge variant="success" class="gap-1">
 					<Check class="w-3.5 h-3.5" />
 					{m.settings_saved()}
-				</span>
+				</Badge>
 			{:else if saveState === 'error'}
-				<span class="text-destructive">{m.settings_could_not_save()}</span>
+				<Badge variant="destructive">{m.settings_could_not_save()}</Badge>
 			{/if}
 		</div>
 	</div>
 
-	<section class="space-y-3 rounded-lg border p-5">
-		<div>
-			<h2 class="font-heading text-lg font-medium">{m.settings_primary_colour()}</h2>
-			<p class="text-sm text-muted-foreground">
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>{m.settings_primary_colour()}</Card.Title>
+			<Card.Description>
 				{m.settings_primary_colour_description()}
-			</p>
-		</div>
-		<ColorPicker
-			name={m.settings_primary_colour()}
-			hue={primaryHue}
-			onchange={onHueChange}
-		/>
-	</section>
+			</Card.Description>
+		</Card.Header>
+		<Card.Content>
+			<ColorPicker
+				name={m.settings_primary_colour()}
+				hue={primaryHue}
+				onchange={onHueChange}
+			/>
+		</Card.Content>
+	</Card.Root>
 
-	<section class="space-y-3 rounded-lg border p-5">
-		<div>
-			<h2 class="font-heading text-lg font-medium">{m.settings_typography()}</h2>
-			<p class="text-sm text-muted-foreground">
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>{m.settings_typography()}</Card.Title>
+			<Card.Description>
 				{m.settings_typography_description()}
-			</p>
-		</div>
+			</Card.Description>
+		</Card.Header>
 
-		<div class="grid gap-4 sm:grid-cols-2">
-			<div class="grid gap-1.5">
-				<Label for="heading-font">{m.settings_heading_font()}</Label>
-				<NativeSelect
-					name="heading-font"
-					value={headingFont}
-					onValueChange={onHeadingChange}
-					items={[
-						{ value: 'Fraunces', label: 'Fraunces' },
-						{ value: 'Playfair Display', label: 'Playfair Display' },
-					]}
-				/>
-				<p class="font-heading text-xl mt-1">{m.settings_font_preview_short()}</p>
-			</div>
+		<Card.Content>
+			<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid gap-1.5">
+					<Label for="heading-font">{m.settings_heading_font()}</Label>
+					<NativeSelect.Root
+						id="heading-font"
+						name="heading-font"
+						bind:value={headingFont}
+						class="w-full"
+						onchange={(e) => onHeadingChange((e.currentTarget as HTMLSelectElement).value)}
+					>
+						<NativeSelect.Option value="Fraunces">Fraunces</NativeSelect.Option>
+						<NativeSelect.Option value="Playfair Display">Playfair Display</NativeSelect.Option>
+					</NativeSelect.Root>
+					<p class="font-heading text-xl mt-1">{m.settings_font_preview_short()}</p>
+				</div>
 
-			<div class="grid gap-1.5">
-				<Label for="body-font">{m.settings_body_font()}</Label>
-				<NativeSelect
-					name="body-font"
-					value={bodyFont}
-					onValueChange={onBodyChange}
-					items={[
-						{ value: 'Geist', label: 'Geist' },
-						{ value: 'Inter', label: 'Inter' },
-						{ value: 'System UI', label: 'System UI' },
-					]}
-				/>
-				<p class="text-sm mt-1">{m.settings_font_preview_long()}</p>
+				<div class="grid gap-1.5">
+					<Label for="body-font">{m.settings_body_font()}</Label>
+					<NativeSelect.Root
+						id="body-font"
+						name="body-font"
+						bind:value={bodyFont}
+						class="w-full"
+						onchange={(e) => onBodyChange((e.currentTarget as HTMLSelectElement).value)}
+					>
+						<NativeSelect.Option value="Geist">Geist</NativeSelect.Option>
+						<NativeSelect.Option value="Inter">Inter</NativeSelect.Option>
+						<NativeSelect.Option value="System UI">System UI</NativeSelect.Option>
+					</NativeSelect.Root>
+					<p class="text-sm mt-1">{m.settings_font_preview_long()}</p>
+				</div>
 			</div>
-		</div>
-	</section>
+		</Card.Content>
+	</Card.Root>
 </div>

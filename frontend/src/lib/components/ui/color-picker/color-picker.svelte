@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Input } from '$lib/components/ui/input';
+  import * as Slider from '$lib/components/ui/slider';
   import { CategoryBadge } from '$lib/components/ui/category-badge';
   import { hexToOklchHue, oklchHueToRepresentativeHex } from '$lib/utils/color';
 
@@ -16,14 +17,13 @@
   // whenever it changes externally; the user can type a hex to drive the hue
   // (lossily — only the hue component survives, as the dual preview makes
   // plain).
-  let hexInput = $state(oklchHueToRepresentativeHex(hue));
+  let hexInput = $state('');
 
   $effect(() => {
     hexInput = oklchHueToRepresentativeHex(hue);
   });
 
-  function onSlider(e: Event) {
-    const next = Number((e.target as HTMLInputElement).value);
+  function onSlider(next: number) {
     onchange(next);
   }
 
@@ -56,15 +56,15 @@
 
 <div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
-    <input
-      type="range"
-      min="0"
-      max="359"
-      step="1"
+    <Slider.Root
+      type="single"
+      min={0}
+      max={359}
+      step={1}
       value={hue}
-      oninput={onSlider}
-      class="h-3 flex-1 cursor-pointer appearance-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-foreground [&::-webkit-slider-thumb]:bg-background [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:active:cursor-grabbing [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-foreground [&::-moz-range-thumb]:bg-background"
-      style="background:{sliderBg};"
+      onValueChange={onSlider}
+      class="hue-slider flex-1"
+      style={`--hue-slider-bg: ${sliderBg};`}
       aria-label="Hue"
     />
     <Input
@@ -88,3 +88,13 @@
     </div>
   </div>
 </div>
+
+<style>
+  :global(.hue-slider [data-slot='slider-track']) {
+    background: var(--hue-slider-bg);
+  }
+
+  :global(.hue-slider [data-slot='slider-range']) {
+    background: transparent;
+  }
+</style>
