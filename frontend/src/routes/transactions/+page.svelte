@@ -6,6 +6,7 @@
 	import { enhance as kitEnhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
+	import { dockActionStore } from '$lib/components/app-shell/dock-action.svelte';
 	import {
 		createTable,
 		getCoreRowModel,
@@ -19,7 +20,6 @@
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
-	import XIcon from '@lucide/svelte/icons/x';
 	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
@@ -258,6 +258,29 @@
 			destructive: true,
 		});
 	}
+
+	// Register the contextual bulk-action bar (which swaps the dock) while a
+	// selection is active; clear it when empty or on navigating away.
+	$effect(() => {
+		const count = selectedTxIds.size;
+		if (count === 0) {
+			dockActionStore.clear();
+			return;
+		}
+		dockActionStore.set({
+			count,
+			actions: [
+				{
+					label: m.common_delete(),
+					icon: Trash2Icon,
+					variant: 'destructive',
+					onClick: confirmBulkDelete,
+				},
+			],
+			onCancel: clearSelection,
+		});
+		return () => dockActionStore.clear();
+	});
 
 	const filteredCategories = $derived(
 		data.categories
@@ -554,28 +577,6 @@
 		</div>
 	{/if}
 </div>
-
-{#if selectedTxIds.size > 0}
-	<div
-		class="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 flex justify-center sm:bottom-[calc(env(safe-area-inset-bottom)+5rem)]"
-	>
-		<div
-			class="flex w-full max-w-md items-center justify-between gap-3 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-3 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl"
-		>
-			<p class="text-sm font-medium">{m.transactions_selected({ count: selectedTxIds.size })}</p>
-			<div class="flex items-center gap-2">
-				<Button variant="ghost" size="sm" onclick={clearSelection}>
-					<XIcon data-icon="inline-start" />
-					{m.common_clear()}
-				</Button>
-				<Button variant="destructive" size="sm" onclick={confirmBulkDelete}>
-					<Trash2Icon data-icon="inline-start" />
-					{m.common_delete()}
-				</Button>
-			</div>
-		</div>
-	</div>
-{/if}
 
 <!-- Create / Edit dialog -->
 <Dialog.Root bind:open={dialogOpen}>
