@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { enhance as kitEnhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
+	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import * as Table from '$lib/components/ui/table';
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Empty from '$lib/components/ui/empty';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -11,16 +11,20 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let permanentDeleteDialogOpen = $state(false);
 	let deleteTargetId = $state<number | null>(null);
 	let deleteTargetType = $state('');
-	let deleteTargetLabel = $state('');
+	let permanentDeleteForm = $state<HTMLFormElement | null>(null);
 
-	function openPermanentDelete(item: { id: number; entityType: string; label: string }) {
+	async function openPermanentDelete(item: { id: number; entityType: string; label: string }) {
 		deleteTargetId = item.id;
 		deleteTargetType = item.entityType;
-		deleteTargetLabel = item.label;
-		permanentDeleteDialogOpen = true;
+		await submitWithAdaptiveConfirm(permanentDeleteForm, {
+			title: m.trash_permanently_delete_title(),
+			description: `${m.delete_confirm_permanent_prefix()} ${item.label}${m.delete_confirm_suffix()}`,
+			confirmLabel: m.common_delete_permanently(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	const typeLabel: Record<string, () => string> = {
@@ -122,45 +126,28 @@
 	{/if}
 </div>
 
-<!-- Permanent delete confirmation -->
-<Dialog.Root bind:open={permanentDeleteDialogOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{m.trash_permanently_delete_title()}</Dialog.Title>
-			<Dialog.Description>
-				{m.delete_confirm_permanent_prefix()} <strong>{deleteTargetLabel}</strong>{m.delete_confirm_suffix()}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			method="POST"
-			action="?/permanentDelete"
-			use:kitEnhance={async () => {
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						permanentDeleteDialogOpen = false;
-						toast.success(m.trash_item_permanently_deleted());
-						await update();
-					} else {
-						const msg =
-							(result as { data?: { message?: string } }).data?.message ??
-							m.trash_delete_failed();
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<input type="hidden" name="id" value={deleteTargetId} />
-			<input type="hidden" name="entityType" value={deleteTargetType} />
-			<Dialog.Footer>
-				<Button
-					type="button"
-					variant="outline"
-					onclick={() => (permanentDeleteDialogOpen = false)}
-				>
-					{m.common_cancel()}
-				</Button>
-				<Button type="submit" variant="destructive">{m.common_delete_permanently()}</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+<form
+	bind:this={permanentDeleteForm}
+	method="POST"
+	action="?/permanentDelete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				deleteTargetId = null;
+				deleteTargetType = '';
+				toast.success(m.trash_item_permanently_deleted());
+				await update();
+			} else {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ??
+					m.trash_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+>
+	<input type="hidden" name="id" value={deleteTargetId} />
+	<input type="hidden" name="entityType" value={deleteTargetType} />
+</form>

@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
@@ -30,13 +31,25 @@
 	let { data }: { data: PageData } = $props();
 
 	let editDialogOpen = $state(false);
-	let deleteDialogOpen = $state(false);
+	let deleteForm = $state<HTMLFormElement | null>(null);
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
 		return `${prefix}${fmt.format(amount)}`;
+	}
+
+	async function confirmDelete() {
+		await submitWithAdaptiveConfirm(deleteForm, {
+			title: m.transactions_delete_title(),
+			description: `${m.delete_confirm_prefix()} ${
+				tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')
+			}${m.delete_confirm_suffix()}`,
+			confirmLabel: m.common_delete(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	const sf = superForm(data.form, {
@@ -149,7 +162,7 @@
 			<!-- Actions -->
 			<div class="flex gap-3 pt-2">
 				<Button onclick={() => (editDialogOpen = true)}>{m.common_edit()}</Button>
-				<Button variant="destructive" onclick={() => (deleteDialogOpen = true)}>{m.common_delete()}</Button>
+				<Button variant="destructive" onclick={confirmDelete}>{m.common_delete()}</Button>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -284,38 +297,23 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Delete confirmation dialog -->
-<Dialog.Root bind:open={deleteDialogOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{m.transactions_delete_title()}</Dialog.Title>
-			<Dialog.Description>
-				{m.delete_confirm_prefix()} <strong>{tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</strong>{m.delete_confirm_suffix()}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			method="POST"
-			action="?/delete"
-			use:kitEnhance={async () => {
-				return async ({ result }) => {
-					if (result.type === 'redirect') {
-						toast.success(m.transactions_trashed());
-						goto(result.location);
-					} else if (result.type === 'failure') {
-						const msg =
-							(result as { data?: { message?: string } }).data?.message ??
-							m.transactions_delete_failed();
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					{m.common_cancel()}
-				</Button>
-				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+<form
+	bind:this={deleteForm}
+	method="POST"
+	action="?/delete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result }) => {
+			if (result.type === 'redirect') {
+				toast.success(m.transactions_trashed());
+				goto(result.location);
+			} else if (result.type === 'failure') {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ??
+					m.transactions_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+></form>

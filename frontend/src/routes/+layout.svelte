@@ -40,10 +40,14 @@
 	};
 
 	const prefs = $derived(data.preferences);
+	const primaryHue = $derived(Math.min(359, Math.max(0, Number(prefs.primaryHue) || 91)));
 	const bodyFamily = $derived(BODY_FAMILY[prefs.bodyFont] ?? BODY_FAMILY.Geist);
 	const headingFamily = $derived(HEADING_FAMILY[prefs.headingFont] ?? HEADING_FAMILY.Fraunces);
 	const bodyPreload = $derived(BODY_WOFF2[prefs.bodyFont] ?? null);
 	const headingPreload = $derived(HEADING_WOFF2[prefs.headingFont] ?? null);
+	const rootThemeCss = $derived(
+		`:root { --primary-hue: ${primaryHue}; --user-body-font: ${bodyFamily}; --user-heading-font: ${headingFamily}; }`,
+	);
 </script>
 
 <svelte:head>
@@ -54,13 +58,7 @@
 		<link rel="preload" href={headingPreload} as="font" type="font/woff2" crossorigin="anonymous" />
 	{/if}
 	<!-- SSR-rendered so the user's hue/fonts apply on first paint, no flash. -->
-	<style>
-		:root {
-			--primary-hue: {prefs.primaryHue};
-			--user-body-font: {bodyFamily};
-			--user-heading-font: {headingFamily};
-		}
-	</style>
+	{@html `<style>${rootThemeCss}</style>`}
 </svelte:head>
 
 {#if data.session}

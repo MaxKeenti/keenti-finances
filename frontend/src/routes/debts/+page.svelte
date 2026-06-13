@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
 	import * as Alert from '$lib/components/ui/alert';
@@ -70,12 +71,11 @@
 	let { data }: { data: PageData } = $props();
 
 	let dialogOpen = $state(false);
-	let deleteDialogOpen = $state(false);
 	let bulkDialogOpen = $state(false);
 	let bulkResult = $state<BulkResult | null>(null);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
-	let deleteTargetDescription = $state('');
+	let deleteForm = $state<HTMLFormElement | null>(null);
 
 	const sf = superForm(data.form, {
 		validators: zod4Client(debtSchema),
@@ -158,10 +158,15 @@
 		dialogOpen = true;
 	}
 
-	function openDelete(debt: Debt) {
+	async function openDelete(debt: Debt) {
 		deleteTargetId = debt.id;
-		deleteTargetDescription = debt.description;
-		deleteDialogOpen = true;
+		await submitWithAdaptiveConfirm(deleteForm, {
+			title: m.debts_delete_title(),
+			description: `${m.delete_confirm_debt_prefix()} ${debt.description}${m.delete_confirm_suffix()}`,
+			confirmLabel: m.common_delete(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -509,39 +514,25 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Delete confirmation dialog -->
-<Dialog.Root bind:open={deleteDialogOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{m.debts_delete_title()}</Dialog.Title>
-			<Dialog.Description>
-				{m.delete_confirm_debt_prefix()} <strong>{deleteTargetDescription}</strong>{m.delete_confirm_suffix()}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			method="POST"
-			action="?/delete"
-			use:kitEnhance={async () => {
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						deleteDialogOpen = false;
-						toast.success(m.debts_trashed());
-						await update();
-					} else {
-						const msg =
-							(result as { data?: { message?: string } }).data?.message ?? m.debts_delete_failed();
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<input type="hidden" name="id" value={deleteTargetId} />
-			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					{m.common_cancel()}
-				</Button>
-				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+<form
+	bind:this={deleteForm}
+	method="POST"
+	action="?/delete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				deleteTargetId = null;
+				toast.success(m.debts_trashed());
+				await update();
+			} else {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ?? m.debts_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+>
+	<input type="hidden" name="id" value={deleteTargetId} />
+</form>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Select from '$lib/components/ui/select';
 	import * as NativeSelectPrimitive from '$lib/components/ui/native-select';
+	import { useIsMobile } from '$lib/use-mobile.svelte';
 	import { cn } from '$lib/utils';
 
 	type Item = { value: string; label: string };
@@ -23,20 +24,10 @@
 		[key: string]: unknown;
 	} = $props();
 
-	let isMobile = $state(false);
-
-	$effect(() => {
-		const mq = window.matchMedia('(hover: none) and (pointer: coarse)');
-		isMobile = mq.matches;
-		const handler = (e: MediaQueryListEvent) => {
-			isMobile = e.matches;
-		};
-		mq.addEventListener('change', handler);
-		return () => mq.removeEventListener('change', handler);
-	});
+	const isMobile = useIsMobile();
 </script>
 
-{#if isMobile}
+{#if isMobile.current}
 	<NativeSelectPrimitive.Root
 		{name}
 		value={value}

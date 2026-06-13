@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { untrack } from 'svelte';
 	import {
 		LayoutDashboard,
 		ArrowLeftRight,
@@ -17,8 +18,15 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages.js';
+	import type { Component } from 'svelte';
 
-	const allNavItems = [
+	type NavItem = {
+		href: string;
+		label: string;
+		icon: Component<{ class?: string }>;
+	};
+
+	const allNavItems: NavItem[] = [
 		{ href: '/', label: m.nav_dashboard(), icon: LayoutDashboard },
 		{ href: '/transactions', label: m.nav_transactions(), icon: ArrowLeftRight },
 		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
@@ -39,18 +47,71 @@
 		(item) => !['/transactions', '/subscriptions', '/debts'].includes(item.href)
 	);
 
+	const RECENTS_KEY = 'keenti.nav.recents';
+
 	let overflowOpen = $state(false);
+	let recentsLoaded = $state(false);
+	let recentHrefs = $state<string[]>([]);
+
+	function isActive(href: string) {
+		const pathname = $page.url.pathname;
+		return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+	}
+
+	function matchingNavItem(pathname: string) {
+		return allNavItems.find((item) =>
+			item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`),
+		);
+	}
+
+	function readStoredRecents() {
+		try {
+			const value = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
+			return Array.isArray(value)
+				? value.filter((href): href is string => allNavItems.some((item) => item.href === href)).slice(0, 4)
+				: [];
+		} catch {
+			return [];
+		}
+	}
+
+	$effect(() => {
+		if (!recentsLoaded) {
+			recentHrefs = readStoredRecents();
+			recentsLoaded = true;
+		}
+
+		const current = matchingNavItem($page.url.pathname);
+		if (!current) return;
+
+		const previous = untrack(() => recentHrefs);
+		const next = [current.href, ...previous.filter((href) => href !== current.href)].slice(0, 4);
+		if (next.join('|') === previous.join('|')) return;
+
+		recentHrefs = next;
+		localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+	});
+
+	const recentItems = $derived(
+		recentHrefs
+			.filter((href) => !isActive(href))
+			.map((href) => allNavItems.find((item) => item.href === href))
+			.filter((item): item is NavItem => Boolean(item))
+			.slice(0, 3),
+	);
 </script>
 
 <nav
-	class="flex items-center justify-center border-t border-sidebar-border bg-sidebar px-2 shrink-0"
+	class="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-40 flex justify-center sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2"
 	aria-label={m.nav_main()}
 >
 	<!-- Desktop: all items centered -->
 	<Tooltip.Provider delayDuration={150}>
-		<div class="hidden sm:flex items-center gap-1 py-2">
+		<div
+			class="hidden items-end gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/80 px-2.5 py-2 shadow-2xl shadow-black/10 backdrop-blur-xl sm:flex"
+		>
 			{#each allNavItems as item}
-				{@const active = $page.url.pathname === item.href}
+				{@const active = isActive(item.href)}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						{#snippet child({ props })}
@@ -59,7 +120,7 @@
 								{...triggerProps}
 								href={item.href}
 								aria-label={item.label}
-								class="flex items-center justify-center w-10 h-10 rounded-lg transition-colors
+								class="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110
 									{active
 									? 'bg-sidebar-accent text-sidebar-accent-foreground'
 									: 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
@@ -72,7 +133,29 @@
 				</Tooltip.Root>
 			{/each}
 
-			<Separator orientation="vertical" class="h-6 bg-sidebar-border mx-1" />
+			{#if recentItems.length > 0}
+				<Separator orientation="vertical" class="mx-1 h-6 bg-sidebar-border" />
+				{#each recentItems as item}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								{@const { type: _triggerType, ...triggerProps } = props}
+								<a
+									{...triggerProps}
+									href={item.href}
+									aria-label={item.label}
+									class="flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-foreground/75 transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+								>
+									<item.icon class="h-4.5 w-4.5 shrink-0" />
+								</a>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="top" sideOffset={10}>{item.label}</Tooltip.Content>
+					</Tooltip.Root>
+				{/each}
+			{/if}
+
+			<Separator orientation="vertical" class="mx-1 h-6 bg-sidebar-border" />
 
 			<Tooltip.Root>
 				<Tooltip.Trigger>
@@ -82,7 +165,7 @@
 							{...triggerProps}
 							href="/logout"
 							aria-label={m.nav_logout()}
-							class="flex items-center justify-center w-10 h-10 rounded-lg transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+							class="flex h-10 w-10 items-center justify-center rounded-xl text-sidebar-foreground transition-all duration-150 ease-out hover:-translate-y-1 hover:scale-110 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
 						>
 							<LogOut class="w-5 h-5 shrink-0" />
 						</a>
@@ -94,13 +177,15 @@
 	</Tooltip.Provider>
 
 	<!-- Mobile: 3 pinned + overflow menu button -->
-	<div class="flex sm:hidden items-center w-full py-2 px-2">
+	<div
+		class="flex w-full items-center gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-2 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:hidden"
+	>
 		{#each pinnedItems as item}
-			{@const active = $page.url.pathname === item.href}
+			{@const active = isActive(item.href)}
 			<a
 				href={item.href}
 				aria-label={item.label}
-				class="flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-colors text-xs font-medium
+				class="flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1 text-xs font-medium transition-colors
 					{active
 					? 'text-sidebar-accent-foreground bg-sidebar-accent'
 					: 'text-sidebar-foreground hover:text-sidebar-accent-foreground'}"
@@ -115,7 +200,7 @@
 			variant="ghost"
 			onclick={() => (overflowOpen = true)}
 			aria-label={m.nav_more_options()}
-			class="h-auto flex-1 flex-col gap-1 py-1 text-xs text-sidebar-foreground hover:bg-transparent hover:text-sidebar-accent-foreground"
+			class="h-auto flex-1 flex-col gap-1 rounded-xl py-1 text-xs text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
 		>
 			<EllipsisVertical class="w-5 h-5 shrink-0" />
 			<span>{m.nav_more()}</span>

@@ -22,35 +22,37 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-xs">
+	<Dialog.Content
+		class="!left-3 !top-3 !h-[calc(100dvh-1.5rem)] !w-[calc(100vw-1.5rem)] !max-w-none !translate-x-0 !translate-y-0 gap-5 rounded-2xl p-5 sm:!left-1/2 sm:!top-1/2 sm:!h-auto sm:!w-full sm:!max-w-md sm:!-translate-x-1/2 sm:!-translate-y-1/2"
+	>
 		<Dialog.Header>
 			<Dialog.Title>{m.nav_title()}</Dialog.Title>
 		</Dialog.Header>
-		<nav class="flex flex-col gap-1 py-2">
+		<nav class="grid grid-cols-3 gap-3">
 			{#each items as item}
 				{@const active = $page.url.pathname === item.href}
 				<a
 					href={item.href}
 					onclick={() => (open = false)}
-					class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+					class="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border px-2 text-center text-xs font-medium transition-colors
 						{active
-						? 'bg-sidebar-accent text-sidebar-accent-foreground'
-						: 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
+						? 'border-sidebar-accent bg-sidebar-accent text-sidebar-accent-foreground'
+						: 'border-sidebar-border/70 bg-background/70 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'}"
 				>
-					<item.icon class="w-5 h-5 shrink-0" />
-					{item.label}
+					<item.icon class="h-6 w-6 shrink-0" />
+					<span class="max-w-full truncate">{item.label}</span>
 				</a>
 			{/each}
 
-			<Separator class="my-1 bg-sidebar-border" />
+			<Separator class="col-span-3 my-1 bg-sidebar-border" />
 
 			<a
 				href="/logout"
 				onclick={() => (open = false)}
-				class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+				class="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sidebar-border/70 bg-background/70 px-2 text-center text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
 			>
-				<LogOut class="w-5 h-5 shrink-0" />
-				{m.nav_logout()}
+				<LogOut class="h-6 w-6 shrink-0" />
+				<span class="max-w-full truncate">{m.nav_logout()}</span>
 			</a>
 		</nav>
 	</Dialog.Content>

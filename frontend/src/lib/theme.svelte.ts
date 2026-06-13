@@ -1,4 +1,4 @@
-import { onMount } from 'svelte';
+import { useMediaQuery } from '$lib/use-mobile.svelte';
 
 let isDark = $state(false);
 
@@ -7,16 +7,10 @@ export function getIsDark() {
 }
 
 export function initTheme() {
-	onMount(() => {
-		const mq = window.matchMedia('(prefers-color-scheme: dark)');
-		isDark = mq.matches;
+	const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 
-		const onChange = (e: MediaQueryListEvent) => {
-			isDark = e.matches;
-			document.documentElement.classList.toggle('dark', e.matches);
-		};
-
-		mq.addEventListener('change', onChange);
-		return () => mq.removeEventListener('change', onChange);
+	$effect(() => {
+		isDark = prefersDark.current;
+		document.documentElement.classList.toggle('dark', prefersDark.current);
 	});
 }

@@ -4,6 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { parseDate } from '@internationalized/date';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import { useIsMobile } from '$lib/use-mobile.svelte';
 	import { cn } from '$lib/utils';
 
 	let {
@@ -20,17 +21,7 @@
 		[key: string]: unknown;
 	} = $props();
 
-	let isMobile = $state(false);
-
-	$effect(() => {
-		const mq = window.matchMedia('(hover: none) and (pointer: coarse)');
-		isMobile = mq.matches;
-		const handler = (e: MediaQueryListEvent) => {
-			isMobile = e.matches;
-		};
-		mq.addEventListener('change', handler);
-		return () => mq.removeEventListener('change', handler);
-	});
+	const isMobile = useIsMobile();
 
 	const calDate = $derived.by(() => {
 		try {
@@ -41,7 +32,7 @@
 	});
 </script>
 
-{#if isMobile}
+{#if isMobile.current}
 	<Input
 		type="date"
 		{name}

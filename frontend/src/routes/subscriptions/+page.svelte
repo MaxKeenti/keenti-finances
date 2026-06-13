@@ -4,6 +4,7 @@
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
+	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
 	import * as Alert from '$lib/components/ui/alert';
@@ -56,11 +57,10 @@
 	let { data }: { data: PageData } = $props();
 
 	let dialogOpen = $state(false);
-	let deleteDialogOpen = $state(false);
 	let memberDialogOpen = $state(false);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
-	let deleteTargetName = $state('');
+	let deleteForm = $state<HTMLFormElement | null>(null);
 	let memberTargetSub = $state<Subscription | null>(null);
 	let selectedContactId = $state('');
 
@@ -114,10 +114,15 @@
 		dialogOpen = true;
 	}
 
-	function openDelete(sub: Subscription) {
+	async function openDelete(sub: Subscription) {
 		deleteTargetId = sub.id;
-		deleteTargetName = sub.name;
-		deleteDialogOpen = true;
+		await submitWithAdaptiveConfirm(deleteForm, {
+			title: m.subscriptions_delete_title(),
+			description: `${m.delete_confirm_prefix()} ${sub.name}${m.delete_confirm_suffix()}`,
+			confirmLabel: m.common_delete(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	function openMembers(sub: Subscription) {
@@ -358,43 +363,29 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Delete confirmation dialog -->
-<Dialog.Root bind:open={deleteDialogOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{m.subscriptions_delete_title()}</Dialog.Title>
-			<Dialog.Description>
-				{m.delete_confirm_prefix()} <strong>{deleteTargetName}</strong>{m.delete_confirm_suffix()}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			method="POST"
-			action="?/delete"
-			use:kitEnhance={async () => {
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						deleteDialogOpen = false;
-						toast.success(m.subscriptions_trashed());
-						await update();
-					} else {
-						const msg =
-							(result as { data?: { message?: string } }).data?.message ??
-							m.subscriptions_delete_failed();
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<input type="hidden" name="id" value={deleteTargetId} />
-			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					{m.common_cancel()}
-				</Button>
-				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+<form
+	bind:this={deleteForm}
+	method="POST"
+	action="?/delete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				deleteTargetId = null;
+				toast.success(m.subscriptions_trashed());
+				await update();
+			} else {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ??
+					m.subscriptions_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+>
+	<input type="hidden" name="id" value={deleteTargetId} />
+</form>
 
 <!-- Member management dialog (SHARED subscriptions only) -->
 <Dialog.Root bind:open={memberDialogOpen}>

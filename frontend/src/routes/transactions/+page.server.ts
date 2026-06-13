@@ -119,8 +119,19 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 		]);
 
-		if (txRes.ok) transactionPage = await txRes.json();
-		else console.error(`[transactions] load: backend returned ${txRes.status} for transactions`);
+		if (txRes.ok) {
+			const body = await txRes.json();
+			if (body && Array.isArray(body.items)) {
+				transactionPage = body;
+			} else {
+				// Defensive: an older/mismatched backend returns a bare array instead of a
+				// paginated TransactionPageResponse. Keep the empty default so the page renders
+				// the empty state rather than crashing on `transactions.length`.
+				console.error('[transactions] load: unexpected transactions response shape (no items array)');
+			}
+		} else {
+			console.error(`[transactions] load: backend returned ${txRes.status} for transactions`);
+		}
 
 		if (catRes.ok) categories = await catRes.json();
 		else console.error(`[transactions] load: backend returned ${catRes.status} for categories`);
@@ -137,7 +148,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
 		zod4(transactionSchema),
 		);
 
-	return { transactions: transactionPage.items, transactionPage, categories, contacts, form };
+	return { transactions: transactionPage.items ?? [], transactionPage, categories, contacts, form };
 };
 
 export const actions: Actions = {
@@ -264,5 +275,46 @@ export const actions: Actions = {
 
 		console.log(`[transactions] delete: success — id: ${id}`);
 		return {};
+	},
+
+	bulkDelete: async ({ request, fetch, cookies }) => {
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
+		const data = await request.formData();
+		const ids = Array.from(
+			new Set(
+				data
+					.getAll('id')
+					.map((value) => String(value))
+					.filter(Boolean),
+			),
+		);
+
+		if (ids.length === 0) return fail(400, { message: m.error_missing_transaction_id() });
+
+		try {
+			for (const id of ids) {
+				const res = await fetch(`${BACKEND}/api/transactions/${id}`, {
+					method: 'DELETE',
+					headers: authHeaders,
+				});
+
+				if (res.status === 404) return fail(404, { message: m.error_transaction_not_found() });
+				if (!res.ok) {
+					console.error(`[transactions] bulkDelete: backend error ${res.status} for id ${id}`);
+					return fail(502, { message: m.error_unexpected_bulk_delete_transactions() });
+				}
+			}
+		} catch {
+			console.error('[transactions] bulkDelete: backend unreachable');
+			return fail(502, { message: m.error_backend_unreachable() });
+		}
+
+		console.log(`[transactions] bulkDelete: success — count: ${ids.length}`);
+		return { deleted: ids.length };
 	},
 };

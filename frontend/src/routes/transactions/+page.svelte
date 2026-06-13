@@ -5,6 +5,7 @@
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import {
 		createTable,
 		getCoreRowModel,
@@ -17,6 +18,8 @@
 	import ArrowUpDownIcon from '@lucide/svelte/icons/arrow-up-down';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
+	import XIcon from '@lucide/svelte/icons/x';
 	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Form from '$lib/components/ui/form';
@@ -24,6 +27,7 @@
 	import * as Empty from '$lib/components/ui/empty';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
@@ -48,10 +52,11 @@
 	let { data }: { data: PageData } = $props();
 
 	let dialogOpen = $state(false);
-	let deleteDialogOpen = $state(false);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
-	let deleteTargetDesc = $state('');
+	let deleteForm = $state<HTMLFormElement | null>(null);
+	let bulkDeleteForm = $state<HTMLFormElement | null>(null);
+	let selectedTxIds = $state<Set<number>>(new Set());
 
 	const today = new Date().toISOString().split('T')[0];
 
@@ -109,10 +114,16 @@
 		dialogOpen = true;
 	}
 
-	function openDelete(tx: { id: number; description: string | null; amount: number; direction: string }) {
+	async function openDelete(tx: { id: number; description: string | null; amount: number; direction: string }) {
+		const description = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS');
 		deleteTargetId = tx.id;
-		deleteTargetDesc = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS');
-		deleteDialogOpen = true;
+		await submitWithAdaptiveConfirm(deleteForm, {
+			title: m.transactions_delete_title(),
+			description: `${m.delete_confirm_prefix()} ${description}${m.delete_confirm_suffix()}`,
+			confirmLabel: m.common_delete(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	const fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
@@ -163,6 +174,13 @@
 			renderFallbackValue: null,
 		}),
 	);
+	const visibleTxIds = $derived(table.getRowModel().rows.map((row) => row.original.id));
+	const allVisibleSelected = $derived(
+		visibleTxIds.length > 0 && visibleTxIds.every((id) => selectedTxIds.has(id)),
+	);
+	const someVisibleSelected = $derived(
+		visibleTxIds.some((id) => selectedTxIds.has(id)) && !allVisibleSelected,
+	);
 	const currentPage = $derived(data.transactionPage.totalPages === 0 ? 0 : data.transactionPage.pageIndex + 1);
 	const pageRangeStart = $derived(
 		data.transactionPage.totalItems === 0
@@ -208,6 +226,37 @@
 	function nextSortDirection(sortBy: TransactionSortBy): TransactionSortDirection {
 		if (data.transactionPage.sortBy !== sortBy) return sortBy === 'transactionDate' ? 'desc' : 'asc';
 		return data.transactionPage.sortDirection === 'asc' ? 'desc' : 'asc';
+	}
+
+	function toggleSelectedTx(id: number) {
+		const next = new Set(selectedTxIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedTxIds = next;
+	}
+
+	function setVisibleSelection(selected: boolean) {
+		const next = new Set(selectedTxIds);
+		for (const id of visibleTxIds) {
+			if (selected) next.add(id);
+			else next.delete(id);
+		}
+		selectedTxIds = next;
+	}
+
+	function clearSelection() {
+		selectedTxIds = new Set();
+	}
+
+	async function confirmBulkDelete() {
+		if (selectedTxIds.size === 0) return;
+		await submitWithAdaptiveConfirm(bulkDeleteForm, {
+			title: m.transactions_bulk_delete_title(),
+			description: m.transactions_bulk_delete_description({ count: selectedTxIds.size }),
+			confirmLabel: m.common_delete(),
+			cancelLabel: m.common_cancel(),
+			destructive: true,
+		});
 	}
 
 	const filteredCategories = $derived(
@@ -296,33 +345,49 @@
 		<div class="grid gap-4 md:hidden">
 			{#each table.getRowModel().rows as row (row.original.id)}
 				{@const tx = row.original}
-				<a href="/transactions/{tx.id}" class="block">
-					<Card.Root class="transition-colors hover:bg-muted/50">
-						<Card.Content class="pt-4">
-							<div class="flex items-start justify-between gap-2">
-								<div class="flex-1 min-w-0">
-									<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
-									<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
+				{@const selected = selectedTxIds.has(tx.id)}
+				<div class="relative">
+					<div class="absolute left-3 top-4 z-[1]">
+						<Checkbox
+							checked={selected}
+							onclick={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								toggleSelectedTx(tx.id);
+							}}
+							aria-label={m.transactions_select_transaction({
+								description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS'),
+							})}
+						/>
+					</div>
+					<a href="/transactions/{tx.id}" class="block">
+						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
+							<Card.Content class="pt-4 pl-10">
+								<div class="flex items-start justify-between gap-2">
+									<div class="flex-1 min-w-0">
+										<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
+										<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
+									</div>
+									<span
+										class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
+											? 'text-green-600 dark:text-green-400'
+											: 'text-red-600 dark:text-red-400'}"
+									>
+										{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
+									</span>
 								</div>
-								<span
-									class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
-										? 'text-green-600 dark:text-green-400'
-										: 'text-red-600 dark:text-red-400'}"
-								>
-									{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-								</span>
-							</div>
-							<div class="flex items-center gap-2 mt-2">
-								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
-								{/if}
-								{#if tx.contactName}
-									<span class="text-xs text-muted-foreground">{tx.contactName}</span>
-								{/if}
-							</div>
-						</Card.Content>
-					</Card.Root>
-				</a>
+								<div class="flex items-center gap-2 mt-2">
+									{#if tx.categoryName}
+										<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
+									{/if}
+									{#if tx.contactName}
+										<span class="text-xs text-muted-foreground">{tx.contactName}</span>
+									{/if}
+								</div>
+							</Card.Content>
+						</Card.Root>
+					</a>
+				</div>
 			{/each}
 		</div>
 
@@ -331,6 +396,14 @@
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
+						<Table.Head class="w-10">
+							<Checkbox
+								checked={allVisibleSelected}
+								indeterminate={someVisibleSelected}
+								onclick={() => setVisibleSelection(!allVisibleSelected)}
+								aria-label={m.transactions_select_page()}
+							/>
+						</Table.Head>
 						<Table.Head>
 							<Button
 								variant="ghost"
@@ -412,7 +485,16 @@
 				<Table.Body>
 					{#each table.getRowModel().rows as row (row.original.id)}
 						{@const tx = row.original}
-						<Table.Row>
+						<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
+							<Table.Cell>
+								<Checkbox
+									checked={selectedTxIds.has(tx.id)}
+									onclick={() => toggleSelectedTx(tx.id)}
+									aria-label={m.transactions_select_transaction({
+										description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS'),
+									})}
+								/>
+							</Table.Cell>
 							<Table.Cell class="whitespace-nowrap">{tx.transactionDate}</Table.Cell>
 							<Table.Cell class="text-muted-foreground">{tx.description ?? '—'}</Table.Cell>
 							<Table.Cell
@@ -472,6 +554,28 @@
 		</div>
 	{/if}
 </div>
+
+{#if selectedTxIds.size > 0}
+	<div
+		class="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 flex justify-center sm:bottom-[calc(env(safe-area-inset-bottom)+5rem)]"
+	>
+		<div
+			class="flex w-full max-w-md items-center justify-between gap-3 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-3 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl"
+		>
+			<p class="text-sm font-medium">{m.transactions_selected({ count: selectedTxIds.size })}</p>
+			<div class="flex items-center gap-2">
+				<Button variant="ghost" size="sm" onclick={clearSelection}>
+					<XIcon data-icon="inline-start" />
+					{m.common_clear()}
+				</Button>
+				<Button variant="destructive" size="sm" onclick={confirmBulkDelete}>
+					<Trash2Icon data-icon="inline-start" />
+					{m.common_delete()}
+				</Button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Create / Edit dialog -->
 <Dialog.Root bind:open={dialogOpen}>
@@ -611,40 +715,58 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Delete confirmation dialog -->
-<Dialog.Root bind:open={deleteDialogOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>{m.transactions_delete_title()}</Dialog.Title>
-			<Dialog.Description>
-				{m.delete_confirm_prefix()} <strong>{deleteTargetDesc}</strong>{m.delete_confirm_suffix()}
-			</Dialog.Description>
-		</Dialog.Header>
-		<form
-			method="POST"
-			action="?/delete"
-			use:kitEnhance={async () => {
-				return async ({ result, update }) => {
-					if (result.type === 'success') {
-						deleteDialogOpen = false;
-						toast.success(m.transactions_trashed());
-						await update();
-					} else {
-						const msg =
-							(result as { data?: { message?: string } }).data?.message ??
-							m.transactions_delete_failed();
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<input type="hidden" name="id" value={deleteTargetId} />
-			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => (deleteDialogOpen = false)}>
-					{m.common_cancel()}
-				</Button>
-				<Button type="submit" variant="destructive">{m.common_delete()}</Button>
-			</Dialog.Footer>
-		</form>
-	</Dialog.Content>
-</Dialog.Root>
+<form
+	bind:this={deleteForm}
+	method="POST"
+	action="?/delete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				if (deleteTargetId != null) {
+					const next = new Set(selectedTxIds);
+					next.delete(deleteTargetId);
+					selectedTxIds = next;
+				}
+				deleteTargetId = null;
+				toast.success(m.transactions_trashed());
+				await update();
+			} else {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ??
+					m.transactions_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+>
+	<input type="hidden" name="id" value={deleteTargetId} />
+</form>
+
+<form
+	bind:this={bulkDeleteForm}
+	method="POST"
+	action="?/bulkDelete"
+	class="hidden"
+	aria-hidden="true"
+	use:kitEnhance={async () => {
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				const deleted = (result.data as { deleted?: number } | undefined)?.deleted ?? selectedTxIds.size;
+				clearSelection();
+				toast.success(m.transactions_bulk_trashed({ count: deleted }));
+				await update();
+			} else {
+				const msg =
+					(result as { data?: { message?: string } }).data?.message ??
+					m.transactions_bulk_delete_failed();
+				toast.error(msg);
+			}
+		};
+	}}
+>
+	{#each selectedTxIds as txId}
+		<input type="hidden" name="id" value={txId} />
+	{/each}
+</form>
