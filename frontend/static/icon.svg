@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+	<title>Keenti</title>
+	<rect width="100" height="100" rx="22" fill="#ffc700" />
+	<g fill="none" stroke="#614a00" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+		<line x1="35" y1="24" x2="35" y2="76" />
+		<path d="M70 24 L41 50 L72 76" />
+	</g>
+</svg>
