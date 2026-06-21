@@ -7,6 +7,9 @@
 		CreditCard,
 		HandCoins,
 		Settings,
+		Layers,
+		Users,
+		Trash2,
 		LogOut,
 		EllipsisVertical
 	} from '@lucide/svelte';
@@ -35,6 +38,12 @@
 			activeHrefs: ['/categories', '/contacts', '/trash'],
 		}
 	];
+	const managementNavItems: NavItem[] = [
+		{ href: '/categories', label: m.nav_categories(), icon: Layers },
+		{ href: '/contacts', label: m.nav_contacts(), icon: Users },
+		{ href: '/trash', label: m.nav_trash(), icon: Trash2 },
+	];
+	const menuItems: NavItem[] = [...dockNavItems, ...managementNavItems];
 	const defaultPinnedHrefs = ['/transactions', '/subscriptions', '/debts'];
 
 	function normalizePinnedHrefs(csv: string | undefined) {
@@ -54,9 +63,6 @@
 		pinnedHrefs
 			.map((href) => dockNavItems.find((item) => item.href === href))
 			.filter((item): item is NavItem => Boolean(item)),
-	);
-	const overflowItems = $derived(
-		dockNavItems.filter((item) => !pinnedHrefs.includes(item.href))
 	);
 	const dockMagnification = $derived($page.data.preferences?.dockMagnification ?? true);
 
@@ -263,4 +269,4 @@
 	</div>
 </nav>
 
-<DockOverflowDialog bind:open={overflowOpen} items={overflowItems} />
+<DockOverflowDialog bind:open={overflowOpen} items={menuItems} />
