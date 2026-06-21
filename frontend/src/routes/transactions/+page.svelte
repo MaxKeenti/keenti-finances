@@ -366,7 +366,10 @@
 		</Empty.Root>
 	{:else}
 		<!-- Mobile card grid (< md) -->
-		<div class="grid gap-4 md:hidden">
+		<!-- grid-cols-1 (minmax(0,1fr)) keeps the single column from growing to the
+		     cards' max-content width; without it the truncated (nowrap) descriptions
+		     blow the track past the viewport and the page overflows horizontally. -->
+		<div class="grid grid-cols-1 gap-4 md:hidden">
 			{#each table.getRowModel().rows as row (row.original.id)}
 				{@const tx = row.original}
 				{@const selected = selectedTxIds.has(tx.id)}
