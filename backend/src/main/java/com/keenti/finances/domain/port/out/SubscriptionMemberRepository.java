@@ -6,7 +6,7 @@ import java.util.Optional;
 
 public interface SubscriptionMemberRepository {
     List<SubscriptionMember> findBySubscriptionId(Long subscriptionId);
-    Optional<SubscriptionMember> findById(Long id);
+    Optional<SubscriptionMember> findBySubscriptionIdAndId(Long subscriptionId, Long id);
     SubscriptionMember save(SubscriptionMember member);
     void deleteById(Long id);
     void updateShareAmounts(Long subscriptionId, java.math.BigDecimal shareAmount);

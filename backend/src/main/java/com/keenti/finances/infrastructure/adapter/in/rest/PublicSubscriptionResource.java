@@ -37,14 +37,14 @@ public class PublicSubscriptionResource {
     public Response getByToken(@PathParam("token") String token) {
         var result = subscriptionUseCase.getByToken(token);
         if (result.isEmpty()) {
-            LOG.infof("public.subscription.token.notfound token=%s", token);
+            LOG.info("public.subscription.notfound");
             return Response.status(Response.Status.NOT_FOUND)
                 .entity("{\"error\":\"Subscription not found\"}")
                 .build();
         }
 
         Subscription sub = result.get();
-        LOG.infof("public.subscription.token.found token=%s subscriptionId=%d", token, sub.getId());
+        LOG.infof("public.subscription.found subscriptionId=%d", sub.getId());
 
         List<SubscriptionMember> members = subscriptionUseCase.listMembers(sub.getId());
         List<PaymentRecord> allPayments = paymentRecordUseCase.listBySubscription(sub.getId());

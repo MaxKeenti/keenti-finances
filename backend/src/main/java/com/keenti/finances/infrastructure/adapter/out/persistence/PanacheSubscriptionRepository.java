@@ -8,6 +8,7 @@ import com.keenti.finances.infrastructure.persistence.HibernateSessions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,14 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
     public Optional<Subscription> findById(Long id) {
         return SubscriptionEntity.<SubscriptionEntity>find("id = ?1", id)
             .firstResultOptional().map(this::toDomain);
+    }
+
+    @Override
+    public Optional<Subscription> findByIdForUpdate(Long id) {
+        return SubscriptionEntity.<SubscriptionEntity>find("id = ?1", id)
+            .withLock(LockModeType.PESSIMISTIC_WRITE)
+            .firstResultOptional()
+            .map(this::toDomain);
     }
 
     @Override

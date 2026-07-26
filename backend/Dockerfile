@@ -11,7 +11,7 @@ COPY mvnw pom.xml ./
 RUN ./mvnw dependency:go-offline -q
 
 COPY src/ src/
-RUN ./mvnw package -DskipTests -q
+RUN ./mvnw package -q
 
 # Stage 2: runtime
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24

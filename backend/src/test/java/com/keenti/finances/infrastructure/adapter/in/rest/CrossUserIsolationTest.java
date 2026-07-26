@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 
@@ -101,5 +102,93 @@ class CrossUserIsolationTest {
                 .statusCode(200)
                 .body("name", everyItem(not(is(aliceName))))
                 .body("name", org.hamcrest.Matchers.hasItem(bobName));
+    }
+
+    @Test
+    void subscriptionMembers_areNotVisibleOrDeletableAcrossUsers() {
+        long aliceContactId = createContact(ALICE, "Alice Member " + System.nanoTime());
+        long aliceSubscriptionId = createSharedSubscription(ALICE, "Alice Shared " + System.nanoTime());
+        long aliceMemberId = addMember(ALICE, aliceSubscriptionId, aliceContactId);
+        long bobSubscriptionId = createSharedSubscription(BOB, "Bob Shared " + System.nanoTime());
+
+        given()
+                .header("X-WorkOS-User-Id", BOB)
+                .when().get("/api/subscriptions/{id}/members", aliceSubscriptionId)
+                .then().statusCode(404);
+
+        given()
+                .header("X-WorkOS-User-Id", BOB)
+                .when().delete("/api/subscriptions/{id}/members/{memberId}",
+                        bobSubscriptionId, aliceMemberId)
+                .then().statusCode(404);
+
+        given()
+                .header("X-WorkOS-User-Id", ALICE)
+                .when().get("/api/subscriptions/{id}/members", aliceSubscriptionId)
+                .then()
+                .statusCode(200)
+                .body("id", hasItem((int) aliceMemberId));
+    }
+
+    @Test
+    void publicSubscription_membersRemainAccessibleByCapabilityToken() {
+        long contactId = createContact(ALICE, "Public Member " + System.nanoTime());
+        long subscriptionId = createSharedSubscription(ALICE, "Public Shared " + System.nanoTime());
+        addMember(ALICE, subscriptionId, contactId);
+
+        String token = given()
+                .header("X-WorkOS-User-Id", ALICE)
+                .when().get("/api/subscriptions/{id}", subscriptionId)
+                .then()
+                .statusCode(200)
+                .extract().jsonPath().getString("tokenUuid");
+
+        given()
+                .when().get("/api/public/subscriptions/{token}", token)
+                .then()
+                .statusCode(200)
+                .body("members.size()", is(1));
+    }
+
+    private static long createContact(String userId, String name) {
+        return given()
+                .header("X-WorkOS-User-Id", userId)
+                .contentType(ContentType.JSON)
+                .body("{\"name\":\"" + name + "\"}")
+                .when().post("/api/contacts")
+                .then()
+                .statusCode(201)
+                .extract().jsonPath().getLong("id");
+    }
+
+    private static long createSharedSubscription(String userId, String name) {
+        return given()
+                .header("X-WorkOS-User-Id", userId)
+                .contentType(ContentType.JSON)
+                .body("""
+                        {
+                          "name": "%s",
+                          "cost": 100.00,
+                          "billingCycle": "MONTHLY",
+                          "type": "SHARED",
+                          "nextBillingDate": "2026-07-26",
+                          "ownerParticipates": true
+                        }
+                        """.formatted(name))
+                .when().post("/api/subscriptions")
+                .then()
+                .statusCode(201)
+                .extract().jsonPath().getLong("id");
+    }
+
+    private static long addMember(String userId, long subscriptionId, long contactId) {
+        return given()
+                .header("X-WorkOS-User-Id", userId)
+                .contentType(ContentType.JSON)
+                .body("{\"contactId\":" + contactId + "}")
+                .when().post("/api/subscriptions/{id}/members", subscriptionId)
+                .then()
+                .statusCode(201)
+                .extract().jsonPath().getLong("id");
     }
 }

@@ -60,7 +60,10 @@ public class BillingService {
      */
     @Transactional
     public OptionalInt generateForSubscription(Long subscriptionId) {
-        Optional<Subscription> found = subscriptionRepository.findById(subscriptionId);
+        // Serialize billing generation per subscription. The database uniqueness
+        // constraints are the final guard, while this lock keeps concurrent
+        // requests idempotent instead of surfacing a constraint violation.
+        Optional<Subscription> found = subscriptionRepository.findByIdForUpdate(subscriptionId);
         if (found.isEmpty()) {
             return OptionalInt.empty();
         }

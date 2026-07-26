@@ -156,7 +156,7 @@ public class SubscriptionService implements SubscriptionUseCase {
     public void removeMember(Long subscriptionId, Long memberId) {
         Subscription sub = subscriptionRepository.findById(subscriptionId)
             .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
-        subscriptionMemberRepository.findById(memberId)
+        subscriptionMemberRepository.findBySubscriptionIdAndId(subscriptionId, memberId)
             .orElseThrow(() -> new NotFoundException("Member not found: " + memberId));
         subscriptionMemberRepository.deleteById(memberId);
         List<SubscriptionMember> remaining = subscriptionMemberRepository.findBySubscriptionId(subscriptionId);
@@ -173,6 +173,8 @@ public class SubscriptionService implements SubscriptionUseCase {
 
     @Override
     public List<SubscriptionMember> listMembers(Long subscriptionId) {
+        subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
         List<SubscriptionMember> members = subscriptionMemberRepository.findBySubscriptionId(subscriptionId);
         LOG.infof("subscription.member.list subscriptionId=%d count=%d", subscriptionId, members.size());
         return members;
@@ -181,7 +183,7 @@ public class SubscriptionService implements SubscriptionUseCase {
     @Override
     public Optional<Subscription> getByToken(String tokenUuid) {
         Optional<Subscription> result = subscriptionRepository.findByTokenUuid(tokenUuid);
-        LOG.infof("subscription.token.lookup token=%s found=%b", tokenUuid, result.isPresent());
+        LOG.infof("subscription.token.lookup found=%b", result.isPresent());
         return result;
     }
 

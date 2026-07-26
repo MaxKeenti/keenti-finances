@@ -8,6 +8,7 @@ import java.util.Optional;
 public interface SubscriptionRepository {
     List<Subscription> findAll();
     Optional<Subscription> findById(Long id);
+    Optional<Subscription> findByIdForUpdate(Long id);
     Subscription save(Subscription subscription);
     Subscription update(Subscription subscription);
     void deleteById(Long id);

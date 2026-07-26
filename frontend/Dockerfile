@@ -10,9 +10,8 @@ WORKDIR /app
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/bun.lock ./bun.lock
-RUN npm install --omit=dev --ignore-scripts 2>/dev/null || true
+RUN npm install --omit=dev --ignore-scripts
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 CMD ["node", "build/index.js"]
-

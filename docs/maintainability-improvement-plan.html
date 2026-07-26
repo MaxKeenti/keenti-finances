@@ -1,0 +1,2273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prioritized security, reliability, readability, and maintainability improvement plan for Keenti Finances.">
+  <title>Keenti Finances · Improvement Plan</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #14201c;
+      --muted: #5d6a65;
+      --paper: #f5f3ec;
+      --surface: #fffdf8;
+      --line: #d9ddd4;
+      --green: #155b48;
+      --green-soft: #dcece5;
+      --amber: #8b5708;
+      --amber-soft: #f8e8c8;
+      --red: #9c3329;
+      --red-soft: #f7ded9;
+      --blue: #315b7d;
+      --blue-soft: #dde9f2;
+      --shadow: 0 18px 50px rgba(30, 48, 41, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(21, 91, 72, 0.11), transparent 28rem),
+        linear-gradient(180deg, #eeefe8 0, var(--paper) 34rem);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.58;
+    }
+
+    a {
+      color: var(--green);
+      text-underline-offset: 0.18em;
+      text-decoration-thickness: 1px;
+    }
+
+    a:hover {
+      text-decoration-thickness: 2px;
+    }
+
+    code {
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #f1f2ec;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.88em;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      padding: 70px 0 42px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 18px;
+      color: var(--green);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 34px;
+      height: 2px;
+      content: "";
+      background: currentColor;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin-top: 0;
+      line-height: 1.12;
+      letter-spacing: -0.03em;
+    }
+
+    h1 {
+      max-width: 870px;
+      margin-bottom: 20px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(3rem, 8vw, 6.8rem);
+      font-weight: 500;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: #35443e;
+      font-size: clamp(1.06rem, 2vw, 1.32rem);
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 30px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid rgba(21, 91, 72, 0.2);
+      border-radius: 999px;
+      color: var(--green);
+      background: rgba(255, 253, 248, 0.74);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .nav-wrap {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      border-block: 1px solid rgba(217, 221, 212, 0.9);
+      background: rgba(245, 243, 236, 0.9);
+      backdrop-filter: blur(14px);
+    }
+
+    .nav {
+      display: flex;
+      gap: 6px;
+      padding: 10px 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .nav a {
+      flex: 0 0 auto;
+      padding: 7px 11px;
+      border-radius: 999px;
+      color: #42504a;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .nav a:hover {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    main {
+      padding: 44px 0 84px;
+    }
+
+    section {
+      scroll-margin-top: 74px;
+      margin-bottom: 70px;
+    }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr);
+      gap: 36px;
+      align-items: end;
+      margin-bottom: 26px;
+    }
+
+    .section-number {
+      margin: 0;
+      color: var(--green);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin-bottom: 8px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      font-weight: 500;
+    }
+
+    .section-intro {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .metric,
+    .panel,
+    .finding,
+    .phase {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      min-height: 160px;
+      padding: 22px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 20px;
+      color: var(--green);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 2.6rem;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      font-weight: 750;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+    }
+
+    .callout {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      margin-top: 18px;
+      padding: 22px 24px;
+      border: 1px solid #d8c28f;
+      border-radius: var(--radius);
+      background: #fff8e8;
+    }
+
+    .callout-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--amber);
+      font-weight: 900;
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .callout.success {
+      border-color: #a8c8bb;
+      background: #eff8f3;
+    }
+
+    .callout.success .callout-mark {
+      background: var(--green);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin: 0 0 18px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .priority {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .p0 {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .p1 {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .p2 {
+      color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .verified {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .findings {
+      display: grid;
+      gap: 16px;
+    }
+
+    .finding {
+      overflow: hidden;
+    }
+
+    .finding summary {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 21px 22px;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .finding summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .finding summary:hover {
+      background: #faf9f4;
+    }
+
+    .finding-id {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--green);
+      background: #f6f7f1;
+      font-size: 0.7rem;
+      font-weight: 900;
+    }
+
+    .finding-title {
+      display: block;
+      font-size: 1.08rem;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .finding-subtitle {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .finding-body {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      padding: 0 22px 24px 84px;
+    }
+
+    .finding-body h4 {
+      margin: 0 0 7px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .finding-body p,
+    .finding-body ul {
+      margin: 0;
+      font-size: 0.91rem;
+    }
+
+    .finding-body ul {
+      padding-left: 1.1rem;
+    }
+
+    .finding-body li + li {
+      margin-top: 5px;
+    }
+
+    .roadmap {
+      position: relative;
+      display: grid;
+      gap: 18px;
+    }
+
+    .roadmap::before {
+      position: absolute;
+      top: 28px;
+      bottom: 28px;
+      left: 27px;
+      width: 2px;
+      content: "";
+      background: var(--line);
+    }
+
+    .phase {
+      position: relative;
+      display: grid;
+      grid-template-columns: 56px 180px minmax(0, 1fr);
+      gap: 22px;
+      padding: 24px;
+    }
+
+    .phase-index {
+      z-index: 1;
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border: 6px solid var(--surface);
+      border-radius: 50%;
+      color: white;
+      background: var(--green);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.35rem;
+    }
+
+    .phase-meta {
+      padding-top: 5px;
+    }
+
+    .phase-meta strong {
+      display: block;
+      font-size: 1.02rem;
+    }
+
+    .phase-meta span {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .phase h3 {
+      margin-bottom: 9px;
+      font-size: 1.3rem;
+    }
+
+    .phase ul {
+      margin: 0;
+      padding-left: 1.15rem;
+    }
+
+    .phase li + li {
+      margin-top: 6px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 840px;
+    }
+
+    th,
+    td {
+      padding: 15px 17px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      background: #f6f5ef;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td {
+      font-size: 0.9rem;
+    }
+
+    td:first-child {
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .acceptance-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .panel {
+      padding: 24px;
+    }
+
+    .panel h3 {
+      margin-bottom: 14px;
+      font-size: 1.15rem;
+    }
+
+    .checklist {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      position: relative;
+      padding-left: 30px;
+    }
+
+    .checklist li + li {
+      margin-top: 11px;
+    }
+
+    .checklist li::before {
+      position: absolute;
+      top: 0.18rem;
+      left: 0;
+      width: 17px;
+      height: 17px;
+      border: 2px solid #8ba79b;
+      border-radius: 4px;
+      content: "";
+      background: #fff;
+    }
+
+    .evidence-list {
+      columns: 2;
+      column-gap: 34px;
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    .evidence-list li {
+      margin-bottom: 9px;
+      break-inside: avoid;
+    }
+
+    .good {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .good .panel {
+      box-shadow: none;
+    }
+
+    .good h3 {
+      color: var(--green);
+    }
+
+    .good p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    footer {
+      padding: 28px 0 50px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .summary-grid,
+      .good {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .section-heading,
+      .finding-body,
+      .phase {
+        grid-template-columns: 1fr;
+      }
+
+      .section-heading {
+        gap: 8px;
+      }
+
+      .finding-body {
+        padding: 0 22px 24px;
+      }
+
+      .phase {
+        padding-left: 24px;
+      }
+
+      .roadmap::before {
+        display: none;
+      }
+
+      .phase-meta {
+        padding-top: 0;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .shell {
+        width: min(100% - 22px, 1180px);
+      }
+
+      .hero {
+        padding-top: 44px;
+      }
+
+      h1 {
+        font-size: 3.2rem;
+      }
+
+      .summary-grid,
+      .acceptance-grid,
+      .good {
+        grid-template-columns: 1fr;
+      }
+
+      .finding summary {
+        grid-template-columns: 42px minmax(0, 1fr);
+      }
+
+      .finding summary .priority {
+        grid-column: 2;
+        justify-self: start;
+      }
+
+      .evidence-list {
+        columns: 1;
+      }
+
+      .footer-inner {
+        display: block;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+        color: black;
+        font-size: 10pt;
+      }
+
+      .shell {
+        width: 100%;
+      }
+
+      .hero {
+        padding-top: 0;
+      }
+
+      h1 {
+        font-size: 38pt;
+      }
+
+      .nav-wrap {
+        display: none;
+      }
+
+      .metric,
+      .panel,
+      .finding,
+      .phase,
+      .table-wrap {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+
+      details:not([open]) > *:not(summary) {
+        display: block;
+      }
+
+      a {
+        color: black;
+        text-decoration: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero shell">
+    <p class="eyebrow">Repository &amp; production audit · July 26, 2026</p>
+    <h1>Make the system safer to change.</h1>
+    <p class="lead">
+      A prioritized improvement plan for Keenti Finances, covering security boundaries,
+      Railway runtime reliability, data integrity, test confidence, query performance,
+      and frontend maintainability.
+    </p>
+    <ul class="hero-meta" aria-label="Audit metadata">
+      <li class="chip">Baseline commit 214816a</li>
+      <li class="chip">Backend · Quarkus / Java 21</li>
+      <li class="chip">Frontend · SvelteKit / Svelte 5</li>
+      <li class="chip">Production · Railway / PostgreSQL 18</li>
+    </ul>
+  </header>
+
+  <div class="nav-wrap">
+    <nav class="nav shell" aria-label="Plan sections">
+      <a href="#summary">Executive summary</a>
+      <a href="#findings">Findings</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#backlog">Backlog</a>
+      <a href="#acceptance">Exit criteria</a>
+      <a href="#strengths">Keep</a>
+      <a href="#evidence">Evidence</a>
+    </nav>
+  </div>
+
+  <main class="shell">
+    <section id="summary">
+      <div class="section-heading">
+        <p class="section-number">01 · Executive summary</p>
+        <div>
+          <h2>Two urgent risks, one clear sequence.</h2>
+          <p class="section-intro">
+            Contain cross-User access and production database disconnects first. Then
+            strengthen release gates and data constraints before doing broad structural refactoring.
+          </p>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <article class="metric">
+          <strong>12</strong>
+          <span>actionable findings</span>
+          <small>Across code, tests, dependencies, and Railway.</small>
+        </article>
+        <article class="metric">
+          <strong>2</strong>
+          <span>P0 workstreams</span>
+          <small>User isolation and production reliability.</small>
+        </article>
+        <article class="metric">
+          <strong>15</strong>
+          <span>Flyway migrations</span>
+          <small>Validated in production; V16 is prepared locally.</small>
+        </article>
+        <article class="metric">
+          <strong>0.22 GB</strong>
+          <span>database disk use</span>
+          <small>No evidence of resource exhaustion.</small>
+        </article>
+      </div>
+
+      <div class="callout" role="note">
+        <div class="callout-mark">!</div>
+        <p>
+          <strong>Important distinction</strong>
+          Railway deploys the intended commit successfully. The runtime incident is caused by
+          PostgreSQL connections becoming stale across sleep/wake cycles, not by a failed build
+          or insufficient CPU, memory, or disk.
+        </p>
+      </div>
+
+      <div class="callout success" role="status">
+        <div class="callout-mark">✓</div>
+        <p>
+          <strong>Implementation update · July 26, 2026</strong>
+          Tenant-scoped member access and token redaction are implemented and tested locally.
+          The production service configuration was updated to disable Postgres sleeping. V16
+          payment idempotency, CI, fail-fast containers, connection validation, and readiness
+          checks are prepared locally but still require a reviewed deployment. A read-only
+          production preflight found zero conflicting payment-record groups, and the local Railway
+          link now targets the correct project. The current Postgres deployment is running; backend
+          and frontend are sleeping on commit <code>214816a</code>. Their deployment artifact
+          metadata predates these configuration and code changes, so reverify the effective sleep
+          and readiness settings after the next reviewed deploy or restart.
+        </p>
+      </div>
+    </section>
+
+    <section id="findings">
+      <div class="section-heading">
+        <p class="section-number">02 · Verified findings</p>
+        <div>
+          <h2>What should be addressed.</h2>
+          <p class="section-intro">
+            Each item includes the observed condition, why it matters, and a concrete target state.
+            Expand a row for detail.
+          </p>
+        </div>
+      </div>
+
+      <ul class="legend" aria-label="Priority legend">
+        <li class="priority p0">P0 · Contain now</li>
+        <li class="priority p1">P1 · Next iteration</li>
+        <li class="priority p2">P2 · Planned cleanup</li>
+        <li class="priority verified">Verified in production</li>
+      </ul>
+
+      <div class="findings">
+        <details class="finding" open>
+          <summary>
+            <span class="finding-id">SEC-01</span>
+            <span>
+              <span class="finding-title">Subscription Member endpoints can cross User boundaries</span>
+              <span class="finding-subtitle">Authorization is checked on the parent inconsistently, while child lookup and deletion use unscoped IDs.</span>
+            </span>
+            <span class="priority p0">P0 · Critical</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Subscription Member listing accepts a Subscription ID without first resolving the scoped parent.
+                Subscription Member deletion verifies the supplied Subscription, but does not verify that
+                <code>memberId</code> belongs to it before deleting by ID.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                A user who learns foreign identifiers could read another user's members or delete
+                a foreign Subscription Member using one of their own Subscription IDs.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Resolve the owned Subscription before every authenticated child operation.</li>
+                <li>Query/delete Subscription Members by both Subscription ID and Subscription Member ID.</li>
+                <li>
+                  Keep the Public Subscription View on an explicit capability-authorized query path:
+                  resolve the token first, then load children for only that resolved Subscription.
+                </li>
+                <li>Add two-User negative integration tests returning 404 and a public-view regression test.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" open>
+          <summary>
+            <span class="finding-id">OPS-01</span>
+            <span>
+              <span class="finding-title">Railway sleep/wake cycles leave stale database connections</span>
+              <span class="finding-subtitle">Frontend failures and Quarkus exceptions line up with PostgreSQL connections being closed underneath the pool.</span>
+            </span>
+            <span class="priority p0">P0 · Critical</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Production logs show repeated backend-unreachable and 500 responses, plus
+                <code>SQLState 08006</code>, EOF, and “connection has been closed” errors. All three
+                services currently have Railway Serverless enabled.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                The application can wake successfully but serve failed requests until invalid pooled
+                connections are discarded. User actions may fail in bursts after idle periods.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Keep PostgreSQL awake; evaluate keeping the backend awake.</li>
+                <li>Validate/recycle connections and retry safe initial reads.</li>
+                <li>Pass a repeatable idle → sleep → wake reliability test.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">DATA-01</span>
+            <span>
+              <span class="finding-title">Payment Record idempotency is enforced only in application code</span>
+              <span class="finding-subtitle">The check-then-insert sequence can race because the intended tuple has no database uniqueness constraint.</span>
+            </span>
+            <span class="priority p1">P1 · High</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Billing checks existence and then inserts a record inside the loop. Migration V4
+                creates no unique index for the Subscription, billing date, and Subscription Member tuple.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Concurrent generation requests can create duplicate payment obligations despite the
+                method's documented idempotency guarantee.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>
+                  Add one new append-only Flyway migration: a unique index on
+                  <code>(subscription_id, billing_date, member_id)</code> for non-null members and
+                  a unique index on <code>(subscription_id, billing_date)</code> where
+                  <code>member_id IS NULL</code>.
+                </li>
+                <li>Fail the migration with a diagnostic query if historical duplicates exist; never edit V4.</li>
+                <li>
+                  Serialize generation by pessimistically locking the owned Subscription before
+                  reading <code>nextBillingDate</code>; retain the indexes as the final invariant.
+                </li>
+                <li>Test concurrent generation against PostgreSQL.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">SEC-02</span>
+            <span>
+              <span class="finding-title">Public subscription capability tokens are written to logs</span>
+              <span class="finding-subtitle">Both the public route and service record the token used to access shared financial information.</span>
+            </span>
+            <span class="priority p0">P0 · Critical</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Token values are interpolated into frontend error messages and backend
+                <code>INFO</code> logs for both successful and failed public subscription lookups.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Anyone with log access may reuse a bearer-style capability URL. Tokens also spread
+                into retained operational data and debugging exports.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Never log raw capability tokens.</li>
+                <li>Correlate with stable event names, HTTP status, and the resolved Subscription ID; do not add a token fingerprint.</li>
+                <li>Document redaction rules for credentials and financial identifiers.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">TEST-01</span>
+            <span>
+              <span class="finding-title">Backend tests do not exercise the production schema path</span>
+              <span class="finding-subtitle">Tests use H2, generate tables automatically, and disable Flyway.</span>
+            </span>
+            <span class="priority p1">P1 · High</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Test configuration selects H2 PostgreSQL mode, uses
+                <code>drop-and-create</code>, and sets <code>quarkus.flyway.migrate-at-start=false</code>.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                PostgreSQL-specific SQL, indexes, filtering behavior, and migration failures can pass
+                tests but break in production.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Run integration tests against ephemeral PostgreSQL.</li>
+                <li>Build the schema exclusively through Flyway in those tests.</li>
+                <li>Keep fast unit tests separate from migration-backed integration tests.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">REL-01</span>
+            <span>
+              <span class="finding-title">Release artifacts can be produced without passing quality gates</span>
+              <span class="finding-subtitle">There is no repository CI workflow, the backend image skips tests, and the frontend runtime install suppresses failures.</span>
+            </span>
+            <span class="priority p1">P1 · High</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                The backend Dockerfile runs Maven with <code>-DskipTests</code>. The frontend uses
+                <code>npm install … || true</code>. No GitHub Actions workflow is present.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Type errors, failed tests, migration incompatibilities, or missing runtime
+                dependencies can reach Railway.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Require backend tests and frontend check/build in CI.</li>
+                <li>Build production images after gates pass.</li>
+                <li>Make dependency installation deterministic and fail-fast.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">PERF-01</span>
+            <span>
+              <span class="finding-title">Response mapping performs N+1 category and contact lookups</span>
+              <span class="finding-subtitle">Production logs confirm repeated service calls while rendering transaction, debt, and subscription responses.</span>
+            </span>
+            <span class="priority p1">P1 · Medium</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                REST mappers call category or contact services inside per-item mapping loops.
+                Railway logs show these repeated lookups for a single page request.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Query count grows with list size, increases latency, and makes logs noisy. It also
+                spreads data-composition behavior across REST resources.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Return projection queries or batch-load related records.</li>
+                <li>Move response composition into focused assemblers/query services.</li>
+                <li>Add query-count or repository-call regression tests.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">OPS-02</span>
+            <span>
+              <span class="finding-title">Deployment health verifies process liveness, not database readiness</span>
+              <span class="finding-subtitle">Railway considers the backend healthy when Quarkus is alive even if database access is broken.</span>
+            </span>
+            <span class="priority p1">P1 · Medium</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                The backend Railway configuration uses <code>/q/health/live</code>. Builds pass this
+                check while later requests fail due to closed database connections.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                A deployment may be marked healthy without being able to serve its core workflows.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Use <code>/q/health/ready</code> for the Railway deploy health check.</li>
+                <li>Confirm readiness includes a meaningful datasource check.</li>
+                <li>Alert on repeated readiness failures.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">FE-01</span>
+            <span>
+              <span class="finding-title">Core Svelte pages are too large and repeat server-side API plumbing</span>
+              <span class="finding-subtitle">The transactions page is 777 lines, with several other route components between 400 and 540 lines.</span>
+            </span>
+            <span class="priority p2">P2 · Medium</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Route components combine data-table configuration, filtering, dialogs, forms,
+                responsive behavior, and presentation. Server load/action files repeatedly rebuild
+                session headers and backend error handling.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Changes require understanding unrelated UI concerns, shared behavior can drift, and
+                regression testing is difficult.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Extract feature components around coherent interactions.</li>
+                <li>Create one typed server-side backend client.</li>
+                <li>Centralize shared DTOs, authorization headers, and error mapping.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">FE-02</span>
+            <span>
+              <span class="finding-title">Frontend behavior has no automated regression suite</span>
+              <span class="finding-subtitle">The project has static checking and builds, but no unit, component, or browser test command.</span>
+            </span>
+            <span class="priority p2">P2 · Medium</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                <code>package.json</code> defines build and check scripts only. No frontend test files
+                or browser-test configuration were found.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Refactoring the largest pages remains risky, particularly for filtering, financial
+                forms, authentication refresh, and error handling.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Add unit tests for pure financial and formatting logic.</li>
+                <li>Add component tests for complex forms and tables.</li>
+                <li>Cover login and one critical financial journey end-to-end.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">DEP-01</span>
+            <span>
+              <span class="finding-title">Frontend dependency audit reports known vulnerabilities</span>
+              <span class="finding-subtitle">The audit baseline reported 15 dependency advisories and should become a tracked release signal.</span>
+            </span>
+            <span class="priority p2">P2 · Medium</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                The frontend dependency audit returned 15 advisories at the audit date. The current
+                version ranges are broad and there is no automated audit gate.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Vulnerable transitive packages may remain unnoticed, while unplanned upgrades can
+                accumulate into a larger migration.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Triage advisories by exploitability and runtime reachability.</li>
+                <li>Upgrade in small, verified groups.</li>
+                <li>Run scheduled audits and block newly introduced critical issues.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding">
+          <summary>
+            <span class="finding-id">OPS-03</span>
+            <span>
+              <span class="finding-title">Operational configuration and logging need cleanup</span>
+              <span class="finding-subtitle">Quarkus ignores one production property, the local CLI targets another project, and backup status needs explicit verification.</span>
+            </span>
+            <span class="priority p2">P2 · Low</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Evidence</h4>
+              <p>
+                Startup warned that <code>quarkus.http.cors</code> was unrecognized; the property is
+                now removed locally. The Railway CLI link originally pointed to
+                <code>anotame-production</code> and was corrected on July 26. A persistent Postgres
+                volume exists, but automated backup policy was not exposed by the read-only audit.
+              </p>
+            </div>
+            <div>
+              <h4>Impact</h4>
+              <p>
+                Warning noise hides meaningful events, and an unrelated local project link increases
+                the chance of running an operational command against the wrong service.
+              </p>
+            </div>
+            <div>
+              <h4>Target state</h4>
+              <ul>
+                <li>Keep healthy startup logs free of ignored configuration warnings.</li>
+                <li>Use the verified Keenti Finances project, environment, and service IDs for every operational command.</li>
+                <li>Confirm scheduled backups and complete a restore drill.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <div class="section-heading">
+        <p class="section-number">03 · Recommended sequence</p>
+        <div>
+          <h2>Reduce risk before refactoring.</h2>
+          <p class="section-intro">
+            The order is intentional: first close security and availability gaps, then create the
+            safety net required to simplify the code confidently.
+          </p>
+        </div>
+      </div>
+
+      <div class="roadmap">
+        <article class="phase">
+          <div class="phase-index">0</div>
+          <div class="phase-meta">
+            <strong>Containment</strong>
+            <span>Immediate · P0</span>
+          </div>
+          <div>
+            <h3>Protect User data and stabilize production</h3>
+            <ul>
+              <li>Fix Subscription Member listing/deletion authorization and add cross-User regression tests.</li>
+              <li>Stop logging public subscription tokens; define a credential-redaction policy.</li>
+              <li>Disable Railway Serverless for PostgreSQL, then run an idle/wake soak test.</li>
+              <li>Use the soak evidence to record whether backend cold starts meet the application's reliability target; do not change backend sleep behavior in this phase.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="phase">
+          <div class="phase-index">1</div>
+          <div class="phase-meta">
+            <strong>Safety net</strong>
+            <span>Next iteration · P1</span>
+          </div>
+          <div>
+            <h3>Make bad changes difficult to ship</h3>
+            <ul>
+              <li>Add CI for backend tests, PostgreSQL/Flyway integration tests, frontend checks, and production builds.</li>
+              <li>Add Payment Record uniqueness with a new Flyway migration and concurrency coverage.</li>
+              <li>Make Docker builds deterministic and fail-fast.</li>
+              <li>Switch Railway's backend health check to readiness.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="phase">
+          <div class="phase-index">2</div>
+          <div class="phase-meta">
+            <strong>Efficiency</strong>
+            <span>Following iteration · P1</span>
+          </div>
+          <div>
+            <h3>Reduce database round trips and operational noise</h3>
+            <ul>
+              <li>Replace per-row service lookups with projections or batched queries.</li>
+              <li>Add query-count expectations for transaction, debt, and subscription lists.</li>
+              <li>Classify logs by actionable event; alert on database disconnect bursts and readiness failures.</li>
+              <li>Clean ignored Quarkus configuration and expected WorkOS inactivity messages.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="phase">
+          <div class="phase-index">3</div>
+          <div class="phase-meta">
+            <strong>Simplification</strong>
+            <span>Planned · P2</span>
+          </div>
+          <div>
+            <h3>Split the frontend along feature boundaries</h3>
+            <ul>
+              <li>Introduce a typed server-side API client with shared authentication and error mapping.</li>
+              <li>Extract the largest route components incrementally, one tested interaction at a time.</li>
+              <li>Centralize DTOs and pure financial/display helpers.</li>
+              <li>Add component and end-to-end coverage before broad page rewrites.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="phase">
+          <div class="phase-index">4</div>
+          <div class="phase-meta">
+            <strong>Operations</strong>
+            <span>Ongoing · P2</span>
+          </div>
+          <div>
+            <h3>Keep the baseline healthy</h3>
+            <ul>
+              <li>Triage and reduce dependency advisories; schedule recurring audits.</li>
+              <li>Use immutable Railway IDs and document safe preflight checks; never rely on the stale local project link.</li>
+              <li>Verify backup schedule, retention, ownership, and restoration procedure.</li>
+              <li>Review this plan after each phase and close findings only against exit criteria.</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="backlog">
+      <div class="section-heading">
+        <p class="section-number">04 · Issue-ready backlog</p>
+        <div>
+          <h2>Small enough to assign.</h2>
+          <p class="section-intro">
+            Execution contracts, ordered by dependency. Every repository task is eligible for
+            <code>ready-for-agent</code>; platform tasks are eligible once their stated authentication
+            preflight succeeds. Estimates are relative implementation sizes, not calendar commitments.
+          </p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Contract</th>
+              <th>Lane</th>
+              <th>Priority</th>
+              <th>Size</th>
+              <th>Depends on</th>
+              <th>Completion signal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>01</td>
+              <td><a href="#contract-a01">Scope Subscription Member reads and deletes to the owned Subscription</a></td>
+              <td>Repository</td>
+              <td><span class="priority p0">P0</span></td>
+              <td>S</td>
+              <td>—</td>
+              <td>Owned operations and the Public Subscription View both pass regression tests.</td>
+            </tr>
+            <tr>
+              <td>02</td>
+              <td><a href="#contract-a02">Redact public Subscription capability tokens</a></td>
+              <td>Repository</td>
+              <td><span class="priority p0">P0</span></td>
+              <td>XS</td>
+              <td>—</td>
+              <td>Raw tokens are absent from backend and frontend logs.</td>
+            </tr>
+            <tr>
+              <td>03</td>
+              <td><a href="#contract-a03">Keep production Postgres awake and verify idle recovery</a></td>
+              <td>Railway</td>
+              <td><span class="priority p0">P0</span></td>
+              <td>S</td>
+              <td>—</td>
+              <td>Twenty idle/recovery probes complete without connection errors.</td>
+            </tr>
+            <tr>
+              <td>04</td>
+              <td><a href="#contract-a04">Run migration-backed integration tests on PostgreSQL</a></td>
+              <td>Repository</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>M</td>
+              <td>—</td>
+              <td>A fresh PostgreSQL database reaches the latest migration through Flyway.</td>
+            </tr>
+            <tr>
+              <td>05</td>
+              <td><a href="#contract-a05">Enforce Payment Record uniqueness under concurrency</a></td>
+              <td>Repository</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>M</td>
+              <td>04</td>
+              <td>Concurrent generation produces one Payment Record per logical tuple.</td>
+            </tr>
+            <tr>
+              <td>06</td>
+              <td><a href="#contract-a06">Make both Docker builds deterministic and fail-fast</a></td>
+              <td>Repository</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>M</td>
+              <td>—</td>
+              <td>Both clean image builds succeed without suppressed failures.</td>
+            </tr>
+            <tr>
+              <td>07</td>
+              <td><a href="#contract-a07">Add required backend/frontend CI and merge gates</a></td>
+              <td>GitHub</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>M</td>
+              <td>04, 06</td>
+              <td>Pull requests cannot merge unless all named checks pass.</td>
+            </tr>
+            <tr>
+              <td>08</td>
+              <td><a href="#contract-a08">Use database-aware Railway readiness checks</a></td>
+              <td>Repository + Railway</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>S</td>
+              <td>03</td>
+              <td>Readiness fails with an unavailable datasource and Railway uses it.</td>
+            </tr>
+            <tr>
+              <td>09</td>
+              <td><a href="#contract-a09">Batch related data for list response mapping</a></td>
+              <td>Repository</td>
+              <td><span class="priority p1">P1</span></td>
+              <td>L</td>
+              <td>04</td>
+              <td>Query count remains bounded as page size grows.</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td><a href="#contract-a10">Create a typed SvelteKit backend client</a></td>
+              <td>Repository</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>M</td>
+              <td>07</td>
+              <td>Routes share session propagation, DTOs, and error mapping.</td>
+            </tr>
+            <tr>
+              <td>11</td>
+              <td><a href="#contract-a11">Add frontend unit, component, and browser test foundations</a></td>
+              <td>Repository</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>M</td>
+              <td>07</td>
+              <td>One command runs all three test layers in CI.</td>
+            </tr>
+            <tr>
+              <td>12</td>
+              <td><a href="#contract-a12">Extract transactions page feature components</a></td>
+              <td>Repository</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>L</td>
+              <td>10, 11</td>
+              <td>Page orchestration is readable and critical behavior remains covered.</td>
+            </tr>
+            <tr>
+              <td>13</td>
+              <td><a href="#contract-a13">Triage dependency advisories and automate audits</a></td>
+              <td>Repository + GitHub</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>M</td>
+              <td>07</td>
+              <td>No unaccepted critical/high runtime advisory remains.</td>
+            </tr>
+            <tr>
+              <td>14</td>
+              <td><a href="#contract-a14">Normalize production logging and add disconnect alerts</a></td>
+              <td>Repository + Railway</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>M</td>
+              <td>08</td>
+              <td>Healthy startup is quiet and simulated disconnects trigger an alert.</td>
+            </tr>
+            <tr>
+              <td>15</td>
+              <td><a href="#contract-a15">Document Railway preflight, backup, and restore operations</a></td>
+              <td>Repository + Railway</td>
+              <td><span class="priority p2">P2</span></td>
+              <td>S</td>
+              <td>03</td>
+              <td>A restore drill succeeds from documented steps.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout" role="note">
+        <div class="callout-mark">✓</div>
+        <p>
+          <strong>Autonomous execution protocol</strong>
+          Copy one contract below into a GitHub issue and apply <code>ready-for-agent</code>.
+          The contract itself authorizes the listed repository and platform mutations; no further
+          design choice is required. Work on one contract per branch, preserve unrelated changes,
+          and attach command output or platform read-back evidence before closing it. If a stated
+          precondition fails, make no mutation, apply <code>needs-info</code>, and report the exact
+          failed precondition.
+        </p>
+      </div>
+
+      <article class="panel">
+        <h3>Fixed targets and guardrails</h3>
+        <ul class="checklist">
+          <li>
+            Repository: <code>MaxKeenti/keenti-finances</code>; baseline:
+            <code>214816a</code>. Rebase on current <code>main</code> before implementation and
+            recompute any migration version from the files then present.
+          </li>
+          <li>
+            Read <code>CONTEXT.md</code> and the ADRs named by the contract. Use canonical terms
+            such as User, Subscription Member, Public Subscription View, and Payment Record.
+          </li>
+          <li>
+            Never edit an existing <code>Vnn__*.sql</code>. A schema task always adds the next
+            available Flyway migration and proves a fresh PostgreSQL database migrates successfully.
+          </li>
+          <li>
+            Railway project <code>4ed3c804-4f91-4b43-a912-1ba7de9accc0</code>
+            (<code>keenti-finances</code>), production environment
+            <code>a08caa22-994e-4dbd-92c2-7cf5eaa698e9</code>.
+          </li>
+          <li>
+            Railway services: Postgres <code>13ae5162-fb6a-4d64-a3c3-e9758b5a8011</code>,
+            backend <code>8949110a-ed94-4976-9ec5-cfc229ff889c</code>, and frontend
+            <code>55a08c17-2836-4615-a3e7-ab492c85e450</code>.
+          </li>
+          <li>
+            The local Railway link was corrected to the Keenti Finances production project on
+            July 26, but operational commands should still use the IDs above. Before a Railway
+            mutation, authenticate, read the explicit target, verify all three service names and
+            IDs, then read the changed field back afterward.
+          </li>
+          <li>
+            For GitHub mutations, verify <code>gh auth status</code> and
+            <code>gh repo view MaxKeenti/keenti-finances</code>. For Railway mutations, verify
+            <code>railway whoami --json</code> and
+            <code>railway status --project 4ed3c804-4f91-4b43-a912-1ba7de9accc0
+            --environment a08caa22-994e-4dbd-92c2-7cf5eaa698e9 --json</code>.
+          </li>
+          <li>
+            Repository verification baseline:
+            <code>(cd backend &amp;&amp; ./mvnw test)</code> and
+            <code>(cd frontend &amp;&amp; bun install --frozen-lockfile &amp;&amp; bun run check
+            &amp;&amp; bun run build)</code>. Run the narrower contract checks in addition.
+          </li>
+        </ul>
+      </article>
+
+      <div class="findings">
+        <details class="finding" id="contract-a01" open>
+          <summary>
+            <span class="finding-id">A01</span>
+            <span>
+              <span class="finding-title">Scope Subscription Member operations without breaking the public capability path</span>
+              <span class="finding-subtitle">Repository contract · P0 · S · no dependency</span>
+            </span>
+            <span class="priority p0">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Authorized scope</h4>
+              <p>
+                Change <code>SubscriptionService</code>, the Subscription input/output ports,
+                <code>PanacheSubscriptionMemberRepository</code>,
+                <code>SubscriptionResource</code>, <code>PublicSubscriptionResource</code>, and
+                adjacent domain projections and tests. Follow ADR-0011, ADR-0014, and ADR-0018.
+              </p>
+            </div>
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>
+                  Authenticated Subscription Member listing must first resolve the Subscription through
+                  <code>subscriptionRepository.findById(subscriptionId)</code>; return 404 when
+                  the Subscription is foreign, deleted, or absent.
+                </li>
+                <li>
+                  Replace unscoped Subscription Member primary-key lookup/deletion with repository
+                  methods that constrain both <code>subscription.id</code> and Subscription Member ID.
+                  A mismatched pair returns 404 and changes no shares or rows.
+                </li>
+                <li>
+                  Add <code>PublicSubscriptionViewUseCase#getByToken(String)</code> and a focused
+                  application query service returning a public-view projection. It resolves the
+                  capability token first and loads Subscription Members, Payment Records, and
+                  Contact names only for that resolved Subscription. The public resource calls
+                  only this use case; it must not call the authenticated Subscription Member list method.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>User A can list and remove their own Subscription Members.</li>
+                <li>User A receives 404 when listing User B's Subscription or pairing A's Subscription with B's Subscription Member ID; no row is deleted.</li>
+                <li>A valid public token still returns the same Public Subscription View; an invalid token returns 404.</li>
+                <li>Add these cases to <code>CrossUserIsolationTest</code> and a new public-resource test, then run <code>cd backend &amp;&amp; ./mvnw test</code>.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a02" open>
+          <summary>
+            <span class="finding-id">A02</span>
+            <span>
+              <span class="finding-title">Remove raw Public Subscription View capability tokens from logs</span>
+              <span class="finding-subtitle">Repository contract · P0 · XS · no dependency</span>
+            </span>
+            <span class="priority p0">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Authorized scope</h4>
+              <p>
+                Change <code>SubscriptionService</code>, <code>PublicSubscriptionResource</code>,
+                <code>frontend/src/routes/public/subscription/[token]/+page.server.ts</code>, and
+                adjacent logging tests or test utilities.
+              </p>
+            </div>
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Do not add a token fingerprint. Log a constant event name, result, HTTP status, and resolved Subscription ID only after a successful lookup.</li>
+                <li>Never include a raw token, request path containing it, or capability URL in backend/frontend log arguments or exception messages.</li>
+                <li>Keep client-visible 404 behavior unchanged and document this rule beside the public query boundary.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Valid and invalid token requests retain their existing HTTP behavior.</li>
+                <li>
+                  <code>rg -n "token=%s|public/subscription/\\$\\{token\\}|tokenUuid"
+                  backend/src/main frontend/src/routes/public</code> finds no log statement containing
+                  a token value; legitimate model/URL construction references may remain.
+                </li>
+                <li>Run both repository verification baselines.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a03" open>
+          <summary>
+            <span class="finding-id">A03</span>
+            <span>
+              <span class="finding-title">Keep production PostgreSQL awake and prove idle recovery</span>
+              <span class="finding-subtitle">Railway contract · P0 · S · no dependency</span>
+            </span>
+            <span class="priority p0">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Precondition &amp; mutation</h4>
+              <ul>
+                <li>Run the fixed Railway authentication and explicit-target preflight above. Do not relink or mutate if any ID/name differs.</li>
+                <li>Read production configuration, set only Postgres service <code>deploy.sleepApplication</code> to <code>false</code>, and read it back as <code>false</code>. Leave frontend and backend sleep settings unchanged.</li>
+                <li>Record before/after JSON with secrets excluded. The contract authorizes this single production configuration mutation.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Soak procedure</h4>
+              <ul>
+                <li>Across 20 backend/frontend idle-to-active recoveries, issue a harmless read through the public frontend and record timestamp, response status, and latency.</li>
+                <li>After each recovery, query bounded backend logs for <code>SQLState 08006</code>, EOF, “connection has been closed,” and datasource acquisition errors.</li>
+                <li>Do not retry a failed probe before recording its first result; retries would hide the user-visible failure.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Completion signal</h4>
+              <p>
+                All 20 first attempts avoid user-visible 500s and targeted backend logs contain no
+                stale-connection error. Attach the probe table, final Railway config read-back, and
+                a keep/disable recommendation for backend sleep based on observed cold-start latency;
+                this contract does not authorize changing the backend sleep setting.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a04">
+          <summary>
+            <span class="finding-id">A04</span>
+            <span>
+              <span class="finding-title">Move Quarkus integration tests to migration-built PostgreSQL</span>
+              <span class="finding-subtitle">Repository contract · P1 · M · no dependency</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Use Quarkus Dev Services for an ephemeral PostgreSQL container; do not commit a fixed test database URL or credentials.</li>
+                <li>Remove the H2 test dependency and H2 test configuration. Set test schema management to <code>none</code> and Flyway migration-at-start to <code>true</code>.</li>
+                <li>Keep pure unit tests framework-free where possible; tests annotated <code>@QuarkusTest</code> are integration tests and use PostgreSQL.</li>
+                <li>Add a test assertion that the Flyway history contains every migration file present at test start and that the schema is not Hibernate-generated.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Prerequisite: a working Docker-compatible container runtime. If absent, apply <code>needs-info</code>; do not restore H2 as a fallback.</li>
+                <li><code>cd backend &amp;&amp; ./mvnw test</code> passes from a clean database and logs Flyway applying through the current highest migration.</li>
+                <li>The suite continues to pass when run twice, proving isolation and cleanup.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a05">
+          <summary>
+            <span class="finding-id">A05</span>
+            <span>
+              <span class="finding-title">Make Payment Record generation idempotent under concurrency</span>
+              <span class="finding-subtitle">Repository contract · P1 · M · depends on A04</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Migration contract</h4>
+              <ul>
+                <li>Compute the next Flyway version at implementation time and add exactly one new migration; never modify V4 or another existing migration.</li>
+                <li>
+                  Before creating indexes, use a PostgreSQL <code>DO</code> block to detect and report
+                  duplicate logical tuples so deployment fails with a useful diagnostic instead of
+                  deleting or merging financial history automatically.
+                </li>
+                <li>
+                  Create one unique index on <code>(subscription_id, billing_date, member_id)</code>
+                  where <code>member_id IS NOT NULL</code>, and a second on
+                  <code>(subscription_id, billing_date)</code> where <code>member_id IS NULL</code>.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4>Concurrency contract</h4>
+              <ul>
+                <li>Add a repository operation that loads the caller-owned Subscription with a PostgreSQL pessimistic write lock before reading <code>nextBillingDate</code>.</li>
+                <li>Hold the lock for generation and date advancement in one transaction. Keep the database indexes as the final invariant.</li>
+                <li>Do not swallow arbitrary constraint violations or mark a failed transaction successful.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Two genuinely concurrent transactions generating the same Shared Subscription produce one Payment Record per Subscription Member and advance the date once.</li>
+                <li>The same test for a Personal Subscription proves that the null-Subscription-Member case produces exactly one Payment Record.</li>
+                <li>Sequential re-triggering remains a no-op. Run <code>cd backend &amp;&amp; ./mvnw test</code> against PostgreSQL.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a06">
+          <summary>
+            <span class="finding-id">A06</span>
+            <span>
+              <span class="finding-title">Make production image builds deterministic and fail-fast</span>
+              <span class="finding-subtitle">Repository contract · P1 · M · no dependency</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Backend: keep the Maven Wrapper and dependency-cache layering. Image packaging may skip tests because A07 gates it, but no dependency or package command may suppress a non-zero exit.</li>
+                <li>Frontend: use Bun and <code>bun.lock</code> consistently for both build and production dependencies. Remove the npm install and <code>|| true</code>; copy only the adapter-node build, production dependencies, and required manifest into the runtime image.</li>
+                <li>Pin Docker base images to immutable digests or a documented patch-level update policy. Run containers as non-root.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li><code>docker build -t keenti-backend:plan backend</code> and <code>docker build -t keenti-frontend:plan frontend</code> succeed from clean build caches.</li>
+                <li>Frontend container starts and <code>/health</code> returns success; backend container reaches its expected datasource-wait state without permission errors.</li>
+                <li>Temporarily invalidating a lockfile/package reference makes the relevant build fail; revert the test-only change before committing.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a07">
+          <summary>
+            <span class="finding-id">A07</span>
+            <span>
+              <span class="finding-title">Require CI checks and enforce them on main</span>
+              <span class="finding-subtitle">GitHub contract · P1 · M · depends on A04 and A06</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Workflow contract</h4>
+              <ul>
+                <li>Create one least-privilege GitHub Actions workflow with concurrency cancellation and pinned action major versions.</li>
+                <li>Named required jobs: <code>backend-test</code>, <code>frontend-check</code>, <code>frontend-test</code>, and <code>production-images</code>.</li>
+                <li><code>backend-test</code> runs the PostgreSQL/Flyway suite; frontend jobs use frozen Bun installs; image builds run only after their quality jobs pass.</li>
+                <li>Cache Maven and Bun artifacts by lock/checksum keys. Do not cache generated application output or credentials.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>GitHub enforcement</h4>
+              <ul>
+                <li>After the workflow has run on GitHub, use the explicit repository preflight and configure a <code>main</code> ruleset requiring the four exact job names, an up-to-date branch, and no bypass for normal pushes.</li>
+                <li>Read the ruleset back through the GitHub API and attach its ID and required checks. Do not claim completion from a workflow file alone.</li>
+                <li>If authentication lacks repository administration permission, leave the workflow change intact, apply <code>needs-info</code>, and report only the missing permission.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Completion signal</h4>
+              <p>
+                A deliberately failing draft pull request is blocked by the relevant check; after
+                reverting the failure, all four checks pass and the pull request becomes mergeable.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a08">
+          <summary>
+            <span class="finding-id">A08</span>
+            <span>
+              <span class="finding-title">Make readiness database-aware in code and Railway</span>
+              <span class="finding-subtitle">Repository + Railway contract · P1 · S · depends on A03</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Repository contract</h4>
+              <ul>
+                <li>Confirm the SmallRye datasource readiness check is registered; add a focused readiness check only if the extension does not expose one.</li>
+                <li>Change <code>backend/railway.toml</code> healthcheck path from <code>/q/health/live</code> to <code>/q/health/ready</code>.</li>
+                <li>Add an integration test proving readiness is UP with PostgreSQL and DOWN when a datasource connection cannot be acquired. Liveness must remain independent of the datasource.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Railway contract</h4>
+              <ul>
+                <li>After merge/deployment, run the fixed Railway preflight, verify backend service config resolves the file setting, and read back <code>/q/health/ready</code> as the active health path.</li>
+                <li>Observe the newest backend deployment to terminal <code>SUCCESS</code>; bounded logs must show readiness UP before completion.</li>
+                <li>Do not alter frontend or Postgres health paths.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Verification</h4>
+              <p>
+                Run the backend suite, validate the TOML syntax, and attach the terminal deployment
+                status plus active Railway healthcheck-path read-back.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a09">
+          <summary>
+            <span class="finding-id">A09</span>
+            <span>
+              <span class="finding-title">Batch Category and Contact data for list responses</span>
+              <span class="finding-subtitle">Repository contract · P1 · L · depends on A04</span>
+            </span>
+            <span class="priority p1">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Add User-scoped repository-port operations that bulk-load Categories or Contacts by a set of IDs in one query per related type.</li>
+                <li>Introduce focused application query services/assemblers for Transaction, Debt, and Subscription list responses; REST resources must not call another service from inside a per-item mapping loop.</li>
+                <li>Do not add eager global relationships, bypass Hibernate filters, or expose persistence entities outside the adapter.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Response JSON and missing-related-record behavior remain backward compatible.</li>
+                <li>Enable Hibernate statistics in tests and assert at most one bulk Category lookup and one bulk Contact lookup per list request, independent of page size.</li>
+                <li>Cover 1-row and 50-row Transaction lists plus representative Debt and Subscription lists, then run the backend suite.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a10">
+          <summary>
+            <span class="finding-id">A10</span>
+            <span>
+              <span class="finding-title">Introduce one typed server-only backend client</span>
+              <span class="finding-subtitle">Repository contract · P2 · M · depends on A07</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Create <code>frontend/src/lib/server/backend/client.ts</code> and <code>types.ts</code>; importing the client from browser code must fail through SvelteKit's server-only boundary.</li>
+                <li>Expose typed <code>get/post/put/delete</code> operations around event-local <code>fetch</code>, one WorkOS header/session propagation policy, JSON decoding, timeout handling, and a typed <code>BackendError</code>.</li>
+                <li>Retry at most one safe GET after an initial connection failure; never automatically retry mutations. Never log authorization headers, capability tokens, or financial response bodies.</li>
+                <li>Migrate all <code>+page.server.ts</code> and server routes to the client in this contract; remove duplicated <code>BACKEND</code>, headers, and error parsing rather than leaving two patterns.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Contract tests cover success, structured backend error, invalid JSON, timeout, safe-read retry, no mutation retry, and missing session.</li>
+                <li><code>rg -n "BACKEND_URL|X-WorkOS-User-Id" frontend/src/routes</code> finds no route-local backend plumbing.</li>
+                <li>Run frontend check, tests, and production build.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a11">
+          <summary>
+            <span class="finding-id">A11</span>
+            <span>
+              <span class="finding-title">Establish frontend unit, component, and browser tests</span>
+              <span class="finding-subtitle">Repository contract · P2 · M · depends on A07</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed toolchain</h4>
+              <ul>
+                <li>Use Vitest for unit tests, Testing Library for Svelte component tests, and Playwright for browser tests. Keep Bun as package manager.</li>
+                <li>Add <code>test:unit</code>, <code>test:component</code>, <code>test:e2e</code>, and aggregate <code>test</code> scripts; all are non-watch commands suitable for CI.</li>
+                <li>For browser authentication, generate a sealed test session with the existing session utility and a non-production test secret. Use a local stub backend; never call WorkOS or production Railway services.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Minimum coverage</h4>
+              <ul>
+                <li>Unit: Direction/net calculations, money formatting, date handling, and backend-client error mapping.</li>
+                <li>Component: Transaction form validation and filtering/table behavior.</li>
+                <li>Browser: unauthenticated redirect behavior and one authenticated create/edit/delete Transaction journey against the stub backend.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Verification</h4>
+              <p>
+                <code>cd frontend &amp;&amp; bun run test &amp;&amp; bun run check &amp;&amp; bun run build</code>
+                passes twice without order dependence, external network access, or committed secrets.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a12">
+          <summary>
+            <span class="finding-id">A12</span>
+            <span>
+              <span class="finding-title">Split the Transactions page by coherent interactions</span>
+              <span class="finding-subtitle">Repository contract · P2 · L · depends on A10 and A11</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed decomposition</h4>
+              <ul>
+                <li>Extract filters/search, desktop table, mobile cards, Transaction form dialog, delete confirmation, and bulk-action dock into feature components under <code>$lib/features/transactions</code>.</li>
+                <li>Keep route-level URL/query synchronization, server data ownership, and orchestration in <code>+page.svelte</code>. Do not introduce a global state library.</li>
+                <li>Preserve existing responsive breakpoints, translated copy, keyboard/focus behavior, and API contracts; this is not a visual redesign.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>Add component coverage for filtering, validation, selection/bulk actions, delete confirmation, and mobile/desktop rendering.</li>
+                <li>The existing browser Transaction journey passes unchanged and no accessibility violation is introduced in the extracted dialogs or controls.</li>
+                <li>Run frontend test, check, and build commands. Treat line-count reduction as supporting evidence, not the completion criterion.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a13">
+          <summary>
+            <span class="finding-id">A13</span>
+            <span>
+              <span class="finding-title">Triage dependency advisories and automate the release signal</span>
+              <span class="finding-subtitle">Repository + GitHub contract · P2 · M · depends on A07</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Fixed implementation</h4>
+              <ul>
+                <li>Run a production-reachability audit from the frozen Bun lockfile and record each high/critical advisory in <code>docs/security/dependency-advisories.md</code>.</li>
+                <li>Each accepted advisory must name the package/path, runtime reachability, rationale, owner, review date, and expiry. Do not apply blanket ignores.</li>
+                <li>Upgrade the smallest compatible dependency groups, running frontend tests/check/build after each group.</li>
+                <li>Add a weekly scheduled workflow and pull-request check that fails on newly introduced high/critical production advisories not present in the time-bounded disposition file.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; verification</h4>
+              <ul>
+                <li>No unaccepted high/critical production advisory remains; lower severities are reported but do not block this contract.</li>
+                <li>A controlled known-advisory fixture proves the check fails, and its removal restores success.</li>
+                <li>Attach before/after audit summaries without pasting dependency credentials or environment variables.</li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a14">
+          <summary>
+            <span class="finding-id">A14</span>
+            <span>
+              <span class="finding-title">Normalize healthy logs and alert on datasource failures</span>
+              <span class="finding-subtitle">Repository + Railway contract · P2 · M · depends on A08</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Repository contract</h4>
+              <ul>
+                <li>Remove the ignored production CORS property; SvelteKit remains the proxy per ADR-0003 and the backend remains private per ADR-0007.</li>
+                <li>Use structured, stable event names and appropriate levels. Expected WorkOS inactivity and successful lookups are not warnings; datasource disconnects and readiness transitions remain actionable.</li>
+                <li>Never lower the severity of a real failure merely to make startup logs quiet.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Railway alert contract</h4>
+              <ul>
+                <li>After the fixed target preflight, create a production backend notification that fires on three datasource/readiness failures within five minutes and uses the workspace's existing operational destination.</li>
+                <li>Use Railway's API/MCP when exposed; otherwise use the signed-in Railway dashboard. Read back the rule name, target service ID, threshold, and destination.</li>
+                <li>If no operational destination exists, do not invent one or send a test externally: apply <code>needs-info</code> with the missing destination as the only blocker.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Completion signal</h4>
+              <p>
+                A controlled non-production readiness failure triggers one test notification, while
+                a healthy startup contains no unrecognized-property warning or raw capability token.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a15">
+          <summary>
+            <span class="finding-id">A15</span>
+            <span>
+              <span class="finding-title">Codify Railway preflight and complete a non-production restore drill</span>
+              <span class="finding-subtitle">Repository + Railway contract · P2 · S · depends on A03</span>
+            </span>
+            <span class="priority p2">ready-for-agent</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Runbook contract</h4>
+              <ul>
+                <li>Create <code>docs/operations/railway.md</code> with the immutable production IDs above, authentication/context checks, bounded log commands, deployment terminal-state rules, and rollback ownership.</li>
+                <li>Document backup schedule, retention, encryption/ownership, restore steps, evidence location, and escalation. Never include secret values or a production database URL.</li>
+                <li>Update any stale instructions that recommend relying on the repository's local Railway link.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Restore drill contract</h4>
+              <ul>
+                <li>Read and record the latest production Postgres backup metadata. Require a successful backup no older than 24 hours and at least seven days of retention; otherwise apply <code>needs-info</code> before creating resources.</li>
+                <li>Restore the latest backup into a temporary isolated non-production service/environment named <code>restore-drill-YYYYMMDD</code>. Never restore over or write to production.</li>
+                <li>Verify row counts for root tables, foreign-key integrity, and Flyway history through the production migration version using read-only SQL.</li>
+                <li>After evidence is saved, delete only the explicitly created restore-drill resources and read back their removal. This cleanup is authorized by this contract; no other resource deletion is allowed.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Completion signal</h4>
+              <p>
+                A second agent can follow the committed runbook without unstated decisions, the
+                restore checks pass, production remains unchanged, and no temporary paid resource remains.
+              </p>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="acceptance">
+      <div class="section-heading">
+        <p class="section-number">05 · Exit criteria</p>
+        <div>
+          <h2>How improvement is measured.</h2>
+          <p class="section-intro">
+            These outcomes prevent the roadmap from becoming an open-ended rewrite.
+          </p>
+        </div>
+      </div>
+
+      <div class="acceptance-grid">
+        <article class="panel">
+          <h3>Security &amp; data integrity</h3>
+          <ul class="checklist">
+            <li>All nested-resource operations bind child identity to an owned root entity.</li>
+            <li>Cross-user access tests cover both reads and mutations.</li>
+            <li>No raw secrets or capability tokens appear in logs.</li>
+            <li>Database constraints back every documented idempotency guarantee.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Production reliability</h3>
+          <ul class="checklist">
+            <li>Twenty repeated idle/wake cycles complete without a user-visible 500.</li>
+            <li>Readiness reflects database availability.</li>
+            <li>Connection-failure bursts produce an actionable alert.</li>
+            <li>A current database backup can be restored successfully.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Release confidence</h3>
+          <ul class="checklist">
+            <li>Backend tests, migrations, frontend checks, and production builds are required.</li>
+            <li>Docker dependency installation cannot fail silently.</li>
+            <li>Flyway migrations are tested against PostgreSQL and remain append-only.</li>
+            <li>Dependency advisories have owners and explicit dispositions.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Readability &amp; maintainability</h3>
+          <ul class="checklist">
+            <li>Routes use one typed backend client and one error mapping strategy.</li>
+            <li>Large pages delegate coherent interactions to tested feature components.</li>
+            <li>List endpoint query count is bounded rather than proportional to item count.</li>
+            <li>Warnings in a healthy production startup are understood and intentional.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="strengths">
+      <div class="section-heading">
+        <p class="section-number">06 · Preserve these strengths</p>
+        <div>
+          <h2>Improve without flattening the architecture.</h2>
+          <p class="section-intro">
+            The repository already has useful boundaries and documentation. The plan should reinforce
+            them rather than introduce a wholesale rewrite.
+          </p>
+        </div>
+      </div>
+
+      <div class="good">
+        <article class="panel">
+          <h3>Clear domain record</h3>
+          <p>
+            The root glossary and ADR collection capture important decisions around tenancy,
+            authentication, soft deletion, billing, and deployment topology.
+          </p>
+        </article>
+        <article class="panel">
+          <h3>Private backend boundary</h3>
+          <p>
+            Railway exposes only the SvelteKit frontend publicly. Backend and database traffic use
+            active private-network endpoints and private environment URLs.
+          </p>
+        </article>
+        <article class="panel">
+          <h3>Migration discipline</h3>
+          <p>
+            Production successfully validates all 15 Flyway migrations. Continue the documented
+            append-only rule for every schema correction in this plan.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="section-heading">
+        <p class="section-number">07 · Evidence index</p>
+        <div>
+          <h2>Where to start reading.</h2>
+          <p class="section-intro">
+            High-signal source locations and operational references used to form the plan.
+          </p>
+        </div>
+      </div>
+
+      <article class="panel">
+        <ul class="evidence-list">
+          <li><a href="../backend/src/main/java/com/keenti/finances/application/service/SubscriptionService.java">SubscriptionService.java</a> — Subscription Member operations and token logging.</li>
+          <li><a href="../backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/SubscriptionResource.java">SubscriptionResource.java</a> — nested Subscription Member routes and response mapping.</li>
+          <li><a href="../backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/PublicSubscriptionResource.java">PublicSubscriptionResource.java</a> — capability token logs and per-Subscription-Member lookups.</li>
+          <li><a href="../backend/src/main/java/com/keenti/finances/application/service/BillingService.java">BillingService.java</a> — check-then-insert payment generation.</li>
+          <li><a href="../backend/src/main/resources/db/migration/V4__create_subscription_tables.sql">V4 migration</a> — current payment-record constraints.</li>
+          <li><a href="../backend/src/test/resources/application.properties">Backend test configuration</a> — H2, generated schema, Flyway disabled.</li>
+          <li><a href="../backend/Dockerfile">Backend Dockerfile</a> — production build skips tests.</li>
+          <li><a href="../frontend/Dockerfile">Frontend Dockerfile</a> — runtime install suppresses failures.</li>
+          <li><a href="../backend/railway.toml">Backend Railway config</a> — liveness health check.</li>
+          <li><a href="../backend/src/main/resources/application.properties">Backend application config</a> — ignored CORS property.</li>
+          <li><a href="../frontend/src/routes/transactions/+page.svelte">Transactions page</a> — largest route component.</li>
+          <li><a href="../frontend/package.json">Frontend package manifest</a> — checks and dependency baseline.</li>
+          <li><a href="adr/0007-railway-two-service-topology.md">ADR-0007</a> — intended Railway topology.</li>
+          <li><a href="adr/0011-monolith-query-scoped-multitenancy.md">ADR-0011</a> — multitenancy strategy.</li>
+          <li><a href="adr/0014-user-scope-on-root-entities-only.md">ADR-0014</a> — root-entity scoping decision.</li>
+          <li><a href="https://docs.railway.com/deployments/serverless">Railway Serverless documentation</a> — sleep detection, private-network wake, and cold-boot caveats.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner shell">
+      <span>Keenti Finances · Maintainability &amp; reliability plan</span>
+      <span>Audit baseline: commit 214816a · Production reviewed read-only</span>
+    </div>
+  </footer>
+</body>
+</html>

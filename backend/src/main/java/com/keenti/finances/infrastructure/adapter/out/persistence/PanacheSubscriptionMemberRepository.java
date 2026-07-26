@@ -17,8 +17,11 @@ public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRe
     }
 
     @Override
-    public Optional<SubscriptionMember> findById(Long id) {
-        return SubscriptionMemberEntity.<SubscriptionMemberEntity>findByIdOptional(id).map(this::toDomain);
+    public Optional<SubscriptionMember> findBySubscriptionIdAndId(Long subscriptionId, Long id) {
+        return SubscriptionMemberEntity.<SubscriptionMemberEntity>find(
+                "subscription.id = ?1 and id = ?2", subscriptionId, id)
+            .firstResultOptional()
+            .map(this::toDomain);
     }
 
     @Override
