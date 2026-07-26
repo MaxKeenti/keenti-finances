@@ -11,7 +11,9 @@ COPY mvnw pom.xml ./
 RUN ./mvnw dependency:go-offline -q
 
 COPY src/ src/
-RUN ./mvnw package -q
+# PostgreSQL-backed tests run in CI, where a container runtime is available.
+# Railway's BuildKit builder packages the already-gated source without Docker-in-Docker.
+RUN ./mvnw package -q -DskipTests
 
 # Stage 2: runtime
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24

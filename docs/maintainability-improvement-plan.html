@@ -812,7 +812,13 @@
           stale-connection workstream remains open. PostgreSQL 18 Dev Services, Flyway-built test
           schemas, and migration-history assertions are implemented locally for the next CI run.
           This workstation has no Docker-compatible runtime, so the new database-backed suite
-          compiles locally but requires CI execution before it is considered verified.
+          compiles locally but requires CI execution before it is considered verified. Deployment
+          <code>ab53aa19</code> from commit <code>f281292</code> failed because the Docker build
+          attempted that suite without a container runtime, while an unprofiled localhost datasource
+          also prevented Dev Services in GitHub CI. The local correction scopes localhost credentials
+          to <code>%dev</code>; CI owns test execution, and the Railway image build packages with
+          tests compiled but not executed. Production continues serving the prior successful backend
+          deployment until the corrected change is reviewed and deployed.
         </p>
       </div>
     </section>
