@@ -793,9 +793,10 @@
         <div class="callout-mark">!</div>
         <p>
           <strong>Important distinction</strong>
-          Railway deploys the intended commit successfully. The runtime incident is caused by
-          PostgreSQL connections becoming stale across sleep/wake cycles, not by a failed build
-          or insufficient CPU, memory, or disk.
+          Railway deploys the intended commit successfully. The original runtime incident involved
+          PostgreSQL sleep/wake connections; the first A03 probe also exposed an application
+          cold-start race between the frontend and backend. Neither failure is explained by a
+          failed build or insufficient CPU, memory, or disk.
         </p>
       </div>
 
@@ -805,24 +806,24 @@
           <strong>Implementation update · July 26, 2026</strong>
           The first containment tranche is deployed from commit <code>22462d7</code>. The backend
           now uses the readiness endpoint, Flyway reports V16 successful, and both payment
-          idempotency indexes exist in production. The initial status snapshot found all three
-          services sleeping; the verification query woke Postgres, so the final snapshot is
-          Postgres <code>SUCCESS</code> with backend and frontend <code>SLEEPING</code>. Postgres
-          still reports <code>sleepApplication=true</code> and may sleep again, so the
-          stale-connection workstream remains open. PostgreSQL 18 Dev Services, Flyway-built test
-          schemas, and migration-history assertions are implemented. This workstation has no
-          Docker-compatible runtime, so the database-backed suite requires CI for execution.
-          Deployment
+          idempotency indexes exist in production. PostgreSQL sleep is now disabled; backend and
+          frontend retain their existing sleep settings. PostgreSQL 18 Dev Services, Flyway-built
+          test schemas, and migration-history assertions are implemented and verified by CI run
+          <code>30221185087</code>. This workstation has no Docker-compatible runtime, so the
+          database-backed suite executes in CI. Deployment
           <code>ab53aa19</code> from commit <code>f281292</code> failed because the Docker build
           attempted that suite without a container runtime, while an unprofiled localhost datasource
           also prevented Dev Services in GitHub CI. Commit <code>9bf3290</code> corrected both:
           localhost credentials are scoped to <code>%dev</code>, CI owns test execution, and the
-          Railway image build packages with tests compiled but not executed. Railway deployment
-          <code>ab4558b3</code> passed its readiness check and is the active sleeping deployment.
-          Its CI run then exposed a separate test-only ordering problem: startup validation ran
-          before migrations on the clean Dev Services database. The follow-up disables redundant
-          startup validation for tests; <code>PostgresSchemaTest</code> still validates explicitly
-          after all migrations have run.
+          Railway image build packages with tests compiled but not executed. Its CI run then
+          exposed a separate test-only ordering problem: startup validation ran before migrations
+          on the clean Dev Services database. Commit <code>874d643</code>
+          disables redundant startup validation for tests; <code>PostgresSchemaTest</code> still
+          validates explicitly after all migrations have run, and both CI jobs passed.
+          PostgreSQL sleep was then disabled for A03. Its first idle-recovery probe returned
+          <code>502</code> while the frontend and backend woke together; the recovered diagnostic
+          returned the expected <code>404</code>. The failure contained no stale-connection
+          signature, so backend cold-start availability remains an open production decision.
         </p>
       </div>
     </section>
@@ -1716,7 +1717,7 @@
               <span class="finding-title">Keep production PostgreSQL awake and prove idle recovery</span>
               <span class="finding-subtitle">Railway contract · P0 · S · no dependency</span>
             </span>
-            <span class="priority p0">ready-for-agent</span>
+            <span class="priority p0">mitigation applied · probe failed</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1743,6 +1744,17 @@
                 a keep/disable recommendation for backend sleep based on observed cold-start latency;
                 this contract does not authorize changing the backend sleep setting.
               </p>
+              <p>
+                <strong>Result · July 26, 2026:</strong> PostgreSQL sleep is disabled, while backend
+                and frontend sleep remain enabled. The first preserved attempt returned
+                <code>502</code> during coordinated application cold start, so the 20-attempt
+                completion signal failed immediately. The recovered diagnostic returned
+                <code>404</code>, and bounded logs contained no stale-connection signature.
+                See
+                <a href="operations/railway-a03-idle-recovery-2026-07-26.md">the A03 evidence record</a>.
+                Keep PostgreSQL awake; decide separately whether to disable backend sleep or make
+                the frontend tolerate the backend wake interval.
+              </p>
             </div>
           </div>
         </details>
@@ -1754,7 +1766,7 @@
               <span class="finding-title">Move Quarkus integration tests to migration-built PostgreSQL</span>
               <span class="finding-subtitle">Repository contract · P1 · M · no dependency</span>
             </span>
-            <span class="priority p1">implemented · CI pending</span>
+            <span class="priority p1">verified in CI</span>
           </summary>
           <div class="finding-body">
             <div>
