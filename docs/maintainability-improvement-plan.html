@@ -778,9 +778,9 @@
           <small>User isolation and production reliability.</small>
         </article>
         <article class="metric">
-          <strong>15</strong>
+          <strong>16</strong>
           <span>Flyway migrations</span>
-          <small>Validated in production; V16 is prepared locally.</small>
+          <small>V16 is applied and validated in production.</small>
         </article>
         <article class="metric">
           <strong>0.22 GB</strong>
@@ -803,15 +803,16 @@
         <div class="callout-mark">✓</div>
         <p>
           <strong>Implementation update · July 26, 2026</strong>
-          Tenant-scoped member access and token redaction are implemented and tested locally.
-          The production service configuration was updated to disable Postgres sleeping. V16
-          payment idempotency, CI, fail-fast containers, connection validation, and readiness
-          checks are prepared locally but still require a reviewed deployment. A read-only
-          production preflight found zero conflicting payment-record groups, and the local Railway
-          link now targets the correct project. The current Postgres deployment is running; backend
-          and frontend are sleeping on commit <code>214816a</code>. Their deployment artifact
-          metadata predates these configuration and code changes, so reverify the effective sleep
-          and readiness settings after the next reviewed deploy or restart.
+          The first containment tranche is deployed from commit <code>22462d7</code>. The backend
+          now uses the readiness endpoint, Flyway reports V16 successful, and both payment
+          idempotency indexes exist in production. The initial status snapshot found all three
+          services sleeping; the verification query woke Postgres, so the final snapshot is
+          Postgres <code>SUCCESS</code> with backend and frontend <code>SLEEPING</code>. Postgres
+          still reports <code>sleepApplication=true</code> and may sleep again, so the
+          stale-connection workstream remains open. PostgreSQL 18 Dev Services, Flyway-built test
+          schemas, and migration-history assertions are implemented locally for the next CI run.
+          This workstation has no Docker-compatible runtime, so the new database-backed suite
+          compiles locally but requires CI execution before it is considered verified.
         </p>
       </div>
     </section>
@@ -919,7 +920,7 @@
               <span class="finding-title">Payment Record idempotency is enforced only in application code</span>
               <span class="finding-subtitle">The check-then-insert sequence can race because the intended tuple has no database uniqueness constraint.</span>
             </span>
-            <span class="priority p1">P1 · High</span>
+            <span class="priority p1">Deployed · verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -996,16 +997,17 @@
             <span class="finding-id">TEST-01</span>
             <span>
               <span class="finding-title">Backend tests do not exercise the production schema path</span>
-              <span class="finding-subtitle">Tests use H2, generate tables automatically, and disable Flyway.</span>
+              <span class="finding-subtitle">The baseline used H2 and generated tables; PostgreSQL migration coverage is now implemented locally.</span>
             </span>
-            <span class="priority p1">P1 · High</span>
+            <span class="priority p1">Implemented · CI pending</span>
           </summary>
           <div class="finding-body">
             <div>
               <h4>Evidence</h4>
               <p>
-                Test configuration selects H2 PostgreSQL mode, uses
-                <code>drop-and-create</code>, and sets <code>quarkus.flyway.migrate-at-start=false</code>.
+                The audit baseline used H2 PostgreSQL mode, <code>drop-and-create</code>, and
+                disabled Flyway. The local implementation now removes H2, provisions PostgreSQL 18
+                through Quarkus Dev Services, and builds the test schema exclusively through Flyway.
               </p>
             </div>
             <div>
@@ -1742,7 +1744,7 @@
               <span class="finding-title">Move Quarkus integration tests to migration-built PostgreSQL</span>
               <span class="finding-subtitle">Repository contract · P1 · M · no dependency</span>
             </span>
-            <span class="priority p1">ready-for-agent</span>
+            <span class="priority p1">implemented · CI pending</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1757,7 +1759,7 @@
             <div>
               <h4>Acceptance &amp; verification</h4>
               <ul>
-                <li>Prerequisite: a working Docker-compatible container runtime. If absent, apply <code>needs-info</code>; do not restore H2 as a fallback.</li>
+                <li>Prerequisite: a working Docker-compatible container runtime. This workstation does not provide one; CI is the required verification environment, and H2 must not be restored as a fallback.</li>
                 <li><code>cd backend &amp;&amp; ./mvnw test</code> passes from a clean database and logs Flyway applying through the current highest migration.</li>
                 <li>The suite continues to pass when run twice, proving isolation and cleanup.</li>
               </ul>
@@ -2222,7 +2224,7 @@
         <article class="panel">
           <h3>Migration discipline</h3>
           <p>
-            Production successfully validates all 15 Flyway migrations. Continue the documented
+            Production successfully validates all 16 Flyway migrations. Continue the documented
             append-only rule for every schema correction in this plan.
           </p>
         </article>
@@ -2247,7 +2249,7 @@
           <li><a href="../backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/PublicSubscriptionResource.java">PublicSubscriptionResource.java</a> — capability token logs and per-Subscription-Member lookups.</li>
           <li><a href="../backend/src/main/java/com/keenti/finances/application/service/BillingService.java">BillingService.java</a> — check-then-insert payment generation.</li>
           <li><a href="../backend/src/main/resources/db/migration/V4__create_subscription_tables.sql">V4 migration</a> — current payment-record constraints.</li>
-          <li><a href="../backend/src/test/resources/application.properties">Backend test configuration</a> — H2, generated schema, Flyway disabled.</li>
+          <li><a href="../backend/src/test/resources/application.properties">Backend test configuration</a> — PostgreSQL 18 Dev Services with a Flyway-built schema.</li>
           <li><a href="../backend/Dockerfile">Backend Dockerfile</a> — production build skips tests.</li>
           <li><a href="../frontend/Dockerfile">Frontend Dockerfile</a> — runtime install suppresses failures.</li>
           <li><a href="../backend/railway.toml">Backend Railway config</a> — liveness health check.</li>
