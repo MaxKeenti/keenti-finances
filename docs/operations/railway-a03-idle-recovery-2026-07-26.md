@@ -10,21 +10,33 @@
 
 No variables or secret values were read or recorded.
 
-## Configuration mutation
+## Final sleep policy
 
 The preflight matched every expected project, environment, and service identifier.
-Before the mutation, all three services had `deploy.sleepApplication=true`.
+All three services initially had `deploy.sleepApplication=true`.
 
-Only PostgreSQL was changed. Railway accepted `sleepApplication=false`; its live
-environment configuration now omits the PostgreSQL sleep override, which is the
-platform's effective false/default state. Backend and frontend remain explicitly
-`true`.
+An earlier API call accepted a request to disable PostgreSQL sleep, but the
+subsequent deployment manifest and observed service state still reported
+PostgreSQL as sleeping. No claim is made that this mutation persisted.
 
-| Service | Before | After |
-| --- | ---: | ---: |
-| PostgreSQL | `true` | `false` (default/override omitted) |
-| Backend | `true` | `true` |
-| Frontend | `true` | `true` |
+The chosen cost policy is to retain Railway Serverless behavior for frontend,
+backend, and PostgreSQL. A production monitor confirmed all three services in
+`SLEEPING` state before the post-mitigation probe.
+
+## Wake-aware retry
+
+Commit `36190b2` adds one centralized SvelteKit server retry policy:
+
+- only `GET` and `HEAD` requests are eligible;
+- network failures and HTTP `502`, `503`, and `504` are transient;
+- seven delays provide a total wake budget of 15.75 seconds;
+- `POST`, `PUT`, `PATCH`, and `DELETE` remain single-attempt so ambiguous
+  failures cannot duplicate financial writes;
+- both SvelteKit server loads and the browser API proxy use the policy.
+
+Five focused tests cover recovery, transient gateway responses, normal `404`
+responses, write safety, and retry-budget exhaustion. GitHub Actions run
+`30225606521` passed the frontend tests/check/build and backend verification.
 
 ## Probe method
 
@@ -32,18 +44,18 @@ Each probe uses an HTTP GET through the public frontend to the public Subscripti
 View route with the nonexistent UUID
 `00000000-0000-0000-0000-000000000000`. This is a harmless database-backed read.
 The expected recovered response is `404`; a `500` or `502` is a user-visible
-failure. The first result is recorded before any retry.
+failure. Each external first result is recorded without a manual retry. The
+application's internal safe-read retry is the mitigation being measured.
 
 ## Results
 
-| Attempt | UTC timestamp | Context | First HTTP result | Latency | Targeted stale-connection logs |
-| ---: | --- | --- | ---: | ---: | --- |
-| 1 | 2026-07-26T23:25:12Z | Frontend, backend, and PostgreSQL sleeping | `502` | 1,657 ms | None |
+| Cycle | UTC timestamp | Context | First HTTP result | Latency | Targeted stale-connection logs |
+| --- | --- | --- | ---: | ---: | --- |
+| Baseline 1 | 2026-07-26T23:25:12Z | All three services sleeping; no wake retry | `502` | 1,657 ms | None |
+| Retry soak 1 | 2026-07-26T23:55:10Z | All three services sleeping; commit `36190b2` deployed | `404` | 8,837 ms | None |
 
-The 20-recovery acceptance run stopped after attempt 1 because the completion
-signal ("all 20 first attempts avoid user-visible 500s") was already impossible
-to satisfy. Continuing with retries would obscure the failed first-attempt
-behavior.
+The unmitigated run stopped after its first failure. The retry strategy starts a
+new 20-recovery acceptance series and is currently 1/20 successful.
 
 One non-soak diagnostic request at `2026-07-26T23:25:55Z` returned the expected
 `404` in 658 ms after all services had recovered.
@@ -61,17 +73,23 @@ One non-soak diagnostic request at `2026-07-26T23:25:55Z` returned the expected
 - Bounded backend logs contained no `SQLState 08006`, EOF, closed-connection, or
   datasource-acquisition error for the probe.
 
+For retry-soak cycle 1:
+
+- Frontend started at `23:55:11Z` and listened around `23:55:15Z`.
+- Backend started at `23:55:13Z`; Quarkus reported ready around `23:55:16Z`.
+- PostgreSQL started at `23:55:14Z` and accepted connections after automatic
+  recovery.
+- The backend validated all 16 migrations and served the harmless lookup around
+  `23:55:19Z`.
+- The first external request stayed open through that sequence and returned the
+  expected `404`.
+
 ## Decision
 
-Keep PostgreSQL sleep disabled. The observed failure is a coordinated application
-cold-start race rather than a stale PostgreSQL connection.
+Keep Railway Serverless enabled for all three services to minimize idle RAM
+cost. The bounded safe-read retry successfully absorbed one complete
+frontend/backend/PostgreSQL cold start without replaying writes.
 
-A03 does not authorize changing backend sleep. The next availability decision
-should either:
-
-1. disable backend sleep, or
-2. make the frontend's first backend read tolerate the backend wake interval
-   without returning a user-visible error.
-
-Until one of those options is implemented, the idle-recovery reliability target
-is not met.
+Continue the acceptance series until 20 independent sleep-to-wake cycles have
+passed. Revisit the sleep policy only if a first request exceeds the retry
+budget, returns a user-visible 5xx, or produces a targeted datasource error.

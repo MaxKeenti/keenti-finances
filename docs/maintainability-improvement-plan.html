@@ -806,9 +806,9 @@
           <strong>Implementation update · July 26, 2026</strong>
           The first containment tranche is deployed from commit <code>22462d7</code>. The backend
           now uses the readiness endpoint, Flyway reports V16 successful, and both payment
-          idempotency indexes exist in production. PostgreSQL sleep is now disabled; backend and
-          frontend retain their existing sleep settings. PostgreSQL 18 Dev Services, Flyway-built
-          test schemas, and migration-history assertions are implemented and verified by CI run
+          idempotency indexes exist in production. All three services retain Railway Serverless
+          behavior to minimize idle RAM cost. PostgreSQL 18 Dev Services, Flyway-built test schemas,
+          and migration-history assertions are implemented and verified by CI run
           <code>30221185087</code>. This workstation has no Docker-compatible runtime, so the
           database-backed suite executes in CI. Deployment
           <code>ab53aa19</code> from commit <code>f281292</code> failed because the Docker build
@@ -820,10 +820,11 @@
           on the clean Dev Services database. Commit <code>874d643</code>
           disables redundant startup validation for tests; <code>PostgresSchemaTest</code> still
           validates explicitly after all migrations have run, and both CI jobs passed.
-          PostgreSQL sleep was then disabled for A03. Its first idle-recovery probe returned
-          <code>502</code> while the frontend and backend woke together; the recovered diagnostic
-          returned the expected <code>404</code>. The failure contained no stale-connection
-          signature, so backend cold-start availability remains an open production decision.
+          A03's unmitigated idle-recovery probe returned <code>502</code> while the services woke
+          together. Commit <code>36190b2</code> adds bounded retries for safe reads only; writes
+          remain single-attempt. With frontend, backend, and PostgreSQL all confirmed sleeping, the
+          first production request then returned the expected <code>404</code> in 8.837 seconds
+          without a stale-connection signature. The revised soak series is 1/20 successful.
         </p>
       </div>
     </section>
@@ -916,8 +917,8 @@
             <div>
               <h4>Target state</h4>
               <ul>
-                <li>Keep PostgreSQL awake; evaluate keeping the backend awake.</li>
-                <li>Validate/recycle connections and retry safe initial reads.</li>
+                <li>Retain serverless sleep to control idle RAM cost.</li>
+                <li>Validate/recycle connections and retry only safe initial reads.</li>
                 <li>Pass a repeatable idle → sleep → wake reliability test.</li>
               </ul>
             </div>
@@ -1312,8 +1313,8 @@
             <ul>
               <li>Fix Subscription Member listing/deletion authorization and add cross-User regression tests.</li>
               <li>Stop logging public subscription tokens; define a credential-redaction policy.</li>
-              <li>Disable Railway Serverless for PostgreSQL, then run an idle/wake soak test.</li>
-              <li>Use the soak evidence to record whether backend cold starts meet the application's reliability target; do not change backend sleep behavior in this phase.</li>
+              <li>Retain Railway Serverless and absorb cold starts with a bounded safe-read retry.</li>
+              <li>Run a 20-cycle idle/wake soak test and keep write requests single-attempt.</li>
             </ul>
           </div>
         </article>
@@ -1714,18 +1715,19 @@
           <summary>
             <span class="finding-id">A03</span>
             <span>
-              <span class="finding-title">Keep production PostgreSQL awake and prove idle recovery</span>
+              <span class="finding-title">Retain Railway Serverless and prove safe idle recovery</span>
               <span class="finding-subtitle">Railway contract · P0 · S · no dependency</span>
             </span>
-            <span class="priority p0">mitigation applied · probe failed</span>
+            <span class="priority p0">retry deployed · 1/20 passed</span>
           </summary>
           <div class="finding-body">
             <div>
-              <h4>Precondition &amp; mutation</h4>
+              <h4>Precondition &amp; implementation</h4>
               <ul>
                 <li>Run the fixed Railway authentication and explicit-target preflight above. Do not relink or mutate if any ID/name differs.</li>
-                <li>Read production configuration, set only Postgres service <code>deploy.sleepApplication</code> to <code>false</code>, and read it back as <code>false</code>. Leave frontend and backend sleep settings unchanged.</li>
-                <li>Record before/after JSON with secrets excluded. The contract authorizes this single production configuration mutation.</li>
+                <li>Retain sleep behavior for frontend, backend, and PostgreSQL to control idle RAM cost.</li>
+                <li>Retry backend network failures and transient <code>502</code>/<code>503</code>/<code>504</code> responses only for <code>GET</code>/<code>HEAD</code>, with a bounded wake budget.</li>
+                <li>Never automatically retry a write request after an ambiguous failure.</li>
               </ul>
             </div>
             <div>
@@ -1741,19 +1743,18 @@
               <p>
                 All 20 first attempts avoid user-visible 500s and targeted backend logs contain no
                 stale-connection error. Attach the probe table, final Railway config read-back, and
-                a keep/disable recommendation for backend sleep based on observed cold-start latency;
-                this contract does not authorize changing the backend sleep setting.
+                a keep/disable recommendation for sleep based on observed cold-start latency.
               </p>
               <p>
-                <strong>Result · July 26, 2026:</strong> PostgreSQL sleep is disabled, while backend
-                and frontend sleep remain enabled. The first preserved attempt returned
-                <code>502</code> during coordinated application cold start, so the 20-attempt
-                completion signal failed immediately. The recovered diagnostic returned
-                <code>404</code>, and bounded logs contained no stale-connection signature.
+                <strong>Result · July 26, 2026:</strong> The unmitigated preserved attempt returned
+                <code>502</code> during coordinated application cold start. After deploying commit
+                <code>36190b2</code>, all three services were confirmed <code>SLEEPING</code>; the
+                next first request remained open through the complete wake sequence and returned
+                the expected <code>404</code> in 8.837 seconds. Bounded logs contained no
+                stale-connection signature.
                 See
                 <a href="operations/railway-a03-idle-recovery-2026-07-26.md">the A03 evidence record</a>.
-                Keep PostgreSQL awake; decide separately whether to disable backend sleep or make
-                the frontend tolerate the backend wake interval.
+                Keep serverless sleep enabled and continue the revised series from 1/20.
               </p>
             </div>
           </div>
