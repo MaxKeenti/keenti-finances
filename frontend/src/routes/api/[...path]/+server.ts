@@ -1,4 +1,5 @@
 import type { RequestHandler } from '@sveltejs/kit';
+import { fetchBackendWithWakeRetry } from '$lib/server/backend-fetch';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 const TIMEOUT_MS = 30_000;
@@ -22,13 +23,14 @@ async function proxy(event: Parameters<RequestHandler>[0]): Promise<Response> {
 
 	let upstream: Response;
 	try {
-		upstream = await fetch(url, {
+		const upstreamRequest = new Request(url, {
 			method: event.request.method,
 			headers,
 			body: hasBody ? event.request.body : undefined,
 			duplex: hasBody ? 'half' : undefined,
 			signal: controller.signal,
 		} as RequestInit);
+		upstream = await fetchBackendWithWakeRetry(upstreamRequest, fetch);
 	} catch (err) {
 		clearTimeout(timer);
 		const isTimeout = (err as Error).name === 'AbortError';

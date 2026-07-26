@@ -2,6 +2,7 @@ import type { Handle, HandleFetch } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { getTextDirection } from '$lib/paraglide/runtime';
+import { fetchBackendWithWakeRetry } from '$lib/server/backend-fetch';
 import { getWorkOS, getAuthorizationUrl } from '$lib/server/workos';
 import {
 	getSession,
@@ -105,10 +106,14 @@ export const handle: Handle = ({ event, resolve }) =>
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
-	if (request.url.startsWith(BACKEND_URL) && event.locals.session) {
-		const headers = new Headers(request.headers);
-		headers.set('X-WorkOS-User-Id', event.locals.session.user.id);
-		return fetch(new Request(request, { headers }));
+	if (request.url.startsWith(BACKEND_URL)) {
+		let backendRequest = request;
+		if (event.locals.session) {
+			const headers = new Headers(request.headers);
+			headers.set('X-WorkOS-User-Id', event.locals.session.user.id);
+			backendRequest = new Request(request, { headers });
+		}
+		return fetchBackendWithWakeRetry(backendRequest, fetch);
 	}
 	return fetch(request);
 };
