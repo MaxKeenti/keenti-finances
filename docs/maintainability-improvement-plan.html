@@ -810,15 +810,19 @@
           Postgres <code>SUCCESS</code> with backend and frontend <code>SLEEPING</code>. Postgres
           still reports <code>sleepApplication=true</code> and may sleep again, so the
           stale-connection workstream remains open. PostgreSQL 18 Dev Services, Flyway-built test
-          schemas, and migration-history assertions are implemented locally for the next CI run.
-          This workstation has no Docker-compatible runtime, so the new database-backed suite
-          compiles locally but requires CI execution before it is considered verified. Deployment
+          schemas, and migration-history assertions are implemented. This workstation has no
+          Docker-compatible runtime, so the database-backed suite requires CI for execution.
+          Deployment
           <code>ab53aa19</code> from commit <code>f281292</code> failed because the Docker build
           attempted that suite without a container runtime, while an unprofiled localhost datasource
-          also prevented Dev Services in GitHub CI. The local correction scopes localhost credentials
-          to <code>%dev</code>; CI owns test execution, and the Railway image build packages with
-          tests compiled but not executed. Production continues serving the prior successful backend
-          deployment until the corrected change is reviewed and deployed.
+          also prevented Dev Services in GitHub CI. Commit <code>9bf3290</code> corrected both:
+          localhost credentials are scoped to <code>%dev</code>, CI owns test execution, and the
+          Railway image build packages with tests compiled but not executed. Railway deployment
+          <code>ab4558b3</code> passed its readiness check and is the active sleeping deployment.
+          Its CI run then exposed a separate test-only ordering problem: startup validation ran
+          before migrations on the clean Dev Services database. The follow-up disables redundant
+          startup validation for tests; <code>PostgresSchemaTest</code> still validates explicitly
+          after all migrations have run.
         </p>
       </div>
     </section>
