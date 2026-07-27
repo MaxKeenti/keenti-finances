@@ -23,6 +23,7 @@ class PublicSubscriptionResourceTest {
 
         given()
                 .header("X-WorkOS-User-Id", userId)
+                .contentType(ContentType.JSON)
                 .when().post("/api/subscriptions/{id}/generate-billing", subscriptionId)
                 .then()
                 .statusCode(200)
