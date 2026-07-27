@@ -15,7 +15,6 @@ public interface SubscriptionUseCase {
     SubscriptionMember addMember(Long subscriptionId, Long contactId);
     void removeMember(Long subscriptionId, Long memberId);
     List<SubscriptionMember> listMembers(Long subscriptionId);
-    Optional<Subscription> getByToken(String tokenUuid);
     void recalculateShares(Long subscriptionId);
     void restore(Long id);
     void permanentDelete(Long id);

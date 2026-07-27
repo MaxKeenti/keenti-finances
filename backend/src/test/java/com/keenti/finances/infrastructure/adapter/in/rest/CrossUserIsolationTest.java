@@ -109,7 +109,9 @@ class CrossUserIsolationTest {
         long aliceContactId = createContact(ALICE, "Alice Member " + System.nanoTime());
         long aliceSubscriptionId = createSharedSubscription(ALICE, "Alice Shared " + System.nanoTime());
         long aliceMemberId = addMember(ALICE, aliceSubscriptionId, aliceContactId);
+        long bobContactId = createContact(BOB, "Bob Member " + System.nanoTime());
         long bobSubscriptionId = createSharedSubscription(BOB, "Bob Shared " + System.nanoTime());
+        long bobMemberId = addMember(BOB, bobSubscriptionId, bobContactId);
 
         given()
                 .header("X-WorkOS-User-Id", BOB)
@@ -128,6 +130,33 @@ class CrossUserIsolationTest {
                 .then()
                 .statusCode(200)
                 .body("id", hasItem((int) aliceMemberId));
+
+        given()
+                .header("X-WorkOS-User-Id", BOB)
+                .when().get("/api/subscriptions/{id}/members", bobSubscriptionId)
+                .then()
+                .statusCode(200)
+                .body("id", hasItem((int) bobMemberId));
+
+        given()
+                .header("X-WorkOS-User-Id", ALICE)
+                .when().delete("/api/subscriptions/{id}/members/{memberId}",
+                        aliceSubscriptionId, aliceMemberId)
+                .then().statusCode(204);
+
+        given()
+                .header("X-WorkOS-User-Id", ALICE)
+                .when().get("/api/subscriptions/{id}/members", aliceSubscriptionId)
+                .then()
+                .statusCode(200)
+                .body("id", not(hasItem((int) aliceMemberId)));
+
+        given()
+                .header("X-WorkOS-User-Id", BOB)
+                .when().get("/api/subscriptions/{id}/members", bobSubscriptionId)
+                .then()
+                .statusCode(200)
+                .body("id", hasItem((int) bobMemberId));
     }
 
     @Test

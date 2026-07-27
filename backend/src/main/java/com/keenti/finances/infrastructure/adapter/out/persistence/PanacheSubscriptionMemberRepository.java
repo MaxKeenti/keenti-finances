@@ -5,7 +5,6 @@ import com.keenti.finances.domain.port.out.SubscriptionMemberRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 @ApplicationScoped
 public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRepository {
@@ -17,14 +16,6 @@ public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRe
     }
 
     @Override
-    public Optional<SubscriptionMember> findBySubscriptionIdAndId(Long subscriptionId, Long id) {
-        return SubscriptionMemberEntity.<SubscriptionMemberEntity>find(
-                "subscription.id = ?1 and id = ?2", subscriptionId, id)
-            .firstResultOptional()
-            .map(this::toDomain);
-    }
-
-    @Override
     public SubscriptionMember save(SubscriptionMember member) {
         SubscriptionMemberEntity entity = toEntity(member);
         entity.persist();
@@ -32,8 +23,9 @@ public class PanacheSubscriptionMemberRepository implements SubscriptionMemberRe
     }
 
     @Override
-    public void deleteById(Long id) {
-        SubscriptionMemberEntity.deleteById(id);
+    public boolean deleteBySubscriptionIdAndId(Long subscriptionId, Long id) {
+        return SubscriptionMemberEntity.delete(
+            "subscription.id = ?1 and id = ?2", subscriptionId, id) == 1;
     }
 
     @Override

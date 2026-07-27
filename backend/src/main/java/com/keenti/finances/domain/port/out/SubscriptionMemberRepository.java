@@ -2,12 +2,10 @@ package com.keenti.finances.domain.port.out;
 
 import com.keenti.finances.domain.model.SubscriptionMember;
 import java.util.List;
-import java.util.Optional;
 
 public interface SubscriptionMemberRepository {
     List<SubscriptionMember> findBySubscriptionId(Long subscriptionId);
-    Optional<SubscriptionMember> findBySubscriptionIdAndId(Long subscriptionId, Long id);
     SubscriptionMember save(SubscriptionMember member);
-    void deleteById(Long id);
+    boolean deleteBySubscriptionIdAndId(Long subscriptionId, Long id);
     void updateShareAmounts(Long subscriptionId, java.math.BigDecimal shareAmount);
 }
