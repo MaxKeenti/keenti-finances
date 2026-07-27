@@ -825,6 +825,10 @@
           remain single-attempt. With frontend, backend, and PostgreSQL all confirmed sleeping, the
           first production request then returned the expected <code>404</code> in 8.837 seconds
           without a stale-connection signature. The revised soak series is 1/20 successful.
+          Railway watch paths are now isolated to <code>/backend/**</code> and
+          <code>/frontend/**</code>. The live configuration read-back succeeded without creating a
+          deployment or waking either sleeping service; a docs-only push is the final no-wake
+          acceptance check.
         </p>
       </div>
     </section>
@@ -1551,6 +1555,15 @@
               <td>03</td>
               <td>A restore drill succeeds from documented steps.</td>
             </tr>
+            <tr>
+              <td>16</td>
+              <td><a href="#contract-a16">Isolate Railway deploy triggers by service path</a></td>
+              <td>Railway</td>
+              <td><span class="priority verified">Verified</span></td>
+              <td>XS</td>
+              <td>—</td>
+              <td>A docs-only push creates no backend or frontend deployment.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -2159,6 +2172,42 @@
               <p>
                 A second agent can follow the committed runbook without unstated decisions, the
                 restore checks pass, production remains unchanged, and no temporary paid resource remains.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <details class="finding" id="contract-a16">
+          <summary>
+            <span class="finding-id">A16</span>
+            <span>
+              <span class="finding-title">Isolate Railway deploy triggers by service path</span>
+              <span class="finding-subtitle">Railway contract · cost control · XS · completed July 26, 2026</span>
+            </span>
+            <span class="priority verified">verified</span>
+          </summary>
+          <div class="finding-body">
+            <div>
+              <h4>Configuration</h4>
+              <ul>
+                <li>Backend watches only <code>/backend/**</code>; frontend watches only <code>/frontend/**</code>.</li>
+                <li>Repository-root documentation and workflow changes do not build or wake either application service.</li>
+                <li>Railway Serverless remains enabled for frontend, backend, and PostgreSQL.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Acceptance &amp; evidence</h4>
+              <ul>
+                <li>Read back both live watch-pattern arrays after mutation.</li>
+                <li>Push a docs-only commit and verify the latest backend and frontend deployment IDs remain unchanged.</li>
+                <li>Record the baseline, final IDs, and service states in <a href="operations/railway-watch-paths-2026-07-26.md">the watch-path evidence record</a>.</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Completion signal</h4>
+              <p>
+                Documentation-only work no longer consumes Railway build time or wakes application
+                RAM, while changes inside each service directory still retain automatic deployment.
               </p>
             </div>
           </div>
