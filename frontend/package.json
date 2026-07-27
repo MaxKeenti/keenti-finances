@@ -6,7 +6,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy cookie globalVariable baseLocale --silent",
-		"prepare": "bun run paraglide:compile && svelte-kit sync || echo ''",
+		"prepare": "bun run paraglide:compile && svelte-kit sync",
 		"prepack": "svelte-kit sync && svelte-package && publint",
 		"test": "bun test",
 		"check": "bun run paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

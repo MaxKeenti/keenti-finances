@@ -1,0 +1,13 @@
+# Dependency and build output are always produced inside the image.
+node_modules/
+build/
+.svelte-kit/
+
+# Local-only files.
+.env
+.env.*
+.DS_Store
+
+# Docker build metadata is not application input.
+Dockerfile
+.dockerignore

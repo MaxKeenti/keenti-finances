@@ -1,5 +1,6 @@
 # Stage 1: build
-FROM registry.access.redhat.com/ubi9/openjdk-21:1.24 AS build
+# Base images are immutable; update each tag and digest together in one review.
+FROM registry.access.redhat.com/ubi9/openjdk-21:1.24@sha256:a7a263e496bdc62bc7b9e8704d7e9ed5fd391418927fd505f56c8ba8c2e7197a AS build
 
 USER root
 WORKDIR /build
@@ -16,7 +17,7 @@ COPY src/ src/
 RUN ./mvnw package -q -DskipTests
 
 # Stage 2: runtime
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24@sha256:b8be612ac873a91d2a9e05937453358e719b155dc0304c070ffe0e94cd6aa5e2
 
 ENV LANGUAGE='en_US:en'
 
