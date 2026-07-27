@@ -38,15 +38,19 @@ Baseline immediately after the configuration read-back:
 | Backend | `e9ea0f97-06a0-4e7d-bd74-20b40a3250f3` | `SLEEPING` |
 | Frontend | `f78ce332-4693-479c-993a-412581aed44c` | `SLEEPING` |
 
-This evidence file and the HTML improvement-plan update form a docs-only commit.
-After that commit is pushed, acceptance requires both latest deployment IDs to
-remain unchanged and both services to remain sleeping. The final observation is
-recorded below after Railway and GitHub have processed the push.
+Commit `a1554deaa229030f3bae0b72ce5191bc7909690c` changed only this evidence
+file and the HTML improvement plan. Railway processed the repository update and
+created a terminal `SKIPPED` record for each service. It did not build an image,
+create a new active deployment, or wake either service.
 
 | Observation | Backend | Frontend |
 | --- | --- | --- |
-| Latest deployment ID | Pending | Pending |
-| Service state | Pending | Pending |
+| Skipped record ID | `30b6faca-b76d-4899-b1bb-4ecee22dd882` | `28909b3d-3750-4d19-bb5c-4640ec8eb1f0` |
+| Active deployment ID | `e9ea0f97-06a0-4e7d-bd74-20b40a3250f3` | `f78ce332-4693-479c-993a-412581aed44c` |
+| Active service state | `SLEEPING` | `SLEEPING` |
+
+Acceptance passed: both active deployment IDs match the baseline, and both
+services remained sleeping.
 
 ## Decision
 

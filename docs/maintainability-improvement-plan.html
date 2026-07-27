@@ -827,8 +827,9 @@
           without a stale-connection signature. The revised soak series is 1/20 successful.
           Railway watch paths are now isolated to <code>/backend/**</code> and
           <code>/frontend/**</code>. The live configuration read-back succeeded without creating a
-          deployment or waking either sleeping service; a docs-only push is the final no-wake
-          acceptance check.
+          deployment or waking either sleeping service. Docs-only commit <code>a1554de</code> then
+          produced only <code>SKIPPED</code> Railway records; both active deployment IDs remained
+          unchanged and sleeping.
         </p>
       </div>
     </section>
