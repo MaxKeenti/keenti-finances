@@ -832,6 +832,12 @@
           deployment or waking either sleeping service. Docs-only commit <code>a1554de</code> then
           produced only <code>SKIPPED</code> Railway records; both active deployment IDs remained
           unchanged and sleeping.
+          A01 is implemented by commits <code>6fc01f6</code> and <code>bff6b9e</code>:
+          authenticated Subscription Member deletion is now atomic on Subscription and Member IDs,
+          and the Public Subscription View has a dedicated application query port and projection.
+          CI run <code>30231939345</code> passed the PostgreSQL-backed isolation and public-view
+          regressions. Railway deployed only the backend as deployment <code>2b854e3b</code>; the
+          frontend deployment was correctly skipped.
         </p>
       </div>
     </section>
@@ -1640,7 +1646,7 @@
               <span class="finding-title">Scope Subscription Member operations without breaking the public capability path</span>
               <span class="finding-subtitle">Repository contract · P0 · S · no dependency</span>
             </span>
-            <span class="priority p0">ready-for-agent</span>
+            <span class="priority verified">verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1682,6 +1688,12 @@
                 <li>A valid public token still returns the same Public Subscription View; an invalid token returns 404.</li>
                 <li>Add these cases to <code>CrossUserIsolationTest</code> and a new public-resource test, then run <code>cd backend &amp;&amp; ./mvnw test</code>.</li>
               </ul>
+              <p>
+                <strong>Verified July 26, 2026:</strong>
+                CI run <code>30231939345</code> passed the database-backed suite. Backend deployment
+                <code>2b854e3b-41c3-408c-9c67-54a66567e049</code> reached
+                <code>SUCCESS</code>; the frontend was not rebuilt.
+              </p>
             </div>
           </div>
         </details>
