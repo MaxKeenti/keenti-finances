@@ -852,6 +852,15 @@
           CI run <code>30232966928</code> passed both jobs. Railway skipped the frontend, deployed
           backend release <code>dad9880a</code>, and Flyway successfully advanced production from
           V16 to V17.
+          A06 is implemented by commits <code>a9007f5</code> and <code>43a731e</code>. All
+          production base images are digest-pinned, both runtime containers are non-root, and the
+          frontend now uses Bun with <code>bun.lock</code> for build and production dependencies.
+          The first frontend image correctly failed when fail-fast lifecycle execution exposed an
+          incomplete dependency-only context; the correction runs <code>prepare</code> explicitly
+          after copying source. CI run <code>30234792328</code> passed, backend deployment
+          <code>12966b4d</code> and frontend deployment <code>c26ed643</code> reached
+          <code>SUCCESS</code>, and production returned <code>200</code> from
+          <code>/health</code>.
         </p>
       </div>
     </section>
@@ -1904,7 +1913,7 @@
               <span class="finding-title">Make production image builds deterministic and fail-fast</span>
               <span class="finding-subtitle">Repository contract · P1 · M · no dependency</span>
             </span>
-            <span class="priority p1">ready-for-agent</span>
+            <span class="priority verified">verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1922,6 +1931,18 @@
                 <li>Frontend container starts and <code>/health</code> returns success; backend container reaches its expected datasource-wait state without permission errors.</li>
                 <li>Temporarily invalidating a lockfile/package reference makes the relevant build fail; revert the test-only change before committing.</li>
               </ul>
+              <p>
+                <strong>Verified July 26, 2026:</strong>
+                Local Maven and Bun invalid-dependency probes failed with non-zero exits and were
+                reverted before commit. The Bun production dependency bundle started successfully
+                under Node and passed <code>/health</code>. CI run <code>30234792328</code>
+                passed both jobs. Railway built the digest-pinned images and promoted backend
+                deployment <code>12966b4d-f331-4d5f-b679-825df860f195</code> and frontend
+                deployment <code>c26ed643-6a62-4cd5-b3e4-2c4aa504a69a</code> to
+                <code>SUCCESS</code>; the frontend Railway health check succeeded on its first
+                attempt. A production health probe returned <code>200</code>, and the harmless
+                public read returned the expected <code>404</code>.
+              </p>
             </div>
           </div>
         </details>
