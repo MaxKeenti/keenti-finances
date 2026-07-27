@@ -838,6 +838,13 @@
           CI run <code>30231939345</code> passed the PostgreSQL-backed isolation and public-view
           regressions. Railway deployed only the backend as deployment <code>2b854e3b</code>; the
           frontend deployment was correctly skipped.
+          A02 is implemented by commit <code>2b62536</code>. Backend and frontend Public
+          Subscription View logs now emit stable result/status events without accepting a token as
+          logging input; successful backend lookups may additionally include only the resolved
+          Subscription ID. CI run <code>30232348269</code> passed. Railway deployments
+          <code>2351067a</code> and <code>9e80ed8d</code> reached <code>SUCCESS</code>, and a
+          production invalid-token probe returned <code>404</code> with token-free application
+          events on both services.
         </p>
       </div>
     </section>
@@ -1705,7 +1712,7 @@
               <span class="finding-title">Remove raw Public Subscription View capability tokens from logs</span>
               <span class="finding-subtitle">Repository contract · P0 · XS · no dependency</span>
             </span>
-            <span class="priority p0">ready-for-agent</span>
+            <span class="priority verified">verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1735,6 +1742,16 @@
                 </li>
                 <li>Run both repository verification baselines.</li>
               </ul>
+              <p>
+                <strong>Verified July 26, 2026:</strong>
+                CI run <code>30232348269</code> passed backend and frontend verification. Production
+                deployments <code>2351067a-e8b9-48d5-abc2-97c7872e433a</code> and
+                <code>9e80ed8d-165e-4a24-b7c9-13adf5f94c34</code> reached
+                <code>SUCCESS</code>. A harmless invalid-token request returned <code>404</code>;
+                bounded application logs contained only
+                <code>public.subscription.lookup result=not_found status=404</code> and
+                <code>public.subscription.load result=not_found status=404</code>.
+              </p>
             </div>
           </div>
         </details>
