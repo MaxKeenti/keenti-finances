@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record PublicSubscriptionView(
+    Long subscriptionId,
     String subscriptionName,
     BigDecimal cost,
     String billingCycle,

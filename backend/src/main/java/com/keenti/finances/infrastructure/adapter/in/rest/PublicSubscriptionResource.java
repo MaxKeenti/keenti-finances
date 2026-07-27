@@ -26,14 +26,18 @@ public class PublicSubscriptionResource {
     public Response getByToken(@PathParam("token") String token) {
         var result = publicSubscriptionViewUseCase.getByToken(token);
         if (result.isEmpty()) {
-            LOG.info("public.subscription.notfound");
+            LOG.info("public.subscription.lookup result=not_found status=404");
             return Response.status(Response.Status.NOT_FOUND)
                 .entity("{\"error\":\"Subscription not found\"}")
                 .build();
         }
 
-        LOG.info("public.subscription.found");
-        return Response.ok(toResponse(result.get())).build();
+        PublicSubscriptionView view = result.get();
+        LOG.infof(
+            "public.subscription.lookup result=found status=200 subscriptionId=%d",
+            view.subscriptionId()
+        );
+        return Response.ok(toResponse(view)).build();
     }
 
     private PublicSubscriptionResponse toResponse(PublicSubscriptionView view) {

@@ -52,6 +52,7 @@ public class PublicSubscriptionViewService implements PublicSubscriptionViewUseC
             .toList();
 
         return new PublicSubscriptionView(
+            subscription.getId(),
             subscription.getName(),
             subscription.getCost(),
             subscription.getBillingCycle(),
