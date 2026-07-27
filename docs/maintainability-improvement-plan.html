@@ -778,9 +778,9 @@
           <small>User isolation and production reliability.</small>
         </article>
         <article class="metric">
-          <strong>16</strong>
+          <strong>17</strong>
           <span>Flyway migrations</span>
-          <small>V16 is applied and validated in production.</small>
+          <small>V17 is applied and validated in production.</small>
         </article>
         <article class="metric">
           <strong>0.22 GB</strong>
@@ -845,6 +845,13 @@
           <code>2351067a</code> and <code>9e80ed8d</code> reached <code>SUCCESS</code>, and a
           production invalid-token probe returned <code>404</code> with token-free application
           events on both services.
+          A05 is completed by commit <code>cb2558b</code> without modifying the deployed V16
+          migration. Append-only V17 reports duplicate Payment Record tuples before repairing
+          missing idempotency indexes, while concurrent HTTP regressions now cover both Personal
+          and Shared Subscriptions and assert that <code>nextBillingDate</code> advances once.
+          CI run <code>30232966928</code> passed both jobs. Railway skipped the frontend, deployed
+          backend release <code>dad9880a</code>, and Flyway successfully advanced production from
+          V16 to V17.
         </p>
       </div>
     </section>
@@ -1842,7 +1849,7 @@
               <span class="finding-title">Make Payment Record generation idempotent under concurrency</span>
               <span class="finding-subtitle">Repository contract · P1 · M · depends on A04</span>
             </span>
-            <span class="priority p1">ready-for-agent</span>
+            <span class="priority verified">verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1876,6 +1883,16 @@
                 <li>The same test for a Personal Subscription proves that the null-Subscription-Member case produces exactly one Payment Record.</li>
                 <li>Sequential re-triggering remains a no-op. Run <code>cd backend &amp;&amp; ./mvnw test</code> against PostgreSQL.</li>
               </ul>
+              <p>
+                <strong>Verified July 26, 2026:</strong>
+                V16's deployed partial unique indexes were preserved. V17 adds the missing
+                duplicate-tuple diagnostic and safely restores either index only if an environment
+                has drifted. CI run <code>30232966928</code> passed the PostgreSQL-backed Personal
+                and Shared Subscription concurrency regressions. Backend deployment
+                <code>dad9880a-ab90-4015-b296-42680053f923</code> reached
+                <code>SUCCESS</code>; Flyway validated all 17 migrations and applied V17.
+                The frontend was correctly skipped.
+              </p>
             </div>
           </div>
         </details>
