@@ -53,9 +53,10 @@ application's internal safe-read retry is the mitigation being measured.
 | --- | --- | --- | ---: | ---: | --- |
 | Baseline 1 | 2026-07-26T23:25:12Z | All three services sleeping; no wake retry | `502` | 1,657 ms | None |
 | Retry soak 1 | 2026-07-26T23:55:10Z | All three services sleeping; commit `36190b2` deployed | `404` | 8,837 ms | None |
+| Retry soak 2 | 2026-07-27T02:06:55Z | All three services sleeping; commit `36190b2` deployed | `404` | 14,193 ms | None |
 
 The unmitigated run stopped after its first failure. The retry strategy starts a
-new 20-recovery acceptance series and is currently 1/20 successful.
+new 20-recovery acceptance series and is currently 2/20 successful.
 
 One non-soak diagnostic request at `2026-07-26T23:25:55Z` returned the expected
 `404` in 658 ms after all services had recovered.
@@ -83,6 +84,18 @@ For retry-soak cycle 1:
   `23:55:19Z`.
 - The first external request stayed open through that sequence and returned the
   expected `404`.
+
+For retry-soak cycle 2:
+
+- Frontend listened at `02:06:57Z`.
+- PostgreSQL completed automatic recovery and accepted connections at
+  approximately `02:07:05Z`.
+- The backend validated all 16 migrations, confirmed schema version 16, and
+  started at approximately `02:07:08Z`.
+- The harmless public lookup reached the backend at approximately `02:07:09Z`;
+  all three Railway services then reported `SUCCESS`.
+- A targeted backend log query found no `SQLState 08006`, EOF, closed-connection,
+  JDBC acquisition, or acquisition-timeout signature.
 
 ## Decision
 

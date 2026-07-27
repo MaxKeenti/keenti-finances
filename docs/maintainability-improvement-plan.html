@@ -824,7 +824,9 @@
           together. Commit <code>36190b2</code> adds bounded retries for safe reads only; writes
           remain single-attempt. With frontend, backend, and PostgreSQL all confirmed sleeping, the
           first production request then returned the expected <code>404</code> in 8.837 seconds
-          without a stale-connection signature. The revised soak series is 1/20 successful.
+          without a stale-connection signature. A second independent all-sleeping recovery returned
+          <code>404</code> in 14.193 seconds with all three services reaching
+          <code>SUCCESS</code>. The revised soak series is 2/20 successful.
           Railway watch paths are now isolated to <code>/backend/**</code> and
           <code>/frontend/**</code>. The live configuration read-back succeeded without creating a
           deployment or waking either sleeping service. Docs-only commit <code>a1554de</code> then
@@ -1732,7 +1734,7 @@
               <span class="finding-title">Retain Railway Serverless and prove safe idle recovery</span>
               <span class="finding-subtitle">Railway contract · P0 · S · no dependency</span>
             </span>
-            <span class="priority p0">retry deployed · 1/20 passed</span>
+            <span class="priority p0">retry deployed · 2/20 passed</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1768,7 +1770,7 @@
                 stale-connection signature.
                 See
                 <a href="operations/railway-a03-idle-recovery-2026-07-26.md">the A03 evidence record</a>.
-                Keep serverless sleep enabled and continue the revised series from 1/20.
+                Keep serverless sleep enabled and continue the revised series from 2/20.
               </p>
             </div>
           </div>
