@@ -10,13 +10,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: Backend tests and package
+  backend-test:
+    name: backend-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -35,9 +36,10 @@ jobs:
       - name: Test and package
         run: ./mvnw --batch-mode verify
 
-  frontend:
-    name: Frontend check and build
+  frontend-check:
+    name: frontend-check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -50,14 +52,83 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Cache Bun packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Test
-        run: bun run test
 
       - name: Check
         run: bun run check
 
       - name: Build
         run: bun run build
+
+  frontend-test:
+    name: frontend-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Cache Bun packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun run test
+
+  production-images:
+    name: production-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - backend-test
+      - frontend-check
+      - frontend-test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build production images from a clean cache
+        run: |
+          docker build --pull --no-cache --tag keenti-backend:ci backend
+          docker build --pull --no-cache --tag keenti-frontend:ci frontend
+
+      - name: Confirm production images run without root
+        run: |
+          test "$(docker run --rm --entrypoint id keenti-backend:ci -u)" != "0"
+          test "$(docker run --rm --entrypoint id keenti-frontend:ci -u)" != "0"
+
+      - name: Probe the frontend production image
+        run: |
+          docker run --detach --name keenti-frontend-ci --publish 3000:3000 keenti-frontend:ci
+          trap 'docker logs keenti-frontend-ci; docker rm --force keenti-frontend-ci' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
