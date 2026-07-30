@@ -1510,7 +1510,7 @@
               <td>07</td>
               <td><a href="#contract-a07">Add required backend/frontend CI and merge gates</a></td>
               <td>GitHub</td>
-              <td><span class="priority p1">P1</span></td>
+              <td><span class="priority verified">Verified</span></td>
               <td>M</td>
               <td>04, 06</td>
               <td>Pull requests cannot merge unless all named checks pass.</td>
@@ -1952,9 +1952,9 @@
             <span class="finding-id">A07</span>
             <span>
               <span class="finding-title">Require CI checks and enforce them on main</span>
-              <span class="finding-subtitle">GitHub contract · P1 · M · depends on A04 and A06</span>
+              <span class="finding-subtitle">GitHub contract · P1 · M · completed July 30, 2026</span>
             </span>
-            <span class="priority p1">ready-for-agent</span>
+            <span class="priority verified">verified</span>
           </summary>
           <div class="finding-body">
             <div>
@@ -1979,6 +1979,20 @@
               <p>
                 A deliberately failing draft pull request is blocked by the relevant check; after
                 reverting the failure, all four checks pass and the pull request becomes mergeable.
+              </p>
+              <p>
+                <strong>Verified July 30, 2026:</strong>
+                CI run <code>30559258218</code> introduced and passed the four exact job contexts.
+                Active repository ruleset <code>20057238</code> targets the default branch with
+                strict required-status-check enforcement for <code>backend-test</code>,
+                <code>frontend-check</code>, <code>frontend-test</code>, and
+                <code>production-images</code>; its API read-back reports an empty bypass list and
+                <code>current_user_can_bypass: never</code>. Draft pull request
+                <code>#8</code> was <code>BLOCKED</code> during deliberate failing run
+                <code>30559657983</code>, where only <code>frontend-test</code> failed and the
+                dependent image job was withheld. After removing the probe, run
+                <code>30559807668</code> passed all four required checks, including PostgreSQL/Flyway
+                tests and clean-cache, non-root production image verification.
               </p>
             </div>
           </div>
