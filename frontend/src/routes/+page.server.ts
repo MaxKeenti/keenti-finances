@@ -12,6 +12,8 @@ type MonthSummary = {
 type DashboardSummary = {
 	year: number;
 	netBalance: number;
+	inBoxes: number;
+	availableToSpend: number;
 	totalIngress: number;
 	totalEgress: number;
 	monthly: MonthSummary[];
@@ -20,6 +22,8 @@ type DashboardSummary = {
 const EMPTY_SUMMARY: DashboardSummary = {
 	year: new Date().getFullYear(),
 	netBalance: 0,
+	inBoxes: 0,
+	availableToSpend: 0,
 	totalIngress: 0,
 	totalEgress: 0,
 	monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, ingress: 0, egress: 0 })),
@@ -42,7 +46,7 @@ export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 			headers: authHeaders,
 		});
 		if (res.ok) {
-			summary = await res.json();
+			summary = { ...EMPTY_SUMMARY, ...((await res.json()) as Partial<DashboardSummary>), year };
 			console.log(
 				`[dashboard] load: year=${year} months=${summary.monthly.length} netBalance=${summary.netBalance}`,
 			);

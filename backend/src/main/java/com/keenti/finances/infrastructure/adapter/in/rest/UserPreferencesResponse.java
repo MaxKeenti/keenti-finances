@@ -9,5 +9,6 @@ public record UserPreferencesResponse(
     String transactionSortBy,
     String transactionSortDirection,
     String mobilePinnedNavItems,
-    boolean dockMagnification
+    boolean dockMagnification,
+    String timeZone
 ) {}

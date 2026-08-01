@@ -138,7 +138,16 @@ public class SubscriptionResource {
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
             t.getTransactionDate(), t.getCategoryId(), categoryName, categoryHue,
-            t.getContactId(), contactName, t.getSubscriptionId()
+            t.getContactId(), contactName, t.getSubscriptionId(),
+            t.getBoxFunding().stream()
+                .map(f -> new BoxFundingResponse(
+                    f.boxId(), f.boxName(), f.amount(), f.lineOrder()))
+                .toList(),
+            t.getBoxDistributions().stream()
+                .map(d -> new BoxDistributionResponse(
+                    d.boxId(), d.boxName(), d.amount(), d.lineOrder(), d.effectiveDate()))
+                .toList(),
+            t.getAvailableToSpendAmount()
         );
     }
 

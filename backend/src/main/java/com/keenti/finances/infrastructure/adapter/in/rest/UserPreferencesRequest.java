@@ -26,5 +26,6 @@ public record UserPreferencesRequest(
     String transactionSortDirection,
     @NotBlank
     String mobilePinnedNavItems,
-    boolean dockMagnification
+    boolean dockMagnification,
+    String timeZone
 ) {}

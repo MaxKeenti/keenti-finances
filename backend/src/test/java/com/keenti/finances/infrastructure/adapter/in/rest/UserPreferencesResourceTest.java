@@ -5,7 +5,17 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import static io.restassured.RestAssured.given;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.equalTo;
 
 @QuarkusTest
@@ -28,7 +38,46 @@ class UserPreferencesResourceTest {
             .body("transactionSortBy", equalTo(UserEntity.DEFAULT_TRANSACTION_SORT_BY))
             .body("transactionSortDirection", equalTo(UserEntity.DEFAULT_TRANSACTION_SORT_DIRECTION))
             .body("mobilePinnedNavItems", equalTo(UserEntity.DEFAULT_MOBILE_PINNED_NAV_ITEMS))
-            .body("dockMagnification", equalTo(UserEntity.DEFAULT_DOCK_MAGNIFICATION));
+            .body("dockMagnification", equalTo(UserEntity.DEFAULT_DOCK_MAGNIFICATION))
+            .body("timeZone", equalTo(UserEntity.DEFAULT_TIME_ZONE));
+    }
+
+    @Test
+    void concurrentFirstRequestsProvisionOneUserWithoutFailures() throws Exception {
+        String workosId = "test-prefs-concurrent-provision-" + System.nanoTime();
+        int requestCount = 4;
+        ExecutorService executor = Executors.newFixedThreadPool(requestCount);
+        CountDownLatch ready = new CountDownLatch(requestCount);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> statuses = new ArrayList<>();
+
+        try {
+            for (int index = 0; index < requestCount; index++) {
+                statuses.add(executor.submit(() -> {
+                    ready.countDown();
+                    assertTrue(start.await(10, TimeUnit.SECONDS));
+                    return given()
+                        .header("X-WorkOS-User-Id", workosId)
+                        .when().get("/api/user/preferences")
+                        .statusCode();
+                }));
+            }
+
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            for (Future<Integer> status : statuses) {
+                assertEquals(200, status.get(15, TimeUnit.SECONDS));
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        given()
+            .header("X-WorkOS-User-Id", workosId)
+            .when().get("/api/categories")
+            .then()
+            .statusCode(200)
+            .body("size()", equalTo(12));
     }
 
     @Test
@@ -172,6 +221,32 @@ class UserPreferencesResourceTest {
             .when().get("/api/user/preferences")
             .then()
             .statusCode(401);
+    }
+
+    @Test
+    void put_validIanaTimeZonePersistsAndInvalidZoneIsRejected() {
+        String user = "test-prefs-time-zone";
+        String valid = preferencesJson(100, "Fraunces", "Geist")
+            .replace("\"dockMagnification\": true",
+                "\"dockMagnification\": true,\n              \"timeZone\": \"America/New_York\"");
+
+        given()
+            .header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(valid)
+            .when().put("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("timeZone", equalTo("America/New_York"));
+
+        String invalid = valid.replace("America/New_York", "Mars/Olympus_Mons");
+        given()
+            .header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(invalid)
+            .when().put("/api/user/preferences")
+            .then()
+            .statusCode(400);
     }
 
     private static String preferencesJson(int primaryHue, String headingFont, String bodyFont) {

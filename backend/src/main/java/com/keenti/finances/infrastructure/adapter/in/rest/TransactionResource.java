@@ -1,10 +1,13 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
 import com.keenti.finances.domain.model.Category;
+import com.keenti.finances.domain.model.BoxDistribution;
+import com.keenti.finances.domain.model.BoxFunding;
 import com.keenti.finances.domain.model.Contact;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.CategoryUseCase;
 import com.keenti.finances.domain.port.in.ContactUseCase;
+import com.keenti.finances.domain.port.in.FundingTriggerUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -22,6 +25,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 @Path("/api/transactions")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -47,6 +51,9 @@ public class TransactionResource {
 
     @Inject
     ContactUseCase contactUseCase;
+
+    @Inject
+    FundingTriggerUseCase fundingTriggerUseCase;
 
     @GET
     public Response list(
@@ -113,6 +120,14 @@ public class TransactionResource {
                         .build());
     }
 
+    @GET
+    @Path("/funding-suggestions")
+    public Response fundingSuggestions(@QueryParam("categoryId") Long categoryId,
+                                       @QueryParam("ingressAmount") java.math.BigDecimal ingressAmount) {
+        return Response.ok(FundingSuggestionResource.toResponse(
+            fundingTriggerUseCase.suggestions(categoryId, ingressAmount))).build();
+    }
+
     @POST
     public Response create(@Valid TransactionRequest request) {
         categoryUseCase.getById(request.categoryId())
@@ -148,7 +163,18 @@ public class TransactionResource {
                             .entity("{\"error\":\"Contact not found: " + request.contactId() + "\"}")
                             .build()));
         }
-        Transaction updated = transactionUseCase.update(id, toTransaction(id, request));
+        Transaction requested = toTransaction(id, request);
+        if (request.boxFunding() == null) {
+            var existing = transactionUseCase.getById(id).orElseThrow(() ->
+                new jakarta.ws.rs.NotFoundException("Transaction not found: " + id));
+            requested = new Transaction(
+                requested.getId(), requested.getAmount(), requested.getDirection(),
+                requested.getDescription(), requested.getTransactionDate(),
+                requested.getCategoryId(), requested.getContactId(),
+                existing.getSubscriptionId(), existing.getBoxFunding(),
+                requested.getBoxDistributions());
+        }
+        Transaction updated = transactionUseCase.update(id, requested);
         return Response.ok(toResponse(updated)).build();
     }
 
@@ -168,7 +194,29 @@ public class TransactionResource {
 
     private Transaction toTransaction(Long id, TransactionRequest r) {
         return new Transaction(id, r.amount(), r.direction(), r.description(),
-                r.transactionDate(), r.categoryId(), r.contactId(), null);
+                r.transactionDate(), r.categoryId(), r.contactId(), null,
+                toBoxFunding(r.boxFunding()), toBoxDistributions(r.boxDistributions()));
+    }
+
+    private java.util.List<BoxDistribution> toBoxDistributions(
+            java.util.List<BoxDistributionRequest> distributions) {
+        if (distributions == null || distributions.isEmpty()) {
+            return java.util.List.of();
+        }
+        return IntStream.range(0, distributions.size())
+            .mapToObj(index -> new BoxDistribution(
+                distributions.get(index).boxId(), distributions.get(index).amount(), index))
+            .toList();
+    }
+
+    private java.util.List<BoxFunding> toBoxFunding(java.util.List<BoxFundingRequest> funding) {
+        if (funding == null || funding.isEmpty()) {
+            return java.util.List.of();
+        }
+        return IntStream.range(0, funding.size())
+            .mapToObj(index -> new BoxFunding(
+                funding.get(index).boxId(), funding.get(index).amount(), index))
+            .toList();
     }
 
     private TransactionResponse toResponse(Transaction t) {
@@ -183,7 +231,16 @@ public class TransactionResource {
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
             t.getTransactionDate(), t.getCategoryId(), categoryName, categoryHue,
-            t.getContactId(), contactName, t.getSubscriptionId()
+            t.getContactId(), contactName, t.getSubscriptionId(),
+            t.getBoxFunding().stream()
+                .map(f -> new BoxFundingResponse(
+                    f.boxId(), f.boxName(), f.amount(), f.lineOrder()))
+                .toList(),
+            t.getBoxDistributions().stream()
+                .map(d -> new BoxDistributionResponse(
+                    d.boxId(), d.boxName(), d.amount(), d.lineOrder(), d.effectiveDate()))
+                .toList(),
+            t.getAvailableToSpendAmount()
         );
     }
 }

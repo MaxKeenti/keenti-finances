@@ -20,6 +20,7 @@ public interface TransactionRepository {
     List<Transaction> findBySubscriptionId(Long subscriptionId);
     void softDeleteById(Long id);
     void restoreById(Long id);
+    Optional<Transaction> findDeletedTransactionById(Long id);
     Optional<TrashItem> findDeletedById(Long id);
     List<TrashItem> findAllDeleted();
 }

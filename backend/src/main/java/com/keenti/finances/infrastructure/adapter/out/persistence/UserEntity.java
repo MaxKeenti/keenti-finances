@@ -30,6 +30,7 @@ public class UserEntity extends PanacheEntityBase {
     public static final String DEFAULT_TRANSACTION_SORT_DIRECTION = "desc";
     public static final String DEFAULT_MOBILE_PINNED_NAV_ITEMS = "/transactions,/subscriptions,/debts";
     public static final boolean DEFAULT_DOCK_MAGNIFICATION = true;
+    public static final String DEFAULT_TIME_ZONE = "America/Mexico_City";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -70,6 +71,9 @@ public class UserEntity extends PanacheEntityBase {
 
     @Column(name = "dock_magnification", nullable = false)
     public boolean dockMagnification = DEFAULT_DOCK_MAGNIFICATION;
+
+    @Column(name = "time_zone", nullable = false, length = 64)
+    public String timeZone = DEFAULT_TIME_ZONE;
 
     public static Optional<UserEntity> findByWorkosId(String workosId) {
         return find("workosId", workosId).firstResultOptional();

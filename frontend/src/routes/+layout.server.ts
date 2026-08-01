@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { EMPTY_BALANCE_SUMMARY, type BalanceSummary } from '$lib/types/boxes';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -12,6 +13,7 @@ const DEFAULT_PREFERENCES = {
 	transactionSortDirection: 'desc',
 	mobilePinnedNavItems: '/transactions,/subscriptions,/debts',
 	dockMagnification: true,
+	timeZone: 'America/Mexico_City',
 } as const;
 
 type Preferences = {
@@ -24,6 +26,7 @@ type Preferences = {
 	transactionSortDirection: string;
 	mobilePinnedNavItems: string;
 	dockMagnification: boolean;
+	timeZone: string;
 };
 
 export const load: LayoutServerLoad = async ({ locals, fetch, cookies }) => {
@@ -32,25 +35,34 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies }) => {
 		...DEFAULT_PREFERENCES,
 		locale: cookieLocale === 'en' ? 'en' : DEFAULT_PREFERENCES.locale,
 	};
+	let balanceSummary: BalanceSummary = EMPTY_BALANCE_SUMMARY;
 
 	if (locals.session) {
-		try {
-			const res = await fetch(`${BACKEND}/api/user/preferences`);
-			if (res.ok) {
-				preferences = (await res.json()) as Preferences;
-				if (preferences.locale === 'en' || preferences.locale === 'es') {
-					cookies.set('PARAGLIDE_LOCALE', preferences.locale, {
-						path: '/',
-						sameSite: 'lax',
-						maxAge: 34_560_000,
-						httpOnly: false,
-					});
-				}
+		const [preferencesResult, balanceResult] = await Promise.allSettled([
+			fetch(`${BACKEND}/api/user/preferences`),
+			fetch(`${BACKEND}/api/boxes/summary`),
+		]);
+
+		if (preferencesResult.status === 'fulfilled' && preferencesResult.value.ok) {
+			preferences = (await preferencesResult.value.json()) as Preferences;
+			if (preferences.locale === 'en' || preferences.locale === 'es') {
+				cookies.set('PARAGLIDE_LOCALE', preferences.locale, {
+					path: '/',
+					sameSite: 'lax',
+					maxAge: 34_560_000,
+					httpOnly: false,
+				});
 			}
-		} catch {
+		} else {
 			console.error('[layout] failed to load user preferences; using defaults');
+		}
+
+		if (balanceResult.status === 'fulfilled' && balanceResult.value.ok) {
+			balanceSummary = (await balanceResult.value.json()) as BalanceSummary;
+		} else {
+			console.error('[layout] failed to load balance summary; using zero fallback');
 		}
 	}
 
-	return { session: locals.session, preferences };
+	return { session: locals.session, preferences, balanceSummary };
 };

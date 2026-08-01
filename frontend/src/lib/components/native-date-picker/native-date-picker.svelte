@@ -6,6 +6,7 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { useIsMobile } from '$lib/use-mobile.svelte';
 	import { cn } from '$lib/utils';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let {
 		name,
@@ -52,7 +53,7 @@
 			{...rest}
 		>
 			<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
-			{value || 'Pick a date'}
+			{value || m.common_pick_date()}
 		</Popover.Trigger>
 		<Popover.Content class="w-auto p-0" align="start">
 			<Calendar

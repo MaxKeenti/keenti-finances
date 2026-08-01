@@ -1,12 +1,17 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
-	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
 	import { goto } from '$app/navigation';
-	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
+	import { adaptiveConfirm, submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import { dockActionStore } from '$lib/components/app-shell/dock-action.svelte';
+	import {
+		BoxAllocationEditor,
+		TransactionBoxBreakdown,
+	} from '$lib/components/transactions';
+	import { FundingSuggestionEditor } from '$lib/components/funding-triggers';
 	import {
 		createTable,
 		getCoreRowModel,
@@ -32,23 +37,21 @@
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
 	import * as Card from '$lib/components/ui/card';
-	import { mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { transactionSchema } from '$lib/schemas/transaction';
+	import {
+		allocationTotal,
+		amountToCents,
+		hasAtMostTwoDecimalPlaces,
+		type BoxAllocationInput,
+		type TransactionDirection,
+	} from '$lib/types/transactions';
 	import type { PageData } from './$types';
 
 	type Transaction = PageData['transactions'][number];
 	type TransactionSortBy = PageData['transactionPage']['sortBy'];
 	type TransactionSortDirection = PageData['transactionPage']['sortDirection'];
-
-	const transactionSchema = z.object({
-		id: z.coerce.number().optional(),
-		amount: z.coerce.number().positive(m.validation_amount_positive()),
-		direction: z.enum(['INGRESS', 'EGRESS']),
-		description: z.string().max(500).optional(),
-		transactionDate: z.string().min(1, m.validation_date_required()),
-		categoryId: z.coerce.number().min(1, m.validation_category_required()),
-		contactId: z.union([z.coerce.number(), z.literal('')]).optional(),
-	});
 
 	let { data }: { data: PageData } = $props();
 
@@ -58,10 +61,11 @@
 	let deleteForm = $state<HTMLFormElement | null>(null);
 	let bulkDeleteForm = $state<HTMLFormElement | null>(null);
 	let selectedTxIds = $state<Set<number>>(new Set());
+	let editingTransaction = $state<Transaction | null>(null);
 
-	const today = new Date().toISOString().split('T')[0];
+	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
-	const sf = superForm(data.form, {
+	const sf = superForm(untrack(() => data.form), {
 		dataType: 'json',
 		validators: zod4Client(transactionSchema),
 		onResult({ result }) {
@@ -80,6 +84,7 @@
 
 	function openCreate() {
 		editMode = false;
+		editingTransaction = null;
 		sf.reset({
 			data: {
 				amount: 0,
@@ -88,21 +93,27 @@
 				transactionDate: today,
 				categoryId: data.categories[0]?.id ?? 0,
 				contactId: '',
+				boxFunding: [],
+				boxDistributions: [],
 			},
 		});
 		dialogOpen = true;
 	}
 
-	function openEdit(tx: {
-		id: number;
-		amount: number;
-		direction: string;
-		description: string | null;
-		transactionDate: string;
-		categoryId: number;
-		contactId: number | null;
-	}) {
+	async function openEdit(tx: Transaction) {
+		if (
+			tx.boxDistributions.length > 0 &&
+			!(await adaptiveConfirm({
+				title: m.transactions_distribution_edit_warning_title(),
+				description: m.transactions_distribution_edit_warning_description(),
+				confirmLabel: m.common_edit(),
+				cancelLabel: m.common_cancel(),
+			}))
+		) {
+			return;
+		}
 		editMode = true;
+		editingTransaction = tx;
 		form.set({
 			id: tx.id,
 			amount: tx.amount,
@@ -111,16 +122,22 @@
 			transactionDate: tx.transactionDate,
 			categoryId: tx.categoryId,
 			contactId: tx.contactId ?? '',
+			boxFunding: tx.boxFunding.map(({ boxId, amount }) => ({ boxId, amount })),
+			boxDistributions: [],
 		});
 		dialogOpen = true;
 	}
 
 	async function openDelete(tx: { id: number; description: string | null; amount: number; direction: string }) {
 		const description = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS');
+		const linkedDepositWarning =
+			data.transactions.find((transaction) => transaction.id === tx.id)?.boxDistributions.length
+				? ` ${m.transactions_distribution_delete_warning()}`
+				: '';
 		deleteTargetId = tx.id;
 		await submitWithAdaptiveConfirm(deleteForm, {
 			title: m.transactions_delete_title(),
-			description: `${m.delete_confirm_prefix()} ${description}${m.delete_confirm_suffix()}`,
+			description: `${m.delete_confirm_prefix()} ${description}${m.delete_confirm_suffix()}${linkedDepositWarning}`,
 			confirmLabel: m.common_delete(),
 			cancelLabel: m.common_cancel(),
 			destructive: true,
@@ -251,9 +268,15 @@
 
 	async function confirmBulkDelete() {
 		if (selectedTxIds.size === 0) return;
+		const containsLinkedDeposits = data.transactions.some(
+			(transaction) =>
+				selectedTxIds.has(transaction.id) && transaction.boxDistributions.length > 0,
+		);
 		await submitWithAdaptiveConfirm(bulkDeleteForm, {
 			title: m.transactions_bulk_delete_title(),
-			description: m.transactions_bulk_delete_description({ count: selectedTxIds.size }),
+			description: `${m.transactions_bulk_delete_description({ count: selectedTxIds.size })}${
+				containsLinkedDeposits ? ` ${m.transactions_distribution_bulk_delete_warning()}` : ''
+			}`,
 			confirmLabel: m.common_delete(),
 			cancelLabel: m.common_cancel(),
 			destructive: true,
@@ -283,6 +306,20 @@
 		return () => dockActionStore.clear();
 	});
 
+	function changeDirection(direction: TransactionDirection) {
+		$form.direction = direction;
+		$form.boxFunding = [];
+		$form.boxDistributions = [];
+	}
+
+	function setBoxFunding(allocations: BoxAllocationInput[]) {
+		$form.boxFunding = allocations;
+	}
+
+	function setBoxDistributions(allocations: BoxAllocationInput[]) {
+		$form.boxDistributions = allocations;
+	}
+
 	const filteredCategories = $derived(
 		data.categories
 			.filter((c) => c.type === $form.direction || c.type === 'BOTH')
@@ -292,6 +329,44 @@
 	const sortedContacts = $derived(
 		[...data.contacts].sort((a, b) => a.name.localeCompare(b.name)),
 	);
+	const allocationInvalid = $derived.by(() => {
+		const allocations =
+			$form.direction === 'EGRESS'
+				? $form.boxFunding
+				: editMode
+					? []
+					: $form.boxDistributions;
+		if (allocations.length === 0) return false;
+		if ($form.transactionDate > today) return true;
+		if (
+			allocations.some(
+				(allocation) =>
+					allocation.amount <= 0 || !hasAtMostTwoDecimalPlaces(allocation.amount),
+			)
+		) {
+			return true;
+		}
+
+		const allocatedCents = amountToCents(allocationTotal(allocations));
+		if ($form.direction === 'INGRESS') {
+			return (
+				allocatedCents >
+				amountToCents(Math.max(0, data.balanceSummary.availableToSpend + $form.amount))
+			);
+		}
+
+		if (allocatedCents > amountToCents($form.amount)) return true;
+		return allocations.some((allocation) => {
+			const currentBalance = data.boxes.find((box) => box.id === allocation.boxId)?.balance ?? 0;
+			const originalAmount =
+				editingTransaction?.boxFunding.find((funding) => funding.boxId === allocation.boxId)
+					?.amount ?? 0;
+			return (
+				amountToCents(allocation.amount) >
+				amountToCents(currentBalance + originalAmount)
+			);
+		});
+	});
 
 	$effect(() => {
 		const ids = filteredCategories.map((c) => c.id);
@@ -387,21 +462,21 @@
 							})}
 						/>
 					</div>
-					<a href="/transactions/{tx.id}" class="block">
-						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
-							<Card.Content class="pt-4 pl-10">
+					<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
+						<Card.Content class="pt-4 pl-10">
 								<div class="flex items-start justify-between gap-2">
-									<div class="flex-1 min-w-0">
+									<a href="/transactions/{tx.id}" class="flex-1 min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 										<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
 										<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
-									</div>
-									<span
+									</a>
+									<a
+										href="/transactions/{tx.id}"
 										class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
 											? 'text-green-600 dark:text-green-400'
 											: 'text-red-600 dark:text-red-400'}"
 									>
 										{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-									</span>
+									</a>
 								</div>
 								<div class="flex items-center gap-2 mt-2">
 									{#if tx.categoryName}
@@ -411,9 +486,20 @@
 										<span class="text-xs text-muted-foreground">{tx.contactName}</span>
 									{/if}
 								</div>
+								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
+									<div class="mt-3">
+										<TransactionBoxBreakdown
+											direction={tx.direction as TransactionDirection}
+											amount={tx.amount}
+											boxFunding={tx.boxFunding}
+											boxDistributions={tx.boxDistributions}
+											availableToSpendAmount={tx.availableToSpendAmount}
+											locale={data.preferences.locale}
+										/>
+									</div>
+								{/if}
 							</Card.Content>
 						</Card.Root>
-					</a>
 				</div>
 			{/each}
 		</div>
@@ -523,7 +609,23 @@
 								/>
 							</Table.Cell>
 							<Table.Cell class="whitespace-nowrap">{tx.transactionDate}</Table.Cell>
-							<Table.Cell class="text-muted-foreground">{tx.description ?? '—'}</Table.Cell>
+							<Table.Cell class="text-muted-foreground">
+								<div class="space-y-1.5">
+									<a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">
+										{tx.description ?? '—'}
+									</a>
+									{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
+										<TransactionBoxBreakdown
+											direction={tx.direction as TransactionDirection}
+											amount={tx.amount}
+											boxFunding={tx.boxFunding}
+											boxDistributions={tx.boxDistributions}
+											availableToSpendAmount={tx.availableToSpendAmount}
+											locale={data.preferences.locale}
+										/>
+									{/if}
+								</div>
+							</Table.Cell>
 							<Table.Cell
 								class="font-mono font-medium {tx.direction === 'INGRESS'
 									? 'text-green-600 dark:text-green-400'
@@ -584,7 +686,7 @@
 
 <!-- Create / Edit dialog -->
 <Dialog.Root bind:open={dialogOpen}>
-	<Dialog.Content class="sm:max-w-lg">
+	<Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>{editMode ? m.transactions_edit_title() : m.transactions_new_title()}</Dialog.Title>
 			<Dialog.Description>
@@ -595,6 +697,21 @@
 		{#if $message}
 			<Alert.Root variant="destructive">
 				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
+		{/if}
+
+		{#if editMode && editingTransaction && editingTransaction.boxDistributions.length > 0}
+			<Alert.Root>
+				<Alert.Title>{m.transactions_distribution_independent_title()}</Alert.Title>
+				<Alert.Description class="space-y-2">
+					<p>{m.transactions_distribution_independent_description()}</p>
+					<TransactionBoxBreakdown
+						direction="INGRESS"
+						amount={editingTransaction.amount}
+						boxDistributions={editingTransaction.boxDistributions}
+						locale={data.preferences.locale}
+					/>
+				</Alert.Description>
 			</Alert.Root>
 		{/if}
 
@@ -634,7 +751,7 @@
 							<NativeSelect
 								name={fieldName}
 								value={$form.direction}
-								onValueChange={(v) => { $form.direction = v as 'INGRESS' | 'EGRESS'; }}
+								onValueChange={(v) => changeDirection(v as TransactionDirection)}
 								placeholder={m.common_select_direction()}
 								items={[
 									{ value: 'INGRESS', label: m.direction_ingress_income() },
@@ -710,9 +827,48 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
+			{#if $form.direction === 'EGRESS'}
+				<BoxAllocationEditor
+					kind="funding"
+					boxes={data.boxes}
+					allocations={$form.boxFunding}
+					onChange={setBoxFunding}
+					transactionAmount={$form.amount}
+					transactionDate={$form.transactionDate}
+					{today}
+					availableBefore={data.balanceSummary.availableToSpend}
+					locale={data.preferences.locale}
+					originalAmount={editingTransaction?.amount ?? 0}
+					originalDirection={(editingTransaction?.direction as TransactionDirection | undefined) ?? null}
+					originalFunding={editingTransaction?.boxFunding ?? []}
+					categoryName={data.categories.find((category) => category.id === $form.categoryId)?.name ?? null}
+				/>
+			{:else if !editMode}
+				<FundingSuggestionEditor
+					categoryId={$form.categoryId}
+					ingressAmount={$form.amount}
+					availableBefore={data.balanceSummary.availableToSpend}
+					allocations={$form.boxDistributions}
+					onChange={setBoxDistributions}
+					locale={data.preferences.locale}
+					active={dialogOpen}
+				/>
+				<BoxAllocationEditor
+					kind="distribution"
+					boxes={data.boxes}
+					allocations={$form.boxDistributions}
+					onChange={setBoxDistributions}
+					transactionAmount={$form.amount}
+					transactionDate={$form.transactionDate}
+					{today}
+					availableBefore={data.balanceSummary.availableToSpend}
+					locale={data.preferences.locale}
+				/>
+			{/if}
+
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={$submitting}>
+				<Button type="submit" disabled={$submitting || allocationInvalid}>
 					{$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
 				</Button>
 			</Dialog.Footer>

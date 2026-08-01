@@ -169,6 +169,20 @@ public class PanacheTransactionRepository implements TransactionRepository {
     }
 
     @Override
+    public Optional<Transaction> findDeletedTransactionById(Long id) {
+        Session session = HibernateSessions.unwrap(em);
+        session.disableFilter("softDelete");
+        try {
+            return TransactionEntity.<TransactionEntity>find(
+                    "id = ?1 AND deletedAt IS NOT NULL", id)
+                .firstResultOptional()
+                .map(this::toDomain);
+        } finally {
+            session.enableFilter("softDelete");
+        }
+    }
+
+    @Override
     @SuppressWarnings("null")
     public Optional<TrashItem> findDeletedById(Long id) {
         Session session = HibernateSessions.unwrap(em);
