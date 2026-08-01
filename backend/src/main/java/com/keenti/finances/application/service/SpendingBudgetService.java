@@ -64,7 +64,7 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
         }
 
         LocalDate today = userTimeZoneProvider.today();
-        LocalDateTime now = LocalDateTime.now(userTimeZoneProvider.getTimeZone());
+        LocalDateTime now = LocalDateTime.now();
         BoxPlan plan = boxPlanRepository.save(new BoxPlan(
             null,
             boxId,
@@ -146,7 +146,7 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
         SpendingBudgetTerms merged = merge(current, changes);
         LocalDate effectiveFrom = currentRange(
             locked, today, current.planRevision()).endExclusive();
-        LocalDateTime now = LocalDateTime.now(userTimeZoneProvider.getTimeZone());
+        LocalDateTime now = LocalDateTime.now();
 
         boxPlanRepository.supersedeUnopenedRevisions(planId, effectiveFrom, now);
         saveRevision(planId, effectiveFrom, merged, now);
@@ -163,7 +163,7 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
         LocalDate today = userTimeZoneProvider.today();
         List<BoxHistoryEntry> history = boxRepository.findHistory(boxId);
         evaluateClosedPeriods(locked, today, history);
-        LocalDateTime now = LocalDateTime.now(userTimeZoneProvider.getTimeZone());
+        LocalDateTime now = LocalDateTime.now();
         boxPlanRepository.supersedeUnopenedRevisions(
             planId, today.plusDays(1), now);
         BoxPlan ended = boxPlanRepository.updateStatus(
@@ -221,7 +221,7 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
                 history, cursor, endExclusive, revision.desiredBalance(),
                 cursor.equals(plan.startDate()) ? plan.createdAt() : null);
             SpendingBudgetPeriod previous = existing.get(cursor);
-            LocalDateTime evaluatedAt = LocalDateTime.now(userTimeZoneProvider.getTimeZone());
+            LocalDateTime evaluatedAt = LocalDateTime.now();
             BoxPlanPeriod generic = new BoxPlanPeriod(
                 previous == null ? null : previous.planPeriod().id(),
                 plan.id(),
@@ -287,7 +287,7 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
                 current.openingBalance(),
                 current.closingBalance(),
                 current.netProgress(),
-                LocalDateTime.now(userTimeZoneProvider.getTimeZone())
+                LocalDateTime.now()
             ),
             current.deposits(),
             current.withdrawals(),
