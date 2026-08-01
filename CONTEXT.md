@@ -23,8 +23,50 @@ The counterparty on the other side of a Transaction — a person or entity from 
 _Avoid_: Party, counterparty (in user-facing copy), payee, payer.
 
 **Net Balance**:
-The headline dashboard figure: the sum of INGRESS Transactions minus EGRESS Transactions over a period.
+The headline dashboard figure: the all-time sum of INGRESS Transactions minus EGRESS Transactions. Internal Box allocations never change it.
 _Avoid_: Balance (ambiguous — also used colloquially for "money in account"), cash flow (related but distinct; cash flow is the time series, net balance is the scalar).
+
+### Boxes
+
+**Box**:
+A User-defined envelope that reserves part of the Net Balance for a purpose without moving money outside the app. A Box has a non-negative balance, personalized presentation, dated history, and at most one active Box Plan. A Box must have a zero balance and no active Box Plan before it can be archived; the User explicitly completes, abandons, or ends the plan first.
+_Avoid_: Account (a Box does not represent a bank account), Category (describes a Transaction's purpose), wallet, pot, section.
+
+**In Boxes**:
+The sum of the current balances of all active Boxes. Displayed alongside Net Balance and Available to Spend; clicking it opens the Boxes overview.
+_Avoid_: Savings (a Spending Budget also holds money), locked balance (the User may withdraw it).
+
+**Available to Spend**:
+The unallocated part of the Net Balance: `Net Balance - In Boxes`. It may be negative after real spending; that is an unreconciled state, not a reason to reject the Transaction. Depositing more money into Boxes is blocked until the shortfall is reconciled.
+_Avoid_: Net Balance (includes money in Boxes), main balance, free balance.
+
+**Box Movement**:
+A dated internal allocation that deposits into, withdraws from, or transfers between Boxes. It is not a Transaction and never changes Net Balance. A Box Movement may be linked to an INGRESS Transaction for traceability.
+_Avoid_: Transaction, transfer Transaction, saving Transaction.
+
+**Box Funding**:
+The amount of an EGRESS Transaction paid from a Box. One Transaction may have Box Funding from several Boxes; any remainder is paid from Available to Spend. Box Funding is part of the Transaction correction lifecycle and is reversed when that Transaction is deleted.
+_Avoid_: Category (what the spending was for), Box Movement (an independent internal allocation).
+
+**Box Plan**:
+Optional guidance attached to a Box. A Box has at most one active plan, either a Saving Goal or a Spending Budget. Finished plans remain in history and do not archive the Box itself.
+_Avoid_: Box Type (the Box remains the same when its plan changes), automation (plans never move money).
+
+**Saving Goal**:
+A Box Plan for growing the Box to a target balance by a target date. It has a daily, weekly, or monthly cadence, a cadence anchor, a regular saving commitment, and automatically evaluated Mini Goals. Reaching the target makes it ready for User-confirmed completion.
+_Avoid_: Spending Budget, target Transaction.
+
+**Mini Goal**:
+One period of a Saving Goal. Achievement is based on the Box's net balance growth during that period. A shortfall is carried into the next period as arrears; clearing arrears returns later periods to the regular commitment.
+_Avoid_: Deposit (withdrawals and spending also affect the result), Payment Record (belongs to Subscriptions).
+
+**Spending Budget**:
+A recurring Box Plan that recommends keeping a desired amount in the Box each period. Money rolls forward and the suggested top-up is `max(period amount - current Box balance, 0)`. It reports funded, spent, and remaining amounts rather than achieved/missed status.
+_Avoid_: Saving Goal, Category budget (only explicitly funded Transactions consume it).
+
+**Funding Trigger**:
+A User-defined suggestion rule that reacts to an INGRESS Transaction's Category and proposes deposits into selected Boxes. Suggestions may come from active Box Plans or a configured fixed amount or percentage. The User must confirm every application; a Funding Trigger never moves money automatically.
+_Avoid_: Automation, scheduled transfer, recurring Transaction.
 
 ### Subscriptions
 

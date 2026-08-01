@@ -4,7 +4,6 @@ import com.keenti.finances.infrastructure.adapter.out.persistence.UserEntity;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceException;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -61,21 +60,30 @@ public class UserScopeFilter implements ContainerRequestFilter {
     }
 
     private UserEntity provisionUser(String workosId) {
-        UserEntity entity = new UserEntity();
-        entity.username = "workos:" + workosId;
-        entity.workosId = workosId;
-        entity.passwordHash = null;
+        // A first page load fans out into several API requests. Use a database
+        // upsert so those requests can safely race without poisoning the
+        // Hibernate persistence context with a failed INSERT. PostgreSQL makes
+        // competing inserts wait for the winning transaction before returning
+        // zero, so the lookup below sees the committed User.
+        int inserted = em.createNativeQuery("""
+                INSERT INTO app_user (username, password_hash, workos_id)
+                VALUES (:username, NULL, :workosId)
+                ON CONFLICT DO NOTHING
+                """)
+            .setParameter("username", "workos:" + workosId)
+            .setParameter("workosId", workosId)
+            .executeUpdate();
 
-        try {
-            em.persist(entity);
-            em.flush();
+        UserEntity entity = UserEntity.findByWorkosId(workosId)
+            .orElseThrow(() -> new IllegalStateException(
+                "Unable to provision WorkOS user " + workosId));
+
+        if (inserted == 1) {
             LOG.infof("auth.workos.jit_provisioned userId=%d workosId=%s", entity.id, workosId);
             defaultCategorySeeder.seedFor(entity);
-            return entity;
-        } catch (PersistenceException ex) {
-            LOG.warnf("auth.workos.jit_race workosId=%s", workosId);
-            return UserEntity.findByWorkosId(workosId)
-                .orElseThrow(() -> ex);
+        } else {
+            LOG.infof("auth.workos.jit_race_resolved userId=%d workosId=%s", entity.id, workosId);
         }
+        return entity;
     }
 }

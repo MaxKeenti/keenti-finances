@@ -42,6 +42,12 @@
 		{ value: 'es', label: m.settings_language_spanish() },
 		{ value: 'en', label: m.settings_language_english() },
 	];
+	const timeZoneItems = $derived(
+		data.timeZones.map((value) => ({
+			value,
+			label: value.replaceAll('_', ' '),
+		})),
+	);
 	const pageSizeItems = [10, 25, 50, 100].map((size) => ({
 		value: String(size),
 		label: m.transactions_page_size({ size }),
@@ -61,6 +67,7 @@
 	const navOptions = [
 		{ value: '/', label: m.nav_dashboard() },
 		{ value: '/transactions', label: m.nav_transactions() },
+		{ value: '/boxes', label: m.nav_boxes() },
 		{ value: '/subscriptions', label: m.nav_subscriptions() },
 		{ value: '/debts', label: m.nav_debts() },
 		{ value: '/settings', label: m.nav_settings() },
@@ -98,6 +105,7 @@
 	let transactionSortDirection = $state(initialPreferences.transactionSortDirection as TransactionSortDirection);
 	let mobilePinnedNavItems = $state(normalizePinnedNavItems(initialPreferences.mobilePinnedNavItems));
 	let dockMagnification = $state(initialPreferences.dockMagnification);
+	let timeZone = $state(initialPreferences.timeZone);
 	let saveState = $state<SaveState>('idle');
 	let savedTimer: ReturnType<typeof setTimeout> | null = null;
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -136,6 +144,7 @@
 					transactionSortDirection,
 					mobilePinnedNavItems: mobilePinnedNavItems.join(','),
 					dockMagnification,
+					timeZone,
 				}),
 			});
 			if (!res.ok) {
@@ -178,6 +187,11 @@
 	function onLocaleChange(next: string) {
 		locale = next;
 		void persist({ reloadLocale: true });
+	}
+
+	function onTimeZoneChange(next: string) {
+		timeZone = next;
+		void persist();
 	}
 
 	function onTransactionDefaultChange(
@@ -330,15 +344,28 @@
 				<Card.Description>{m.settings_regional_description()}</Card.Description>
 			</Card.Header>
 			<Card.Content>
-				<div class="grid gap-1.5">
-					<Label for="locale">{m.settings_language()}</Label>
-					<NativeSelect
-						id="locale"
-						name="locale"
-						value={locale}
-						onValueChange={onLocaleChange}
-						items={localeItems}
-					/>
+				<div class="grid gap-4">
+					<div class="grid gap-1.5">
+						<Label for="locale">{m.settings_language()}</Label>
+						<NativeSelect
+							id="locale"
+							name="locale"
+							value={locale}
+							onValueChange={onLocaleChange}
+							items={localeItems}
+						/>
+					</div>
+					<div class="grid gap-1.5">
+						<Label for="time-zone">{m.settings_time_zone()}</Label>
+						<NativeSelect
+							id="time-zone"
+							name="time-zone"
+							value={timeZone}
+							onValueChange={onTimeZoneChange}
+							items={timeZoneItems}
+						/>
+						<p class="text-xs text-muted-foreground">{m.settings_time_zone_description()}</p>
+					</div>
 				</div>
 			</Card.Content>
 		</Card.Root>

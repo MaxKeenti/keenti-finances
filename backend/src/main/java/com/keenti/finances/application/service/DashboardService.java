@@ -3,6 +3,7 @@ package com.keenti.finances.application.service;
 import com.keenti.finances.domain.model.DashboardSummary;
 import com.keenti.finances.domain.model.MonthSummary;
 import com.keenti.finances.domain.port.in.DashboardUseCase;
+import com.keenti.finances.domain.port.out.BoxRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -18,12 +19,17 @@ public class DashboardService implements DashboardUseCase {
     @Inject
     TransactionRepository transactionRepository;
 
+    @Inject
+    BoxRepository boxRepository;
+
     @Override
     public DashboardSummary getSummary(int year) {
         LOG.infof("dashboard.aggregation year=%d", year);
 
         List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year);
         BigDecimal netBalance = transactionRepository.getNetBalance();
+        BigDecimal inBoxes = boxRepository.getTotalBalance();
+        BigDecimal availableToSpend = netBalance.subtract(inBoxes);
 
         BigDecimal totalIngress = monthly.stream()
                 .map(MonthSummary::getIngress)
@@ -32,9 +38,10 @@ public class DashboardService implements DashboardUseCase {
                 .map(MonthSummary::getEgress)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LOG.infof("dashboard.aggregation year=%d months=%d totalIngress=%s totalEgress=%s netBalance=%s",
-                year, monthly.size(), totalIngress, totalEgress, netBalance);
+        LOG.infof("dashboard.aggregation year=%d months=%d totalIngress=%s totalEgress=%s netBalance=%s inBoxes=%s availableToSpend=%s",
+                year, monthly.size(), totalIngress, totalEgress, netBalance, inBoxes, availableToSpend);
 
-        return new DashboardSummary(year, netBalance, totalIngress, totalEgress, monthly);
+        return new DashboardSummary(year, netBalance, inBoxes, availableToSpend,
+                totalIngress, totalEgress, monthly);
     }
 }

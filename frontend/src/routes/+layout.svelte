@@ -62,7 +62,7 @@
 </svelte:head>
 
 {#if data.session}
-	<AppShell>
+	<AppShell balanceSummary={data.balanceSummary} locale={data.preferences.locale}>
 		{@render children()}
 	</AppShell>
 {:else}

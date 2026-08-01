@@ -14,6 +14,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.time.ZoneId;
 
 @Path("/api/user/preferences")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -24,6 +25,7 @@ public class UserPreferencesResource {
     private static final Set<String> ALLOWED_MOBILE_PINNED_NAV_ITEMS = Set.of(
         "/",
         "/transactions",
+        "/boxes",
         "/subscriptions",
         "/debts",
         "/settings"
@@ -45,7 +47,8 @@ public class UserPreferencesResource {
     @Transactional
     public Response update(@Valid UserPreferencesRequest request) {
         if (!ALLOWED_TRANSACTION_PAGE_SIZES.contains(request.transactionPageSize())
-            || !isValidPinnedNavItems(request.mobilePinnedNavItems())) {
+            || !isValidPinnedNavItems(request.mobilePinnedNavItems())
+            || !isValidTimeZone(request.timeZone())) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
 
@@ -62,6 +65,9 @@ public class UserPreferencesResource {
         user.transactionSortDirection = request.transactionSortDirection();
         user.mobilePinnedNavItems = request.mobilePinnedNavItems();
         user.dockMagnification = request.dockMagnification();
+        if (request.timeZone() != null && !request.timeZone().isBlank()) {
+            user.timeZone = request.timeZone();
+        }
         return Response.ok(toResponse(user)).build();
     }
 
@@ -75,7 +81,8 @@ public class UserPreferencesResource {
             user.transactionSortBy,
             user.transactionSortDirection,
             user.mobilePinnedNavItems,
-            user.dockMagnification
+            user.dockMagnification,
+            user.timeZone
         );
     }
 
@@ -87,5 +94,11 @@ public class UserPreferencesResource {
 
         Set<String> unique = new HashSet<>(items);
         return unique.size() == items.size() && ALLOWED_MOBILE_PINNED_NAV_ITEMS.containsAll(items);
+    }
+
+    private static boolean isValidTimeZone(String timeZone) {
+        return timeZone == null
+            || timeZone.isBlank()
+            || ZoneId.getAvailableZoneIds().contains(timeZone);
     }
 }

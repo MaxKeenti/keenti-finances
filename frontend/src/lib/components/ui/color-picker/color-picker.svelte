@@ -3,6 +3,7 @@
   import * as Slider from '$lib/components/ui/slider';
   import { CategoryBadge } from '$lib/components/ui/category-badge';
   import { hexToOklchHue, oklchHueToRepresentativeHex } from '$lib/utils/color';
+  import { m } from '$lib/paraglide/messages.js';
 
   interface Props {
     hue: number;
@@ -65,7 +66,7 @@
       onValueChange={onSlider}
       class="hue-slider flex-1"
       style={`--hue-slider-bg: ${sliderBg};`}
-      aria-label="Hue"
+      thumbLabel={m.common_hue()}
     />
     <Input
       type="text"
@@ -74,17 +75,17 @@
       onkeydown={onHexKeydown}
       class="h-9 w-24 font-mono uppercase"
       maxlength={7}
-      aria-label="Hex color"
+      aria-label={m.common_hex_colour()}
     />
   </div>
 
   <div class="flex items-center gap-2 text-xs text-muted-foreground">
-    <span>Preview:</span>
+    <span>{m.common_preview()}:</span>
     <div class="rounded-md bg-background p-1.5">
-      <CategoryBadge {hue} name={name || 'Sample'} {direction} forceTheme="light" />
+      <CategoryBadge {hue} name={name || m.common_sample()} {direction} forceTheme="light" />
     </div>
     <div class="rounded-md bg-foreground p-1.5">
-      <CategoryBadge {hue} name={name || 'Sample'} {direction} forceTheme="dark" />
+      <CategoryBadge {hue} name={name || m.common_sample()} {direction} forceTheme="dark" />
     </div>
   </div>
 </div>
