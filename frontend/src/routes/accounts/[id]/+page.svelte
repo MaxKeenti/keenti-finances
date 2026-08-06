@@ -4,6 +4,7 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { mxnFormatter } from '$lib/formatting';
 	import type { PageData } from './$types';
 
@@ -17,6 +18,7 @@
 	);
 	const accountKindLabel = $derived(({ CASH: 'Cash', DEBIT: 'Debit', CHECKING: 'Checking', SAVINGS: 'Savings', CREDIT: 'Credit' } as Record<string, string>)[data.account.kind] ?? data.account.kind);
 	const availableCredit = $derived(data.credit?.settings ? Math.max(data.credit.settings.creditLimit + data.account.balance, 0) : 0);
+	const today = new Date().toISOString().slice(0, 10);
 
 	function enhanceLifecycle() {
 		return async ({ result, update }: { result: { type: string; data?: { message?: string } }; update: () => Promise<void> }) => {
@@ -65,6 +67,18 @@
 		<Card.Root>
 			<Card.Header><Card.Title>Credit statements</Card.Title><Card.Description>Confirmed statements are preserved; payments from Transfers are allocated to the oldest outstanding statement.</Card.Description></Card.Header>
 			<Card.Content>{#if data.credit.statements.length === 0}<p class="text-sm text-muted-foreground">No confirmed statements yet. Add one from the Accounts overview.</p>{:else}<div class="divide-y rounded-md border">{#each data.credit.statements as statement}<div class="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><span>Due {statement.dueDate}</span><span class="tabular-nums">{fmt.format(statement.outstandingBalance)} remaining</span></div>{/each}</div>{/if}</Card.Content>
+		</Card.Root>
+		<Card.Root>
+			<Card.Header><Card.Title>MSI plans</Card.Title><Card.Description>The full purchase is already debt; each plan records equal no-interest statement installments.</Card.Description></Card.Header>
+			<Card.Content class="space-y-4">
+				{#if data.credit.msiPlans.length}<div class="divide-y rounded-md border">{#each data.credit.msiPlans as plan}<div class="flex flex-wrap justify-between gap-2 p-3 text-sm"><span>{plan.installmentCount} installments from {plan.firstInstallmentDate}</span><span>{fmt.format(plan.installmentAmount)} each · {fmt.format(plan.purchaseAmount)} total</span></div>{/each}</div>{:else}<p class="text-sm text-muted-foreground">No active MSI plans.</p>{/if}
+				<form method="POST" action="?/createMsiPlan" use:enhance={enhanceLifecycle} class="grid gap-3 sm:grid-cols-4">
+					<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="transactionId" required><option value="">Credit purchase</option>{#each data.credit.creditTransactions as transaction}<option value={transaction.id}>{transaction.transactionDate} · {transaction.description ?? 'Expense'} · {fmt.format(transaction.amount)}</option>{/each}</select>
+					<Input name="installmentCount" type="number" min="2" max="60" placeholder="Installments" />
+					<input class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="firstInstallmentDate" type="date" value={today} aria-label="First installment date" />
+					<Button type="submit">Create MSI plan</Button>
+				</form>
+			</Card.Content>
 		</Card.Root>
 	{/if}
 

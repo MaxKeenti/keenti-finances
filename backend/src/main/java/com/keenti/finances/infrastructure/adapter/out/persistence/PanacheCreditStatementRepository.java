@@ -85,6 +85,7 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
             .setParameter("id", statement.id()).setParameter("userId", userContext.getUserId())
             .getResultList().stream().findFirst().orElseThrow();
         entity.dueDate = statement.dueDate();
+        entity.estimatedBalance = statement.estimatedBalance();
         entity.officialBalance = statement.officialBalance();
         entity.officialMinimumPayment = statement.officialMinimumPayment();
         entity.officialAvoidInterest = statement.officialAvoidInterest();
@@ -92,6 +93,32 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         entity.confirmedAt = LocalDateTime.now();
         em.flush();
         return toDomain(entity);
+    }
+
+    @Override
+    public void saveRevision(CreditStatement statement) {
+        em.createNativeQuery("""
+                INSERT INTO credit_statement_revision (statement_id, due_date, official_balance,
+                    official_minimum_payment, official_avoid_interest, official_note, estimated_balance,
+                    confirmed_at)
+                VALUES (:statementId, :dueDate, :officialBalance, :minimumPayment, :avoidInterest,
+                    :officialNote, :estimatedBalance, :confirmedAt)
+                """)
+            .setParameter("statementId", statement.id()).setParameter("dueDate", statement.dueDate())
+            .setParameter("officialBalance", statement.officialBalance())
+            .setParameter("minimumPayment", statement.officialMinimumPayment())
+            .setParameter("avoidInterest", statement.officialAvoidInterest())
+            .setParameter("officialNote", statement.officialNote())
+            .setParameter("estimatedBalance", statement.estimatedBalance())
+            .setParameter("confirmedAt", statement.confirmedAt())
+            .executeUpdate();
+    }
+
+    @Override
+    public long revisionCount(Long statementId) {
+        Object raw = em.createNativeQuery("SELECT COUNT(*) FROM credit_statement_revision WHERE statement_id = :id")
+            .setParameter("id", statementId).getSingleResult();
+        return ((Number) raw).longValue();
     }
 
     @Override

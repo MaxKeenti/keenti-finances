@@ -61,11 +61,12 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, 'Financial Account not found');
 	const account = await accountRes.json() as Account;
 
-	const [transactionsRes, transfersRes, settingsRes, statementsRes] = await Promise.all([
+	const [transactionsRes, transfersRes, settingsRes, statementsRes, msiPlansRes] = await Promise.all([
 		fetch(`${BACKEND}/api/transactions`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
 		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/credit-settings`, { headers: auth }) : Promise.resolve(null),
 		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/credit-statements`, { headers: auth }) : Promise.resolve(null),
+		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/msi-plans`, { headers: auth }) : Promise.resolve(null),
 	]);
 	const transactions = transactionsRes.ok ? await transactionsRes.json() as Transaction[] : [];
 	const transfers = transfersRes.ok ? await transfersRes.json() as Transfer[] : [];
@@ -102,7 +103,9 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const nextStatement = statements
 		.filter((statement) => statement.outstandingBalance > 0)
 		.sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0] ?? null;
-	return { account, activity, credit: account.kind === 'CREDIT' ? { settings, statements, nextStatement } : null };
+	const msiPlans = msiPlansRes?.ok ? await msiPlansRes.json() : [];
+	const creditTransactions = transactions.filter((transaction) => transaction.accountId === id && transaction.direction === 'EGRESS');
+	return { account, activity, credit: account.kind === 'CREDIT' ? { settings, statements, nextStatement, msiPlans, creditTransactions } : null };
 };
 
 export const actions: Actions = {
@@ -129,5 +132,16 @@ export const actions: Actions = {
 			});
 		}
 		return { restored: true };
+	},
+	createMsiPlan: async ({ params, request, fetch, cookies }) => {
+		const data = await request.formData();
+		const response = await fetch(`${BACKEND}/api/accounts/${params.id}/msi-plans`, {
+			method: 'POST', headers: headers(cookies, true), body: JSON.stringify({
+				transactionId: Number(data.get('transactionId')), installmentCount: Number(data.get('installmentCount')),
+				firstInstallmentDate: data.get('firstInstallmentDate'),
+			}),
+		});
+		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The MSI plan could not be created. Use a credit-account expense whose amount divides evenly into the selected installments.' });
+		return { msiCreated: true };
 	},
 };

@@ -7,6 +7,10 @@ import com.keenti.finances.domain.model.CreditStatement;
 import com.keenti.finances.domain.port.in.CreditStatementUseCase;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
+import com.keenti.finances.domain.port.out.CreditStatementRepository;
+import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
+import com.keenti.finances.domain.port.out.TransactionRepository;
+import com.keenti.finances.domain.model.CreditMsiPlan;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -37,6 +41,10 @@ public class FinancialAccountResource {
 
     @Inject
     CreditStatementUseCase creditStatementUseCase;
+
+    @Inject CreditMsiPlanRepository creditMsiPlanRepository;
+    @Inject TransactionRepository transactionRepository;
+    @Inject CreditStatementRepository creditStatementRepository;
 
     @GET
     public Response list(@QueryParam("archived") @DefaultValue("false") boolean archived) {
@@ -118,6 +126,28 @@ public class FinancialAccountResource {
         return Response.ok(toResponse(reconfirmed)).build();
     }
 
+    @GET
+    @Path("/{id}/msi-plans")
+    public Response msiPlans(@PathParam("id") Long id) {
+        requireCredit(id);
+        return Response.ok(creditMsiPlanRepository.findByAccountId(id).stream().map(FinancialAccountResource::toResponse).toList()).build();
+    }
+
+    @POST
+    @Path("/{id}/msi-plans")
+    @Transactional
+    public Response createMsiPlan(@PathParam("id") Long id, @Valid CreditMsiPlanRequest request) {
+        requireCredit(id);
+        var transaction = transactionRepository.findById(request.transactionId()).orElseThrow(() -> new jakarta.ws.rs.NotFoundException("Transaction not found"));
+        if (!idEquals(transaction.getAccountId(), id) || !"EGRESS".equals(transaction.getDirection())) throw new jakarta.ws.rs.BadRequestException("An MSI plan requires an EGRESS Transaction on this Credit Account");
+        if (creditMsiPlanRepository.existsByTransactionId(request.transactionId())) throw new jakarta.ws.rs.ClientErrorException("This purchase already has an MSI plan", Response.Status.CONFLICT);
+        if (request.firstInstallmentDate().isBefore(transaction.getTransactionDate())) throw new jakarta.ws.rs.BadRequestException("The first installment cannot precede the purchase");
+        BigDecimal divisor = BigDecimal.valueOf(request.installmentCount());
+        try { transaction.getAmount().divide(divisor); } catch (ArithmeticException e) { throw new jakarta.ws.rs.BadRequestException("The purchase amount must divide exactly into MXN-cent installments"); }
+        CreditMsiPlan saved = creditMsiPlanRepository.save(new CreditMsiPlan(null, id, request.transactionId(), transaction.getAmount(), request.installmentCount(), request.firstInstallmentDate(), true));
+        return Response.status(Response.Status.CREATED).entity(toResponse(saved)).build();
+    }
+
     @POST
     @Path("/activate")
     public Response activate(@Valid FinancialAccountActivationRequest request) {
@@ -184,12 +214,16 @@ public class FinancialAccountResource {
     private CreditStatementResponse toResponse(CreditStatement statement) {
         BigDecimal currentEstimate = creditStatementUseCase.estimateOutstandingBalance(
             statement.accountId(), statement.periodEnd());
-        BigDecimal mismatchAmount = currentEstimate.subtract(statement.officialBalance());
+        BigDecimal mismatchAmount = currentEstimate.subtract(statement.estimatedBalance());
         return new CreditStatementResponse(statement.id(), statement.accountId(), statement.periodStart(),
             statement.periodEnd(), statement.dueDate(), statement.estimatedBalance(),
             statement.officialBalance(), statement.officialMinimumPayment(),
             statement.officialAvoidInterest(), statement.officialNote(), statement.confirmedAt(),
             statement.paidAmount(), statement.officialBalance().subtract(statement.paidAmount()),
-            mismatchAmount.signum() != 0, mismatchAmount);
+            mismatchAmount.signum() != 0, mismatchAmount,
+            creditStatementRepository.revisionCount(statement.id()));
     }
+
+    private static CreditMsiPlanResponse toResponse(CreditMsiPlan plan) { return new CreditMsiPlanResponse(plan.id(), plan.transactionId(), plan.purchaseAmount(), plan.installmentCount(), plan.installmentAmount(), plan.firstInstallmentDate(), plan.active()); }
+    private static boolean idEquals(Long left, Long right) { return left != null && left.equals(right); }
 }

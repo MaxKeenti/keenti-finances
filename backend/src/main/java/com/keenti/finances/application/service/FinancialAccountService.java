@@ -4,6 +4,7 @@ import com.keenti.finances.domain.model.AccountTrackingStatus;
 import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditStatementRepository;
+import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -36,6 +37,9 @@ public class FinancialAccountService implements FinancialAccountUseCase {
 
     @Inject
     CreditStatementRepository creditStatementRepository;
+
+    @Inject
+    CreditMsiPlanRepository creditMsiPlanRepository;
 
     @Override
     public AccountTrackingStatus status() {
@@ -125,6 +129,10 @@ public class FinancialAccountService implements FinancialAccountUseCase {
                 .anyMatch(statement -> statement.officialBalance().subtract(statement.paidAmount()).signum() > 0)) {
             throw new ClientErrorException(
                 "Settle every confirmed Credit Statement before archiving this Financial Account",
+                Response.Status.CONFLICT);
+        }
+        if (account.isCredit() && creditMsiPlanRepository.hasActiveByAccountId(id)) {
+            throw new ClientErrorException("Finish or cancel every active MSI plan before archiving this Financial Account",
                 Response.Status.CONFLICT);
         }
         FinancialAccount archived = financialAccountRepository.setArchived(id, true);

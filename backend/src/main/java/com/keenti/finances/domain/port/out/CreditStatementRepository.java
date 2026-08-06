@@ -13,6 +13,8 @@ public interface CreditStatementRepository {
     Optional<CreditStatement> findById(Long id);
     CreditStatement save(CreditStatement statement);
     CreditStatement updateOfficialFigures(CreditStatement statement);
+    void saveRevision(CreditStatement statement);
+    long revisionCount(Long statementId);
     void allocateOldestOutstanding(Long accountId, Long transferId, LocalDate paymentDate,
                                    BigDecimal amount);
     void removeAllocationsForTransfer(Long transferId);

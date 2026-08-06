@@ -66,9 +66,11 @@ public class CreditStatementService implements CreditStatementUseCase {
             throw new BadRequestException("A reconfirmation cannot change the statement period or Financial Account");
         }
         validate(statement);
+        creditStatementRepository.saveRevision(existing);
+        BigDecimal currentEstimate = estimateOutstandingBalance(existing.accountId(), existing.periodEnd());
         return creditStatementRepository.updateOfficialFigures(new CreditStatement(statementId,
             existing.accountId(), existing.periodStart(), existing.periodEnd(), statement.dueDate(),
-            existing.estimatedBalance(), statement.officialBalance(), statement.officialMinimumPayment(),
+            currentEstimate, statement.officialBalance(), statement.officialMinimumPayment(),
             statement.officialAvoidInterest(), statement.officialNote(), existing.confirmedAt(), existing.paidAmount()));
     }
 
