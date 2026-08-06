@@ -13,7 +13,7 @@
 	let { data }: { data: PageData } = $props();
 	type Account = { id: number; name: string; kind: string; balance: number };
 	type Transfer = { id: number; sourceAccountId: number; sourceAccountName: string | null; destinationAccountId: number; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
-	type CreditDetail = { settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null; statements: Array<{ id: number; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; paidAmount: number; outstandingBalance: number }> };
+	type CreditDetail = { settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null; statements: Array<{ id: number; periodStart: string; periodEnd: string; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; officialNote: string | null; paidAmount: number; outstandingBalance: number; reconciliationMismatch: boolean; mismatchAmount: number }> };
 	const accounts = $derived(data.accounts as Account[]);
 	const archivedAccounts = $derived(data.archivedAccounts as Account[]);
 	const transfers = $derived(data.transfers as Transfer[]);
@@ -160,7 +160,22 @@
 						<div class="space-y-2 text-sm">
 							<p class="font-medium">Confirmed statements</p>
 							{#each detail.statements as statement}
-								<div class="flex flex-wrap justify-between gap-2 rounded-md border p-3"><span>Due {statement.dueDate}</span><span>{fmt.format(statement.outstandingBalance)} remaining · {fmt.format(statement.officialAvoidInterest)} to avoid interest</span></div>
+								<div class="space-y-3 rounded-md border p-3">
+									<div class="flex flex-wrap justify-between gap-2"><span>Due {statement.dueDate}</span><span>{fmt.format(statement.outstandingBalance)} remaining · {fmt.format(statement.officialAvoidInterest)} to avoid interest</span></div>
+									{#if statement.reconciliationMismatch}<Alert.Root><Alert.Description>Activity changed after confirmation: {fmt.format(Math.abs(statement.mismatchAmount))} differs from the official statement. Reconfirm only after checking the bank statement.</Alert.Description></Alert.Root>{/if}
+									<details>
+										<summary class="cursor-pointer text-sm font-medium">Reconfirm official figures</summary>
+										<form method="POST" action="?/reconfirmCreditStatement" use:enhance class="mt-3 grid gap-3 sm:grid-cols-3">
+											<input type="hidden" name="accountId" value={account.id} /><input type="hidden" name="statementId" value={statement.id} /><input type="hidden" name="periodStart" value={statement.periodStart} /><input type="hidden" name="periodEnd" value={statement.periodEnd} />
+											<input class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="dueDate" type="date" value={statement.dueDate} aria-label="Statement due date" />
+											<Input name="officialBalance" type="number" min="0" step="0.01" value={statement.officialBalance} />
+											<Input name="officialMinimumPayment" type="number" min="0" step="0.01" value={statement.officialMinimumPayment} />
+											<Input name="officialAvoidInterest" type="number" min="0" step="0.01" value={statement.officialAvoidInterest} />
+											<Input name="officialNote" value={statement.officialNote ?? ''} placeholder="Optional note" />
+											<Button type="submit">Reconfirm statement</Button>
+										</form>
+									</details>
+								</div>
 							{/each}
 						</div>
 					{/if}

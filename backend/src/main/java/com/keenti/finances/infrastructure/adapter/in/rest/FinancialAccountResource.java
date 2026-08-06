@@ -85,7 +85,7 @@ public class FinancialAccountResource {
     @Path("/{id}/credit-statements")
     public Response creditStatements(@PathParam("id") Long id) {
         return Response.ok(creditStatementUseCase.list(id).stream()
-            .map(FinancialAccountResource::toResponse).toList()).build();
+            .map(this::toResponse).toList()).build();
     }
 
     @GET
@@ -105,6 +105,17 @@ public class FinancialAccountResource {
             request.officialBalance(), request.officialMinimumPayment(),
             request.officialAvoidInterest(), request.officialNote(), null, null));
         return Response.status(Response.Status.CREATED).entity(toResponse(confirmed)).build();
+    }
+
+    @POST
+    @Path("/{id}/credit-statements/{statementId}/reconfirm")
+    public Response reconfirmCreditStatement(@PathParam("id") Long id, @PathParam("statementId") Long statementId,
+                                             @Valid CreditStatementRequest request) {
+        CreditStatement reconfirmed = creditStatementUseCase.reconfirm(statementId, new CreditStatement(null, id,
+            request.periodStart(), request.periodEnd(), request.dueDate(), null,
+            request.officialBalance(), request.officialMinimumPayment(),
+            request.officialAvoidInterest(), request.officialNote(), null, null));
+        return Response.ok(toResponse(reconfirmed)).build();
     }
 
     @POST
@@ -170,11 +181,15 @@ public class FinancialAccountResource {
             settings.statementClosingDay(), settings.paymentDueDay());
     }
 
-    private static CreditStatementResponse toResponse(CreditStatement statement) {
+    private CreditStatementResponse toResponse(CreditStatement statement) {
+        BigDecimal currentEstimate = creditStatementUseCase.estimateOutstandingBalance(
+            statement.accountId(), statement.periodEnd());
+        BigDecimal mismatchAmount = currentEstimate.subtract(statement.officialBalance());
         return new CreditStatementResponse(statement.id(), statement.accountId(), statement.periodStart(),
             statement.periodEnd(), statement.dueDate(), statement.estimatedBalance(),
             statement.officialBalance(), statement.officialMinimumPayment(),
             statement.officialAvoidInterest(), statement.officialNote(), statement.confirmedAt(),
-            statement.paidAmount(), statement.officialBalance().subtract(statement.paidAmount()));
+            statement.paidAmount(), statement.officialBalance().subtract(statement.paidAmount()),
+            mismatchAmount.signum() != 0, mismatchAmount);
     }
 }

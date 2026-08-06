@@ -9,4 +9,5 @@ public interface CreditStatementUseCase {
     List<CreditStatement> list(Long accountId);
     BigDecimal estimateOutstandingBalance(Long accountId, LocalDate periodEnd);
     CreditStatement confirm(CreditStatement statement);
+    CreditStatement reconfirm(Long statementId, CreditStatement statement);
 }

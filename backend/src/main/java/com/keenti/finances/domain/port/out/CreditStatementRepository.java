@@ -10,7 +10,9 @@ public interface CreditStatementRepository {
     List<CreditStatement> findByAccountId(Long accountId);
     Optional<CreditStatement> findByAccountIdAndPeriod(Long accountId, LocalDate periodStart,
                                                         LocalDate periodEnd);
+    Optional<CreditStatement> findById(Long id);
     CreditStatement save(CreditStatement statement);
+    CreditStatement updateOfficialFigures(CreditStatement statement);
     void allocateOldestOutstanding(Long accountId, Long transferId, LocalDate paymentDate,
                                    BigDecimal amount);
     void removeAllocationsForTransfer(Long transferId);

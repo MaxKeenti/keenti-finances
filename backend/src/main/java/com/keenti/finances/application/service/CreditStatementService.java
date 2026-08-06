@@ -55,6 +55,23 @@ public class CreditStatementService implements CreditStatementUseCase {
             statement.officialAvoidInterest(), statement.officialNote(), LocalDateTime.now(), BigDecimal.ZERO));
     }
 
+    @Override
+    @Transactional
+    public CreditStatement reconfirm(Long statementId, CreditStatement statement) {
+        CreditStatement existing = creditStatementRepository.findById(statementId).orElseThrow(() ->
+            new NotFoundException("Credit statement not found: " + statementId));
+        if (!existing.accountId().equals(statement.accountId())
+                || !existing.periodStart().equals(statement.periodStart())
+                || !existing.periodEnd().equals(statement.periodEnd())) {
+            throw new BadRequestException("A reconfirmation cannot change the statement period or Financial Account");
+        }
+        validate(statement);
+        return creditStatementRepository.updateOfficialFigures(new CreditStatement(statementId,
+            existing.accountId(), existing.periodStart(), existing.periodEnd(), statement.dueDate(),
+            existing.estimatedBalance(), statement.officialBalance(), statement.officialMinimumPayment(),
+            statement.officialAvoidInterest(), statement.officialNote(), existing.confirmedAt(), existing.paidAmount()));
+    }
+
     private void requireCreditAccount(Long accountId) {
         if (!financialAccountRepository.isTrackingActive()) {
             throw new ClientErrorException("Activate Financial Account tracking before managing statements",

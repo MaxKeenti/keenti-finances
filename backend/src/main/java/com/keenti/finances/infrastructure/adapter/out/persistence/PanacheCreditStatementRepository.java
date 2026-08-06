@@ -47,6 +47,17 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
     }
 
     @Override
+    public Optional<CreditStatement> findById(Long id) {
+        return em.createQuery("""
+                SELECT statement FROM CreditStatementEntity statement
+                JOIN statement.account account
+                WHERE statement.id = :id AND account.user.id = :userId
+                """, CreditStatementEntity.class)
+            .setParameter("id", id).setParameter("userId", userContext.getUserId())
+            .getResultList().stream().findFirst().map(this::toDomain);
+    }
+
+    @Override
     public CreditStatement save(CreditStatement statement) {
         CreditStatementEntity entity = new CreditStatementEntity();
         entity.account = em.getReference(FinancialAccountEntity.class, statement.accountId());
@@ -60,6 +71,25 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         entity.officialNote = statement.officialNote();
         entity.confirmedAt = statement.confirmedAt();
         em.persist(entity);
+        em.flush();
+        return toDomain(entity);
+    }
+
+    @Override
+    public CreditStatement updateOfficialFigures(CreditStatement statement) {
+        CreditStatementEntity entity = em.createQuery("""
+                SELECT statement FROM CreditStatementEntity statement
+                JOIN statement.account account
+                WHERE statement.id = :id AND account.user.id = :userId
+                """, CreditStatementEntity.class)
+            .setParameter("id", statement.id()).setParameter("userId", userContext.getUserId())
+            .getResultList().stream().findFirst().orElseThrow();
+        entity.dueDate = statement.dueDate();
+        entity.officialBalance = statement.officialBalance();
+        entity.officialMinimumPayment = statement.officialMinimumPayment();
+        entity.officialAvoidInterest = statement.officialAvoidInterest();
+        entity.officialNote = statement.officialNote();
+        entity.confirmedAt = LocalDateTime.now();
         em.flush();
         return toDomain(entity);
     }

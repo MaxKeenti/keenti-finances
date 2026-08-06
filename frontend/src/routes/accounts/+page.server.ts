@@ -138,4 +138,20 @@ export const actions: Actions = {
 		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The statement could not be confirmed.' });
 		return { statementConfirmed: true };
 	},
+	reconfirmCreditStatement: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const accountId = Number(data.get('accountId'));
+		const statementId = Number(data.get('statementId'));
+		const response = await fetch(`${BACKEND}/api/accounts/${accountId}/credit-statements/${statementId}/reconfirm`, {
+			method: 'POST', headers: headers(cookies, true), body: JSON.stringify({
+				periodStart: data.get('periodStart'), periodEnd: data.get('periodEnd'), dueDate: data.get('dueDate'),
+				officialBalance: Number(data.get('officialBalance')),
+				officialMinimumPayment: Number(data.get('officialMinimumPayment')),
+				officialAvoidInterest: Number(data.get('officialAvoidInterest')),
+				officialNote: String(data.get('officialNote') ?? '') || null,
+			}),
+		});
+		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The statement could not be reconfirmed.' });
+		return { statementReconfirmed: true };
+	},
 };
