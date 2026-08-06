@@ -217,8 +217,8 @@ public class TransactionService implements TransactionUseCase {
         Transaction existing = transactionRepository.findById(transactionId).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + transactionId));
         if (subscriptionId != null) {
-            if (!"EGRESS".equals(existing.getDirection())) {
-                throw new BadRequestException("Only EGRESS transactions can be linked to subscriptions");
+            if (!"INGRESS".equals(existing.getDirection())) {
+                throw new BadRequestException("Only INGRESS transactions can be linked to subscriptions");
             }
             subscriptionRepository.findById(subscriptionId).orElseThrow(() ->
                 new NotFoundException("Subscription not found: " + subscriptionId));
