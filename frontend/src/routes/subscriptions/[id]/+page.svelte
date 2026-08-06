@@ -399,7 +399,7 @@
 
 <!-- Link Transactions dialog -->
 <Dialog.Root bind:open={linkDialogOpen}>
-	<Dialog.Content class="sm:max-w-lg">
+	<Dialog.Content class="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] p-3 sm:max-w-lg sm:p-4">
 		<Dialog.Header>
 			<Dialog.Title>{m.subscriptions_link_transactions_title()}</Dialog.Title>
 			<Dialog.Description>{m.subscriptions_link_transactions_description()}</Dialog.Description>
@@ -423,7 +423,7 @@
 					}
 				};
 			}}
-			class="space-y-4"
+			class="space-y-3"
 		>
 			{#each selectedTxIds as txId}
 				<input type="hidden" name="transactionId" value={txId} />
@@ -432,10 +432,10 @@
 			{#if data.unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
-				<ScrollArea.Root class="h-72 rounded-md border">
+				<ScrollArea.Root class="h-48 rounded-md border sm:h-72">
 					<ul class="divide-y">
 					{#each data.unlinkedTransactions as tx (tx.id)}
-						<li class="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+						<li class="flex items-center gap-2 px-3 py-2 hover:bg-muted/50">
 							<Checkbox
 								checked={selectedTxIds.has(tx.id)}
 								onclick={() => toggleTx(tx.id)}
@@ -443,7 +443,7 @@
 							/>
 							<button
 								type="button"
-								class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+								class="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
 								aria-pressed={selectedTxIds.has(tx.id)}
 								onclick={() => toggleTx(tx.id)}
 							>
@@ -453,9 +453,9 @@
 								</span>
 								<span class="flex shrink-0 items-center gap-2">
 									{#if tx.categoryName}
-										<Badge variant="secondary">{tx.categoryName}</Badge>
+										<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 									{/if}
-									<span class="text-sm font-medium text-red-600 dark:text-red-400">{transactionAmount(tx)}</span>
+									<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
 								</span>
 							</button>
 						</li>
@@ -464,7 +464,7 @@
 				</ScrollArea.Root>
 			{/if}
 
-			<Dialog.Footer>
+			<Dialog.Footer class="flex-row justify-end">
 				<Button type="button" variant="outline" onclick={() => (linkDialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={selectedTxIds.size === 0}>
 					{selectedTxIds.size > 0
@@ -515,7 +515,7 @@
 
 <!-- Link a single transaction to a Payment Record (marks it paid) -->
 <Dialog.Root bind:open={payLinkDialogOpen}>
-	<Dialog.Content class="sm:max-w-lg">
+	<Dialog.Content class="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] p-3 sm:max-w-lg sm:p-4">
 		<Dialog.Header>
 			<Dialog.Title>{m.subscriptions_link_one_payment_title()}</Dialog.Title>
 			<Dialog.Description>{m.subscriptions_link_one_payment_description()}</Dialog.Description>
@@ -540,7 +540,7 @@
 					}
 				};
 			}}
-			class="space-y-4"
+			class="space-y-3"
 		>
 			<input type="hidden" name="paymentId" value={payLinkPaymentId} />
 			<input type="hidden" name="transactionId" value={payLinkTxId} />
@@ -548,14 +548,14 @@
 			{#if data.unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
-				<ScrollArea.Root class="h-72 rounded-md border">
+				<ScrollArea.Root class="h-48 rounded-md border sm:h-72">
 					<RadioGroup.Root bind:value={payLinkTxId} class="gap-0">
 						{#each data.unlinkedTransactions as tx (tx.id)}
-							<div class="flex items-center gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-muted/50">
+							<div class="flex items-center gap-2 border-b px-3 py-2 last:border-b-0 hover:bg-muted/50">
 								<RadioGroup.Item value={String(tx.id)} aria-label={tx.description} />
 								<button
 									type="button"
-									class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+									class="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
 									aria-pressed={payLinkTxId === String(tx.id)}
 									onclick={() => (payLinkTxId = String(tx.id))}
 								>
@@ -565,9 +565,9 @@
 									</span>
 									<span class="flex shrink-0 items-center gap-2">
 										{#if tx.categoryName}
-											<Badge variant="secondary">{tx.categoryName}</Badge>
+											<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 										{/if}
-										<span class="text-sm font-medium text-red-600 dark:text-red-400">{transactionAmount(tx)}</span>
+										<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
 									</span>
 								</button>
 							</div>
@@ -576,7 +576,7 @@
 				</ScrollArea.Root>
 			{/if}
 
-			<Dialog.Footer>
+			<Dialog.Footer class="flex-row justify-end">
 				<Button type="button" variant="outline" onclick={() => (payLinkDialogOpen = false)}>{m.common_cancel()}</Button>
 				<Button type="submit" disabled={!payLinkTxId}>{m.subscriptions_link_mark_paid()}</Button>
 			</Dialog.Footer>
