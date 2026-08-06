@@ -45,7 +45,7 @@ class PaymentRecordServiceTest {
         SubscriptionMemberEntity member = member(sub, contact(user, "Member A"));
         PaymentRecordEntity record = pendingRecord(sub, member, "50.00");
         LocalDate txDate = LocalDate.now().minusDays(2);
-        TransactionEntity tx = egressTransaction(user, "Netflix", "50.00", txDate);
+        TransactionEntity tx = ingressTransaction(user, "Netflix", "50.00", txDate);
 
         PaymentRecord updated = paymentRecordService.linkTransaction(sub.id, record.id, tx.id);
 
@@ -74,7 +74,7 @@ class PaymentRecordServiceTest {
         PaymentRecordEntity record = pendingRecord(sub, member, "50.00");
         record.status = "PAID";
         em.flush();
-        TransactionEntity tx = egressTransaction(user, "Spotify", "50.00", LocalDate.now());
+        TransactionEntity tx = ingressTransaction(user, "Spotify", "50.00", LocalDate.now());
 
         WebApplicationException ex = assertThrows(WebApplicationException.class,
             () -> paymentRecordService.linkTransaction(sub.id, record.id, tx.id));
@@ -83,12 +83,12 @@ class PaymentRecordServiceTest {
 
     @Test
     @Transactional
-    void linkTransactionRejectsIngressTransaction() {
-        UserEntity user = ensureUser("test-link-ingress-rejected");
+    void linkTransactionRejectsEgressTransaction() {
+        UserEntity user = ensureUser("test-link-egress-rejected");
         SubscriptionEntity sub = sharedSubscription(user);
         SubscriptionMemberEntity member = member(sub, contact(user, "Member C"));
         PaymentRecordEntity record = pendingRecord(sub, member, "50.00");
-        TransactionEntity tx = ingressTransaction(user, "Refund", "50.00", LocalDate.now());
+        TransactionEntity tx = egressTransaction(user, "Subscription charge", "50.00", LocalDate.now());
 
         assertThrows(BadRequestException.class,
             () -> paymentRecordService.linkTransaction(sub.id, record.id, tx.id));
