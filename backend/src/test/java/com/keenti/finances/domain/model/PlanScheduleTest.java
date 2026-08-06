@@ -43,6 +43,25 @@ class PlanScheduleTest {
     }
 
     @Test
+    void biweeklyAnchorUsesTheSelectedWeekdayAndThenRepeatsEveryTwoWeeks() {
+        List<PlanSchedule.DateRange> periods = PlanSchedule.rangeFrom(
+            LocalDate.parse("2026-07-29"), // Wednesday
+            LocalDate.parse("2026-08-31"),
+            PlanCadence.BIWEEKLY,
+            1, // Monday
+            null);
+
+        assertEquals(LocalDate.parse("2026-08-03"),
+            periods.get(0).endExclusive());
+        assertEquals(LocalDate.parse("2026-08-17"),
+            periods.get(1).endExclusive());
+        assertEquals(LocalDate.parse("2026-08-31"),
+            periods.get(2).endExclusive());
+        assertEquals(LocalDate.parse("2026-09-01"),
+            periods.get(3).endExclusive());
+    }
+
+    @Test
     void monthEndAnchorClampsAndRecoversRequestedDay() {
         assertEquals(LocalDate.parse("2027-02-28"),
             PlanSchedule.nextBoundary(

@@ -77,7 +77,7 @@ A Saving Goal defines:
 
 - a target total Box balance;
 - a target date;
-- a daily, weekly, or monthly cadence;
+- a daily, weekly, biweekly, or monthly cadence;
 - a cadence anchor (local midnight, weekday, or day of month);
 - a regular saving commitment;
 - period-by-period Mini Goals.

@@ -127,11 +127,18 @@
 	let payLinkDialogOpen = $state(false);
 	let payLinkPaymentId = $state<number | null>(null);
 	let payLinkTxId = $state('');
+	let deleteBillingPeriodDialogOpen = $state(false);
+	let billingPeriodToDelete = $state('');
 
 	function openPayLink(paymentId: number) {
 		payLinkPaymentId = paymentId;
 		payLinkTxId = '';
 		payLinkDialogOpen = true;
+	}
+
+	function openDeleteBillingPeriod(billingDate: string) {
+		billingPeriodToDelete = billingDate;
+		deleteBillingPeriodDialogOpen = true;
 	}
 
 	function toggleTx(id: number) {
@@ -311,8 +318,22 @@
 
 					{#each periods as period (period)}
 						<Tabs.Content value={period}>
+							{@const periodRecords = recordsForPeriod(period)}
+							{#if periodRecords.every((payment) => payment.transactionId === null)}
+								<div class="mb-3 flex justify-end">
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										class="h-7 px-3 text-xs text-destructive hover:text-destructive"
+										onclick={() => openDeleteBillingPeriod(period)}
+									>
+										{m.subscriptions_billing_delete()}
+									</Button>
+								</div>
+							{/if}
 							<ul class="divide-y rounded-md border">
-								{#each recordsForPeriod(period) as payment (payment.id)}
+								{#each periodRecords as payment (payment.id)}
 									{@const tx = linkedTransaction(payment.transactionId)}
 									<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 										<div class="min-w-0 space-y-0.5">
@@ -450,6 +471,43 @@
 						? m.subscriptions_link_selected({ count: `(${selectedTxIds.size})` })
 						: m.subscriptions_link_selected({ count: '' })}
 				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Delete an entire billing period only when it has no linked transactions. -->
+<Dialog.Root bind:open={deleteBillingPeriodDialogOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>{m.subscriptions_billing_delete_title()}</Dialog.Title>
+			<Dialog.Description>
+				{m.subscriptions_billing_delete_description({ date: periodLabel(billingPeriodToDelete) })}
+			</Dialog.Description>
+		</Dialog.Header>
+		<form
+			method="POST"
+			action="?/deleteBillingPeriod"
+			use:kitEnhance={async () => {
+				return async ({ result, update }) => {
+					if (result.type === 'success') {
+						deleteBillingPeriodDialogOpen = false;
+						billingPeriodToDelete = '';
+						toast.success(m.subscriptions_billing_delete_success());
+						await update();
+					} else {
+						const msg =
+							(result as { data?: { message?: string } }).data?.message ??
+							m.subscriptions_billing_delete_failed();
+						toast.error(msg);
+					}
+				};
+			}}
+		>
+			<input type="hidden" name="billingDate" value={billingPeriodToDelete} />
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => (deleteBillingPeriodDialogOpen = false)}>{m.common_cancel()}</Button>
+				<Button type="submit" variant="destructive">{m.subscriptions_billing_delete()}</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

@@ -667,15 +667,19 @@ public class SavingGoalService implements SavingGoalUseCase {
     private static Integer resolvedWeekday(SavingGoalTermsChange changes,
                                            SavingGoalRevision current,
                                            PlanCadence cadence) {
-        if (cadence != PlanCadence.WEEKLY) {
+        if (!usesWeekdayAnchor(cadence)) {
             return null;
         }
         if (changes.anchorWeekday() != null) {
             return changes.anchorWeekday();
         }
-        return current.cadence() == PlanCadence.WEEKLY
+        return usesWeekdayAnchor(current.cadence())
             ? current.anchorWeekday()
             : null;
+    }
+
+    private static boolean usesWeekdayAnchor(PlanCadence cadence) {
+        return cadence == PlanCadence.WEEKLY || cadence == PlanCadence.BIWEEKLY;
     }
 
     private static Integer resolvedMonthDay(SavingGoalTermsChange changes,

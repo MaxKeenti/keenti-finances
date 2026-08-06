@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @QuarkusTest
@@ -91,6 +92,51 @@ class PaymentRecordServiceTest {
 
         assertThrows(BadRequestException.class,
             () -> paymentRecordService.linkTransaction(sub.id, record.id, tx.id));
+    }
+
+    @Test
+    @Transactional
+    void deleteBillingPeriodRemovesOnlyUnlinkedRecordsAndMakesItRegenerable() {
+        UserEntity user = ensureUser("test-delete-period");
+        SubscriptionEntity sub = sharedSubscription(user);
+        SubscriptionMemberEntity firstMember = member(sub, contact(user, "Member D"));
+        SubscriptionMemberEntity secondMember = member(sub, contact(user, "Member E"));
+        LocalDate billingDate = LocalDate.now().minusMonths(1);
+        sub.nextBillingDate = LocalDate.now().plusMonths(1);
+        PaymentRecordEntity first = pendingRecord(sub, firstMember, "50.00");
+        first.billingDate = billingDate;
+        PaymentRecordEntity second = pendingRecord(sub, secondMember, "50.00");
+        second.billingDate = billingDate;
+        em.flush();
+
+        assertEquals(2, paymentRecordService.deleteBillingPeriod(sub.id, billingDate));
+
+        em.flush();
+        em.clear();
+        assertEquals(0, PaymentRecordEntity.count("subscription.id = ?1 AND billingDate = ?2", sub.id, billingDate));
+        assertEquals(billingDate, SubscriptionEntity.<SubscriptionEntity>findById(sub.id).nextBillingDate);
+        assertNull(PaymentRecordEntity.<PaymentRecordEntity>findById(first.id));
+        assertNull(PaymentRecordEntity.<PaymentRecordEntity>findById(second.id));
+    }
+
+    @Test
+    @Transactional
+    void deleteBillingPeriodRejectsTheEntirePeriodWhenAnyRecordHasATransaction() {
+        UserEntity user = ensureUser("test-delete-linked-period");
+        SubscriptionEntity sub = sharedSubscription(user);
+        SubscriptionMemberEntity firstMember = member(sub, contact(user, "Member F"));
+        SubscriptionMemberEntity secondMember = member(sub, contact(user, "Member G"));
+        PaymentRecordEntity first = pendingRecord(sub, firstMember, "50.00");
+        PaymentRecordEntity second = pendingRecord(sub, secondMember, "50.00");
+        first.transaction = egressTransaction(user, "Netflix", "50.00", LocalDate.now());
+        em.flush();
+
+        WebApplicationException exception = assertThrows(WebApplicationException.class,
+            () -> paymentRecordService.deleteBillingPeriod(sub.id, sub.nextBillingDate));
+        assertEquals(409, exception.getResponse().getStatus());
+        assertEquals(2, PaymentRecordEntity.count("subscription.id = ?1", sub.id));
+        assertEquals(first.id, PaymentRecordEntity.<PaymentRecordEntity>findById(first.id).id);
+        assertEquals(second.id, PaymentRecordEntity.<PaymentRecordEntity>findById(second.id).id);
     }
 
     // --- fixtures ---

@@ -8,7 +8,7 @@ A Box has at most one active Box Plan: a Saving Goal or a Spending Budget. Plans
 
 Archiving a Box does not implicitly close its plan. The User must first confirm completion or abandonment of a Saving Goal, or end a Spending Budget, so the plan history records the decision that actually occurred.
 
-A Saving Goal targets a total Box balance by a date. Its daily, weekly, or monthly Mini Goals use a configurable cadence anchor and a stable regular commitment. A period succeeds based on net Box growth, not gross deposits, so spending and withdrawals correctly reduce saving progress. Shortfalls become arrears on the next period; once arrears are covered, later periods return to the regular commitment. Extra saving makes the main goal early without lowering that commitment.
+A Saving Goal targets a total Box balance by a date. Its daily, weekly, biweekly, or monthly Mini Goals use a configurable cadence anchor and a stable regular commitment. A period succeeds based on net Box growth, not gross deposits, so spending and withdrawals correctly reduce saving progress. Shortfalls become arrears on the next period; once arrears are covered, later periods return to the regular commitment. Extra saving makes the main goal early without lowering that commitment.
 
 Periods are evaluated lazily when the goal is read. No scheduler or automatic closure action is required. This matches the deployment lesson in ADR-0019: date-driven state can catch up idempotently inside a User request without depending on a Railway process waking at a particular time.
 

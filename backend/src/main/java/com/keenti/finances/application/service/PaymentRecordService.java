@@ -1,6 +1,7 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.PaymentRecord;
+import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.PaymentRecordUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
@@ -10,6 +11,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import java.time.LocalDate;
 import java.util.List;
 import org.jboss.logging.Logger;
@@ -103,5 +106,34 @@ public class PaymentRecordService implements PaymentRecordUseCase {
         LOG.infof("payment.link paymentId=%d subscriptionId=%d transactionId=%d status=PAID",
             paymentId, subscriptionId, transactionId);
         return updated;
+    }
+
+    @Override
+    @Transactional
+    public int deleteBillingPeriod(Long subscriptionId, LocalDate billingDate) {
+        Subscription subscription = subscriptionRepository.findByIdForUpdate(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
+        List<PaymentRecord> records = paymentRecordRepository
+            .findBySubscriptionIdAndBillingDateForUpdate(subscriptionId, billingDate);
+        if (records.isEmpty()) {
+            throw new NotFoundException("No payment records found for billing date: " + billingDate);
+        }
+        if (records.stream().anyMatch(record -> record.getTransactionId() != null)) {
+            throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                .entity("{\"error\":\"Payment records with linked transactions cannot be deleted\"}")
+                .build());
+        }
+
+        paymentRecordRepository.deleteByIds(records.stream().map(PaymentRecord::getId).toList());
+        if (billingDate.isBefore(subscription.getNextBillingDate())) {
+            subscriptionRepository.update(new Subscription(
+                subscription.getId(), subscription.getName(), subscription.getCost(),
+                subscription.getBillingCycle(), subscription.getType(), subscription.getCategoryId(),
+                billingDate, subscription.getTokenUuid(), subscription.getCreatedAt(),
+                subscription.isOwnerParticipates()));
+        }
+        LOG.infof("payment.delete_period subscriptionId=%d billingDate=%s count=%d",
+            subscriptionId, billingDate, records.size());
+        return records.size();
     }
 }

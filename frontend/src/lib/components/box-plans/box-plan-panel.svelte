@@ -124,6 +124,7 @@
 	function cadenceLabel(cadence: PlanCadence): string {
 		if (cadence === 'DAILY') return m.box_plan_daily();
 		if (cadence === 'WEEKLY') return m.box_plan_weekly();
+		if (cadence === 'BIWEEKLY') return m.box_plan_biweekly();
 		return m.box_plan_monthly();
 	}
 

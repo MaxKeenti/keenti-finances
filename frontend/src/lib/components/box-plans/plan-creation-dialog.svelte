@@ -50,6 +50,7 @@
 	const cadenceItems = $derived([
 		{ value: 'DAILY', label: m.box_plan_daily() },
 		{ value: 'WEEKLY', label: m.box_plan_weekly() },
+		{ value: 'BIWEEKLY', label: m.box_plan_biweekly() },
 		{ value: 'MONTHLY', label: m.box_plan_monthly() },
 	]);
 	const weekdayItems = $derived(weekdays(locale));
@@ -81,6 +82,7 @@
 		const days = Math.floor((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
 		if (value === 'DAILY') return days;
 		if (value === 'WEEKLY') return Math.max(1, Math.ceil(days / 7));
+		if (value === 'BIWEEKLY') return Math.max(1, Math.ceil(days / 14));
 		return Math.max(
 			1,
 			(endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
@@ -115,7 +117,7 @@
 				targetAmount,
 				targetDate,
 				cadence,
-				anchorWeekday: cadence === 'WEEKLY' ? anchorWeekday : null,
+				anchorWeekday: ['WEEKLY', 'BIWEEKLY'].includes(cadence) ? anchorWeekday : null,
 				anchorDayOfMonth: cadence === 'MONTHLY' ? anchorDayOfMonth : null,
 				regularCommitment: regularCommitment ?? null,
 			};
@@ -128,7 +130,7 @@
 		return {
 			desiredBalance,
 			cadence,
-			anchorWeekday: cadence === 'WEEKLY' ? anchorWeekday : null,
+			anchorWeekday: ['WEEKLY', 'BIWEEKLY'].includes(cadence) ? anchorWeekday : null,
 			anchorDayOfMonth: cadence === 'MONTHLY' ? anchorDayOfMonth : null,
 		};
 	}
@@ -212,7 +214,7 @@
 					<Label for="plan-cadence">{m.box_plan_cadence()}</Label>
 					<NativeSelect id="plan-cadence" name="plan-cadence" value={cadence} onValueChange={(value) => (cadence = value as PlanCadence)} items={cadenceItems} />
 				</div>
-				{#if cadence === 'WEEKLY'}
+				{#if cadence === 'WEEKLY' || cadence === 'BIWEEKLY'}
 					<div class="grid gap-2">
 						<Label for="plan-weekday">{m.box_plan_weekday()}</Label>
 						<NativeSelect id="plan-weekday" name="plan-weekday" value={String(anchorWeekday)} onValueChange={(value) => (anchorWeekday = Number(value))} items={weekdayItems} />

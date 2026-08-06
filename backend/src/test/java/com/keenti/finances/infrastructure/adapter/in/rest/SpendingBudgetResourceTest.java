@@ -146,6 +146,17 @@ class SpendingBudgetResourceTest {
     }
 
     @Test
+    void biweeklyBudgetAcceptsAWeekdayAnchor() {
+        String user = user("biweekly");
+        long boxId = createBox(user, "Payday budget");
+
+        createBudget(user, boxId, "1000.00", "BIWEEKLY", 5, null)
+            .statusCode(201)
+            .body("cadence", equalTo("BIWEEKLY"))
+            .body("anchorWeekday", equalTo(5));
+    }
+
+    @Test
     void callerScopedBoxAndPlanIdentifiersDoNotLeak() {
         String alice = user("alice");
         String bob = user("bob");

@@ -373,10 +373,10 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
         PlanCadence cadence = changes.cadence() == null
             ? current.planRevision().cadence()
             : changes.cadence();
-        Integer weekday = cadence == PlanCadence.WEEKLY
+        Integer weekday = usesWeekdayAnchor(cadence)
             ? changes.anchorWeekday() != null
                 ? changes.anchorWeekday()
-                : current.planRevision().cadence() == PlanCadence.WEEKLY
+                : usesWeekdayAnchor(current.planRevision().cadence())
                     ? current.planRevision().anchorWeekday()
                     : null
             : null;
@@ -411,6 +411,10 @@ public class SpendingBudgetService implements SpendingBudgetUseCase {
         }
         return new SpendingBudgetTerms(
             desired, terms.cadence(), terms.anchorWeekday(), terms.anchorDayOfMonth());
+    }
+
+    private static boolean usesWeekdayAnchor(PlanCadence cadence) {
+        return cadence == PlanCadence.WEEKLY || cadence == PlanCadence.BIWEEKLY;
     }
 
     private BoxPlan requireBudget(Long boxId, Long planId, boolean active) {

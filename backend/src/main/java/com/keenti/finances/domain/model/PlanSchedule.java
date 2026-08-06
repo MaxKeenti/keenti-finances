@@ -39,6 +39,11 @@ public final class PlanSchedule {
                 LocalDate candidate = date.with(TemporalAdjusters.next(anchor));
                 yield candidate;
             }
+            case BIWEEKLY -> {
+                DayOfWeek anchor = DayOfWeek.of(anchorWeekday);
+                yield date.getDayOfWeek() == anchor ? date.plusWeeks(2)
+                    : date.with(TemporalAdjusters.next(anchor));
+            }
             case MONTHLY -> {
                 YearMonth month = YearMonth.from(date);
                 LocalDate candidate = anchoredDay(month, anchorDayOfMonth);
@@ -112,11 +117,11 @@ public final class PlanSchedule {
                     throw new IllegalArgumentException("Daily cadence has no anchor");
                 }
             }
-            case WEEKLY -> {
+            case WEEKLY, BIWEEKLY -> {
                 if (anchorWeekday == null || anchorWeekday < 1 || anchorWeekday > 7
                     || anchorDayOfMonth != null) {
                     throw new IllegalArgumentException(
-                        "Weekly cadence requires an ISO weekday from 1 to 7");
+                        "Weekly and biweekly cadences require an ISO weekday from 1 to 7");
                 }
             }
             case MONTHLY -> {
