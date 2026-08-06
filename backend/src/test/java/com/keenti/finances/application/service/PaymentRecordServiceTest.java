@@ -114,9 +114,9 @@ class PaymentRecordServiceTest {
         em.flush();
         em.clear();
         assertEquals(0, PaymentRecordEntity.count("subscription.id = ?1 AND billingDate = ?2", sub.id, billingDate));
-        assertEquals(billingDate, SubscriptionEntity.findById(sub.id).nextBillingDate);
-        assertNull(PaymentRecordEntity.findById(first.id));
-        assertNull(PaymentRecordEntity.findById(second.id));
+        assertEquals(billingDate, SubscriptionEntity.<SubscriptionEntity>findById(sub.id).nextBillingDate);
+        assertNull(PaymentRecordEntity.<PaymentRecordEntity>findById(first.id));
+        assertNull(PaymentRecordEntity.<PaymentRecordEntity>findById(second.id));
     }
 
     @Test
@@ -135,8 +135,8 @@ class PaymentRecordServiceTest {
             () -> paymentRecordService.deleteBillingPeriod(sub.id, sub.nextBillingDate));
         assertEquals(409, exception.getResponse().getStatus());
         assertEquals(2, PaymentRecordEntity.count("subscription.id = ?1", sub.id));
-        assertEquals(first.id, PaymentRecordEntity.findById(first.id).id);
-        assertEquals(second.id, PaymentRecordEntity.findById(second.id).id);
+        assertEquals(first.id, PaymentRecordEntity.<PaymentRecordEntity>findById(first.id).id);
+        assertEquals(second.id, PaymentRecordEntity.<PaymentRecordEntity>findById(second.id).id);
     }
 
     // --- fixtures ---
