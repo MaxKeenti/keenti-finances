@@ -10,6 +10,7 @@ const paymentSchema = z.object({
 	amount: z.coerce.number().positive(m.validation_amount_positive()),
 	paymentDate: z.string().min(1, m.validation_payment_date_required()),
 	categoryId: z.coerce.number().positive(m.validation_category_required()),
+	accountId: z.union([z.literal(''), z.coerce.number().positive()]).optional(),
 	notes: z.string().optional(),
 });
 
@@ -38,6 +39,7 @@ type DebtPayment = {
 };
 
 type Category = { id: number; name: string; type: string };
+type FinancialAccount = { id: number; name: string; kind: string; balance: number };
 
 export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const id = params.id;
@@ -51,6 +53,8 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	let debt: Debt;
 	let payments: DebtPayment[] = [];
 	let categories: Category[] = [];
+	let accounts: FinancialAccount[] = [];
+	let accountTracking = { active: false };
 
 	try {
 		const debtRes = await fetch(`${BACKEND}/api/debts/${id}`, { headers: authHeaders });
@@ -67,9 +71,11 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	}
 
 	try {
-		const [paymentsRes, categoriesRes] = await Promise.all([
+		const [paymentsRes, categoriesRes, accountsRes, trackingRes] = await Promise.all([
 			fetch(`${BACKEND}/api/debts/${id}/payments`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts/status`, { headers: authHeaders }),
 		]);
 
 		if (paymentsRes.ok) payments = await paymentsRes.json();
@@ -77,17 +83,20 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 
 		if (categoriesRes.ok) categories = await categoriesRes.json();
 		else console.error(`[debts/${id}] load: categories returned ${categoriesRes.status}`);
+
+		if (accountsRes.ok) accounts = await accountsRes.json();
+		if (trackingRes.ok) accountTracking = await trackingRes.json();
 	} catch {
 		console.error(`[debts/${id}] load: backend unreachable for payments/categories`);
 	}
 
 	const today = new Date().toISOString().split('T')[0];
 	const form = await superValidate(
-		{ amount: debt.remaining, paymentDate: today, categoryId: 0, notes: '' },
+		{ amount: debt.remaining, paymentDate: today, categoryId: 0, accountId: '' as '', notes: '' },
 		zod4(paymentSchema),
 	);
 
-	return { debt, payments, categories, form };
+	return { debt, payments, categories, accounts, accountTracking, form };
 };
 
 export const actions: Actions = {
@@ -101,6 +110,7 @@ export const actions: Actions = {
 
 		const form = await superValidate(request, zod4(paymentSchema));
 		if (!form.valid) return fail(400, { form });
+		const accountId = !form.data.accountId ? null : form.data.accountId;
 
 		let res: Response;
 		try {
@@ -111,6 +121,7 @@ export const actions: Actions = {
 					amount: form.data.amount,
 					paymentDate: form.data.paymentDate,
 					categoryId: form.data.categoryId,
+					accountId,
 					notes: form.data.notes || null,
 				}),
 			});
