@@ -477,7 +477,7 @@
 				{@const tx = row.original}
 				{@const selected = selectedTxIds.has(tx.id)}
 				<div class="relative">
-					<div class="absolute left-3 top-4 z-[1]">
+					<div class="absolute left-3 top-4 z-1">
 						<Checkbox
 							checked={selected}
 							onclick={(event) => {
@@ -624,7 +624,7 @@
 							</Button>
 						</Table.Head>
 						<Table.Head>Account</Table.Head>
-						<Table.Head class="w-[120px] text-right">{m.common_actions()}</Table.Head>
+						<Table.Head class="w-30 text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
