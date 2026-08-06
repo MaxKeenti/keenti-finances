@@ -8,6 +8,7 @@ import com.keenti.finances.domain.port.in.CreditStatementUseCase;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DefaultValue;
@@ -71,6 +72,7 @@ public class FinancialAccountResource {
 
     @PUT
     @Path("/{id}/credit-settings")
+    @Transactional
     public Response saveCreditSettings(@PathParam("id") Long id,
                                        @Valid CreditAccountSettingsRequest request) {
         requireCredit(id);

@@ -29,10 +29,16 @@ public class PanacheCreditAccountSettingsRepository implements CreditAccountSett
     @Override
     public CreditAccountSettings save(CreditAccountSettings settings) {
         CreditAccountSettingsEntity entity = em.find(CreditAccountSettingsEntity.class, settings.accountId());
-        if (entity == null) { entity = new CreditAccountSettingsEntity(); entity.accountId = settings.accountId(); em.persist(entity); }
+        if (entity == null) {
+            entity = new CreditAccountSettingsEntity();
+            entity.accountId = settings.accountId();
+        }
         entity.creditLimit = settings.creditLimit();
         entity.statementClosingDay = settings.statementClosingDay();
         entity.paymentDueDay = settings.paymentDueDay();
+        if (!em.contains(entity)) {
+            em.persist(entity);
+        }
         em.flush();
         return toDomain(entity);
     }

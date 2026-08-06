@@ -28,6 +28,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     public List<FinancialAccount> findAll(boolean archived) {
         return FinancialAccountEntity.<FinancialAccountEntity>find(
                 "archived = ?1 ORDER BY name, id", archived)
+            .list()
             .stream()
             .map(this::toDomain)
             .toList();

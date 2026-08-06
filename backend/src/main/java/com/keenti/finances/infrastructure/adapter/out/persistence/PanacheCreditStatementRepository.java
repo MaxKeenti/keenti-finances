@@ -27,9 +27,9 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
                 JOIN statement.account account
                 WHERE account.id = :accountId AND account.user.id = :userId
                 ORDER BY statement.periodEnd DESC, statement.id DESC
-                """, CreditStatementEntity.class)
+            """, CreditStatementEntity.class)
             .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
-            .getResultStream().map(this::toDomain).toList();
+            .getResultList().stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -43,7 +43,7 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
                 """, CreditStatementEntity.class)
             .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
             .setParameter("periodStart", periodStart).setParameter("periodEnd", periodEnd)
-            .getResultStream().findFirst().map(this::toDomain);
+            .getResultList().stream().findFirst().map(this::toDomain);
     }
 
     @Override
