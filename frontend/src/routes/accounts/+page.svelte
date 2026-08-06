@@ -9,7 +9,9 @@
 
 	let { data }: { data: PageData } = $props();
 	type Account = { id: number; name: string; kind: string; balance: number };
+	type CreditDetail = { settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null; statements: Array<{ id: number; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; paidAmount: number; outstandingBalance: number }> };
 	const accounts = $derived(data.accounts as Account[]);
+	const creditDetails = $derived(data.creditDetails as Record<number, CreditDetail>);
 	let setupAccounts = $state([{ name: '', kind: 'DEBIT', openingBalance: 0 }]);
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const today = new Date().toISOString().slice(0, 10);
@@ -61,5 +63,45 @@
 				<input type="hidden" name="transferDate" value={today} /><input type="hidden" name="notes" value="" />
 			</form></Card.Content>
 		</Card.Root>
+
+		{#each accounts.filter((account) => account.kind === 'CREDIT') as account}
+			{@const detail = creditDetails[account.id]}
+			<Card.Root>
+				<Card.Header><Card.Title>{account.name} credit payment</Card.Title><Card.Description>Confirm bank statements here. Transfers into this account remain payments and never affect Net Balance.</Card.Description></Card.Header>
+				<Card.Content class="space-y-5">
+					<details>
+						<summary class="cursor-pointer text-sm font-medium">Credit account settings</summary>
+						<form method="POST" action="?/saveCreditSettings" use:enhance class="mt-3 grid gap-3 sm:grid-cols-4">
+							<input type="hidden" name="accountId" value={account.id} />
+							<Input name="creditLimit" type="number" min="0.01" step="0.01" required value={detail?.settings?.creditLimit ?? ''} placeholder="Credit limit" />
+							<Input name="statementClosingDay" type="number" min="1" max="31" required value={detail?.settings?.statementClosingDay ?? ''} placeholder="Closing day" />
+							<Input name="paymentDueDay" type="number" min="1" max="31" required value={detail?.settings?.paymentDueDay ?? ''} placeholder="Due day" />
+							<Button type="submit">Save settings</Button>
+						</form>
+					</details>
+
+					<form method="POST" action="?/confirmCreditStatement" use:enhance class="grid gap-3 sm:grid-cols-3">
+						<input type="hidden" name="accountId" value={account.id} />
+						<Input name="periodStart" type="date" required aria-label="Statement period start" />
+						<Input name="periodEnd" type="date" required aria-label="Statement period end" />
+						<Input name="dueDate" type="date" required aria-label="Statement due date" />
+						<Input name="officialBalance" type="number" min="0" step="0.01" required placeholder="Official balance" />
+						<Input name="officialMinimumPayment" type="number" min="0" step="0.01" required placeholder="Minimum payment" />
+						<Input name="officialAvoidInterest" type="number" min="0" step="0.01" required placeholder="Avoid-interest payment" />
+						<Input name="officialNote" class="sm:col-span-2" placeholder="Optional note" />
+						<Button type="submit">Confirm statement</Button>
+					</form>
+
+					{#if detail?.statements?.length}
+						<div class="space-y-2 text-sm">
+							<p class="font-medium">Confirmed statements</p>
+							{#each detail.statements as statement}
+								<div class="flex flex-wrap justify-between gap-2 rounded-md border p-3"><span>Due {statement.dueDate}</span><span>{fmt.format(statement.outstandingBalance)} remaining · {fmt.format(statement.officialAvoidInterest)} to avoid interest</span></div>
+							{/each}
+						</div>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+		{/each}
 	{/if}
 </div>

@@ -16,10 +16,25 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		fetch(`${BACKEND}/api/accounts`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
 	]);
+	const status = statusRes.ok ? await statusRes.json() : { active: false, transactionNetBalance: 0, accountNetBalance: 0 };
+	const accounts = accountsRes.ok ? await accountsRes.json() : [];
+	const creditDetails = await Promise.all(
+		accounts.filter((account: { kind: string }) => account.kind === 'CREDIT').map(async (account: { id: number }) => {
+			const [settingsRes, statementsRes] = await Promise.all([
+				fetch(`${BACKEND}/api/accounts/${account.id}/credit-settings`, { headers: auth }),
+				fetch(`${BACKEND}/api/accounts/${account.id}/credit-statements`, { headers: auth }),
+			]);
+			return [account.id, {
+				settings: settingsRes.ok ? await settingsRes.json() : null,
+				statements: statementsRes.ok ? await statementsRes.json() : [],
+			}] as const;
+		})
+	);
 	return {
-		status: statusRes.ok ? await statusRes.json() : { active: false, transactionNetBalance: 0, accountNetBalance: 0 },
-		accounts: accountsRes.ok ? await accountsRes.json() : [],
+		status,
+		accounts,
 		transfers: transfersRes.ok ? await transfersRes.json() : [],
+		creditDetails: Object.fromEntries(creditDetails),
 	};
 };
 
@@ -48,5 +63,33 @@ export const actions: Actions = {
 		});
 		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The transfer could not be recorded.' });
 		return { transferred: true };
+	},
+	saveCreditSettings: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const accountId = Number(data.get('accountId'));
+		const response = await fetch(`${BACKEND}/api/accounts/${accountId}/credit-settings`, {
+			method: 'PUT', headers: headers(cookies, true), body: JSON.stringify({
+				creditLimit: Number(data.get('creditLimit')),
+				statementClosingDay: Number(data.get('statementClosingDay')),
+				paymentDueDay: Number(data.get('paymentDueDay')),
+			}),
+		});
+		if (!response.ok) return fail(400, { message: 'Credit settings could not be saved.' });
+		return { creditSettingsSaved: true };
+	},
+	confirmCreditStatement: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const accountId = Number(data.get('accountId'));
+		const response = await fetch(`${BACKEND}/api/accounts/${accountId}/credit-statements`, {
+			method: 'POST', headers: headers(cookies, true), body: JSON.stringify({
+				periodStart: data.get('periodStart'), periodEnd: data.get('periodEnd'), dueDate: data.get('dueDate'),
+				officialBalance: Number(data.get('officialBalance')),
+				officialMinimumPayment: Number(data.get('officialMinimumPayment')),
+				officialAvoidInterest: Number(data.get('officialAvoidInterest')),
+				officialNote: String(data.get('officialNote') ?? '') || null,
+			}),
+		});
+		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The statement could not be confirmed.' });
+		return { statementConfirmed: true };
 	},
 };

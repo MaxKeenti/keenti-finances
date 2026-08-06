@@ -16,4 +16,5 @@ public interface FinancialAccountRepository {
     void lockTrackingScope();
     void activateTracking(LocalDate activationDate);
     BigDecimal getTotalBalance();
+    BigDecimal getBalanceAt(Long accountId, LocalDate date);
 }

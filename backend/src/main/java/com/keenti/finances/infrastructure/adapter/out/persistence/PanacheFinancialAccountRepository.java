@@ -105,6 +105,39 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
         return money(raw);
     }
 
+    @Override
+    public BigDecimal getBalanceAt(Long accountId, LocalDate date) {
+        Object raw = em.createNativeQuery("""
+                SELECT account.opening_balance + COALESCE((
+                    SELECT SUM(CASE WHEN tx.direction = 'INGRESS' THEN tx.amount ELSE -tx.amount END)
+                    FROM transaction tx
+                    WHERE tx.account_id = account.id
+                      AND tx.user_id = :userId
+                      AND tx.deleted_at IS NULL
+                      AND tx.transaction_date <= :balanceDate
+                ), 0) + COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.destination_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.transfer_date <= :balanceDate
+                ), 0) - COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.source_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.transfer_date <= :balanceDate
+                ), 0)
+                FROM financial_account account
+                WHERE account.id = :accountId AND account.user_id = :userId
+                """)
+            .setParameter("accountId", accountId)
+            .setParameter("userId", userContext.getUserId())
+            .setParameter("balanceDate", date)
+            .getSingleResult();
+        return money(raw);
+    }
+
     private FinancialAccount toDomain(FinancialAccountEntity entity) {
         return new FinancialAccount(
             entity.id, entity.name, entity.kind, entity.openingBalance, entity.openingDate,

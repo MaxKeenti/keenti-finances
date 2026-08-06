@@ -4,6 +4,7 @@ import com.keenti.finances.domain.model.FinancialAccountTransfer;
 import com.keenti.finances.domain.port.in.FinancialAccountTransferUseCase;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountTransferRepository;
+import com.keenti.finances.domain.port.out.CreditStatementRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -23,6 +24,9 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
 
     @Inject
     FinancialAccountTransferRepository transferRepository;
+
+    @Inject
+    CreditStatementRepository creditStatementRepository;
 
     @Override
     public List<FinancialAccountTransfer> list() {
@@ -61,6 +65,12 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
             throw new ClientErrorException(
                 "Restore an archived Financial Account before recording a Transfer", Response.Status.CONFLICT);
         }
-        return transferRepository.save(transfer);
+        FinancialAccountTransfer created = transferRepository.save(transfer);
+        var destination = financialAccountRepository.findById(created.destinationAccountId()).orElseThrow();
+        if (destination.isCredit()) {
+            creditStatementRepository.allocateOldestOutstanding(destination.getId(), created.id(),
+                created.transferDate(), created.amount());
+        }
+        return created;
     }
 }

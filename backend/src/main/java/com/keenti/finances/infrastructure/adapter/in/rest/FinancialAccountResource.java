@@ -3,6 +3,8 @@ package com.keenti.finances.infrastructure.adapter.in.rest;
 import com.keenti.finances.domain.model.AccountTrackingStatus;
 import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.model.CreditAccountSettings;
+import com.keenti.finances.domain.model.CreditStatement;
+import com.keenti.finances.domain.port.in.CreditStatementUseCase;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import jakarta.inject.Inject;
@@ -31,6 +33,9 @@ public class FinancialAccountResource {
 
     @Inject
     CreditAccountSettingsRepository creditAccountSettingsRepository;
+
+    @Inject
+    CreditStatementUseCase creditStatementUseCase;
 
     @GET
     public Response list(@QueryParam("archived") @DefaultValue("false") boolean archived) {
@@ -72,6 +77,32 @@ public class FinancialAccountResource {
         CreditAccountSettings saved = creditAccountSettingsRepository.save(new CreditAccountSettings(
             id, request.creditLimit(), request.statementClosingDay(), request.paymentDueDay()));
         return Response.ok(toResponse(saved)).build();
+    }
+
+    @GET
+    @Path("/{id}/credit-statements")
+    public Response creditStatements(@PathParam("id") Long id) {
+        return Response.ok(creditStatementUseCase.list(id).stream()
+            .map(FinancialAccountResource::toResponse).toList()).build();
+    }
+
+    @GET
+    @Path("/{id}/credit-statements/estimate")
+    public Response estimateCreditStatement(@PathParam("id") Long id,
+                                            @QueryParam("periodEnd") LocalDate periodEnd) {
+        return Response.ok(new CreditStatementEstimateResponse(periodEnd,
+            creditStatementUseCase.estimateOutstandingBalance(id, periodEnd))).build();
+    }
+
+    @POST
+    @Path("/{id}/credit-statements")
+    public Response confirmCreditStatement(@PathParam("id") Long id,
+                                           @Valid CreditStatementRequest request) {
+        CreditStatement confirmed = creditStatementUseCase.confirm(new CreditStatement(null, id,
+            request.periodStart(), request.periodEnd(), request.dueDate(), null,
+            request.officialBalance(), request.officialMinimumPayment(),
+            request.officialAvoidInterest(), request.officialNote(), null, null));
+        return Response.status(Response.Status.CREATED).entity(toResponse(confirmed)).build();
     }
 
     @POST
@@ -123,5 +154,13 @@ public class FinancialAccountResource {
     private static CreditAccountSettingsResponse toResponse(CreditAccountSettings settings) {
         return new CreditAccountSettingsResponse(settings.accountId(), settings.creditLimit(),
             settings.statementClosingDay(), settings.paymentDueDay());
+    }
+
+    private static CreditStatementResponse toResponse(CreditStatement statement) {
+        return new CreditStatementResponse(statement.id(), statement.accountId(), statement.periodStart(),
+            statement.periodEnd(), statement.dueDate(), statement.estimatedBalance(),
+            statement.officialBalance(), statement.officialMinimumPayment(),
+            statement.officialAvoidInterest(), statement.officialNote(), statement.confirmedAt(),
+            statement.paidAmount(), statement.officialBalance().subtract(statement.paidAmount()));
     }
 }

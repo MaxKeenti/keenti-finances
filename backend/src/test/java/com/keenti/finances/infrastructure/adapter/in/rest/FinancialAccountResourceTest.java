@@ -109,6 +109,40 @@ class FinancialAccountResourceTest {
             .then().statusCode(200).body("netBalance", equalTo(100.0f));
     }
 
+    @Test
+    void creditTransfersAllocateToTheOldestConfirmedStatement() {
+        String user = "credit-statement-" + UUID.randomUUID();
+        var activation = activate(user, List.of(
+            account("Cash", "CASH", "0.00"), account("PLATA", "CREDIT", "0.00")))
+            .statusCode(201).extract().jsonPath();
+        long cash = activation.getLong("[0].id");
+        long plata = activation.getLong("[1].id");
+        long incomeCategory = createIncomeCategory(user);
+        transaction(user, incomeCategory, cash, "100.00").statusCode(201);
+
+        given().header("X-WorkOS-User-Id", user).contentType(ContentType.JSON)
+            .body(Map.of(
+                "periodStart", LocalDate.now().minusDays(20).toString(),
+                "periodEnd", LocalDate.now().minusDays(1).toString(),
+                "dueDate", LocalDate.now().plusDays(10).toString(),
+                "officialBalance", "100.00", "officialMinimumPayment", "20.00",
+                "officialAvoidInterest", "100.00"))
+            .when().post("/api/accounts/{id}/credit-statements", plata)
+            .then().statusCode(201).body("estimatedBalance", equalTo(0.0f));
+
+        given().header("X-WorkOS-User-Id", user).contentType(ContentType.JSON)
+            .body(Map.of("sourceAccountId", cash, "destinationAccountId", plata,
+                "amount", "60.00", "transferDate", LocalDate.now().toString()))
+            .when().post("/api/account-transfers")
+            .then().statusCode(201);
+
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/accounts/{id}/credit-statements", plata)
+            .then().statusCode(200).body("size()", equalTo(1))
+            .body("[0].paidAmount", equalTo(60.0f))
+            .body("[0].outstandingBalance", equalTo(40.0f));
+    }
+
     private static io.restassured.response.ValidatableResponse activate(
             String user, List<Map<String, String>> accounts) {
         return given().header("X-WorkOS-User-Id", user)
