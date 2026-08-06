@@ -47,6 +47,7 @@ type TransactionPage = {
 	sortBy: TransactionSortBy;
 	sortDirection: TransactionSortDirection;
 };
+type Transfer = { id: number; sourceAccountName: string | null; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
 
 type TransactionSortBy =
 	| 'transactionDate'
@@ -126,15 +127,17 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	let boxes: BoxDto[] = [];
 	let accounts: FinancialAccount[] = [];
 	let accountTracking: AccountTracking = { active: false, activatedAt: null };
+	let transfers: Transfer[] = [];
 
 	try {
-		const [txRes, catRes, conRes, boxRes, accountRes, accountStatusRes] = await Promise.all([
+		const [txRes, catRes, conRes, boxRes, accountRes, accountStatusRes, transferRes] = await Promise.all([
 			fetch(`${BACKEND}/api/transactions?${txParams}`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/boxes?archived=false`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/accounts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/accounts/status`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/account-transfers`, { headers: authHeaders }),
 		]);
 
 		if (txRes.ok) {
@@ -170,6 +173,9 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 
 		if (accountStatusRes.ok) accountTracking = await accountStatusRes.json();
 		else console.error(`[transactions] load: backend returned ${accountStatusRes.status} for account status`);
+
+		if (transferRes.ok) transfers = await transferRes.json();
+		else console.error(`[transactions] load: backend returned ${transferRes.status} for transfers`);
 	} catch {
 		console.error('[transactions] load: backend unreachable');
 	}
@@ -192,7 +198,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 
 	return {
 		transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes,
-		accounts, accountTracking, form,
+		accounts, accountTracking, transfers, form,
 	};
 };
 

@@ -213,6 +213,7 @@
 			data.transactionPage.totalItems,
 		),
 	);
+	const transfers = $derived(data.transfers);
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
@@ -436,6 +437,13 @@
 		</div>
 	{/if}
 
+	{#if transfers.length > 0}
+		<Card.Root>
+			<Card.Header><Card.Title>Transfers</Card.Title><Card.Description>Account-to-account movements are neutral: they do not change Net Balance or Boxes.</Card.Description></Card.Header>
+			<Card.Content><div class="divide-y rounded-md border">{#each transfers as transfer (transfer.id)}<a href="/accounts" class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="font-mono font-medium tabular-nums">{fmt.format(transfer.amount)}</span></a>{/each}</div></Card.Content>
+		</Card.Root>
+	{/if}
+
 	{#if data.transactionPage.totalItems === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.transactions_empty_title()}</Empty.Title>
@@ -486,6 +494,9 @@
 									{/if}
 									{#if tx.contactName}
 										<span class="text-xs text-muted-foreground">{tx.contactName}</span>
+									{/if}
+									{#if tx.accountName}
+										<span class="text-xs text-muted-foreground">{tx.accountName}</span>
 									{/if}
 								</div>
 								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
@@ -594,6 +605,7 @@
 								{m.common_contact()} {@render sortIcon('contactName')}
 							</Button>
 						</Table.Head>
+						<Table.Head>Account</Table.Head>
 						<Table.Head class="w-[120px] text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -643,6 +655,7 @@
 								{/if}
 							</Table.Cell>
 							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
+							<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
 							<Table.Cell class="text-right">
 								<div class="flex justify-end gap-2">
 									<Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button>

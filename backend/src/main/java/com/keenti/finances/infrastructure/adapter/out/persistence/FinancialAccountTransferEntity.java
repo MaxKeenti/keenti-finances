@@ -50,4 +50,7 @@ public class FinancialAccountTransferEntity extends PanacheEntityBase {
 
     @Column(name = "created_at", nullable = false)
     public LocalDateTime createdAt;
+
+    @Column(name = "deleted_at")
+    public LocalDateTime deletedAt;
 }

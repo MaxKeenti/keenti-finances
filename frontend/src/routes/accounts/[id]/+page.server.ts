@@ -44,6 +44,9 @@ type Activity = {
 	amount: number;
 };
 
+type CreditSettings = { creditLimit: number; statementClosingDay: number; paymentDueDay: number };
+type CreditStatement = { id: number; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; paidAmount: number; outstandingBalance: number };
+
 function headers(cookies: Parameters<typeof getSession>[0], json = false): Record<string, string> {
 	const token = getSession(cookies)?.accessToken;
 	return { ...(json ? { 'content-type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -58,9 +61,11 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, 'Financial Account not found');
 	const account = await accountRes.json() as Account;
 
-	const [transactionsRes, transfersRes] = await Promise.all([
+	const [transactionsRes, transfersRes, settingsRes, statementsRes] = await Promise.all([
 		fetch(`${BACKEND}/api/transactions`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
+		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/credit-settings`, { headers: auth }) : Promise.resolve(null),
+		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/credit-statements`, { headers: auth }) : Promise.resolve(null),
 	]);
 	const transactions = transactionsRes.ok ? await transactionsRes.json() as Transaction[] : [];
 	const transfers = transfersRes.ok ? await transfersRes.json() as Transfer[] : [];
@@ -92,7 +97,12 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 			}),
 	].sort((left, right) => right.date.localeCompare(left.date));
 
-	return { account, activity };
+	const settings = settingsRes?.ok ? await settingsRes.json() as CreditSettings : null;
+	const statements = statementsRes?.ok ? await statementsRes.json() as CreditStatement[] : [];
+	const nextStatement = statements
+		.filter((statement) => statement.outstandingBalance > 0)
+		.sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0] ?? null;
+	return { account, activity, credit: account.kind === 'CREDIT' ? { settings, statements, nextStatement } : null };
 };
 
 export const actions: Actions = {

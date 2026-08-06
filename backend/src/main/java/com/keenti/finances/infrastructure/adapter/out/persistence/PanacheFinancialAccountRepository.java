@@ -156,12 +156,14 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                       AND transfer.transfer_date <= :balanceDate
                 ), 0) - COALESCE((
                     SELECT SUM(transfer.amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.source_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                       AND transfer.transfer_date <= :balanceDate
                 ), 0)
                 FROM financial_account account
@@ -189,11 +191,13 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0) - COALESCE((
                     SELECT SUM(transfer.amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.source_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0)
                 FROM financial_account account
                 LEFT JOIN transaction tx

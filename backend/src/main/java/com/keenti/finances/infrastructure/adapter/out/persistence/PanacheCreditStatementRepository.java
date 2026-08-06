@@ -100,6 +100,20 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         em.flush();
     }
 
+    @Override
+    public void removeAllocationsForTransfer(Long transferId) {
+        em.createNativeQuery("""
+                DELETE FROM credit_statement_payment payment
+                USING financial_account_transfer transfer
+                WHERE payment.transfer_id = transfer.id
+                  AND transfer.id = :transferId
+                  AND transfer.user_id = :userId
+                """)
+            .setParameter("transferId", transferId).setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        em.flush();
+    }
+
     private CreditStatement toDomain(CreditStatementEntity entity) {
         return new CreditStatement(entity.id, entity.account.id, entity.periodStart, entity.periodEnd,
             entity.dueDate, entity.estimatedBalance, entity.officialBalance,

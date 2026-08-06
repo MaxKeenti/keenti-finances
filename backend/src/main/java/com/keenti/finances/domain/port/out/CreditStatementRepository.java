@@ -13,4 +13,5 @@ public interface CreditStatementRepository {
     CreditStatement save(CreditStatement statement);
     void allocateOldestOutstanding(Long accountId, Long transferId, LocalDate paymentDate,
                                    BigDecimal amount);
+    void removeAllocationsForTransfer(Long transferId);
 }

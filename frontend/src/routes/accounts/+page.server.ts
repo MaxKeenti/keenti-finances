@@ -87,6 +87,29 @@ export const actions: Actions = {
 		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The transfer could not be recorded.' });
 		return { transferred: true };
 	},
+	updateTransfer: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		const response = await fetch(`${BACKEND}/api/account-transfers/${id}`, {
+			method: 'PUT', headers: headers(cookies, true),
+			body: JSON.stringify({
+				sourceAccountId: Number(data.get('sourceAccountId')),
+				destinationAccountId: Number(data.get('destinationAccountId')),
+				amount: Number(data.get('amount')),
+				transferDate: data.get('transferDate'), notes: String(data.get('notes') ?? '') || null,
+			}),
+		});
+		if (!response.ok) return fail(response.status === 409 ? 409 : 400, { message: 'The transfer could not be updated.' });
+		return { transferUpdated: true };
+	},
+	deleteTransfer: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const response = await fetch(`${BACKEND}/api/account-transfers/${Number(data.get('id'))}`, {
+			method: 'DELETE', headers: headers(cookies),
+		});
+		if (!response.ok) return fail(400, { message: 'The transfer could not be deleted.' });
+		return { transferDeleted: true };
+	},
 	saveCreditSettings: async ({ request, fetch, cookies }) => {
 		const data = await request.formData();
 		const accountId = Number(data.get('accountId'));

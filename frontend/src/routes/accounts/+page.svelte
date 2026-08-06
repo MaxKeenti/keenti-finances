@@ -6,12 +6,13 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { mxnFormatter } from '$lib/formatting';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	type Account = { id: number; name: string; kind: string; balance: number };
-	type Transfer = { id: number; sourceAccountName: string | null; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
+	type Transfer = { id: number; sourceAccountId: number; sourceAccountName: string | null; destinationAccountId: number; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
 	type CreditDetail = { settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null; statements: Array<{ id: number; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; paidAmount: number; outstandingBalance: number }> };
 	const accounts = $derived(data.accounts as Account[]);
 	const archivedAccounts = $derived(data.archivedAccounts as Account[]);
@@ -22,10 +23,13 @@
 	let addAccountError = $state('');
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const today = new Date().toISOString().slice(0, 10);
+	let transferDate = $state(today);
+	let transferDates = $state<Record<number, string>>({});
 	const kinds = [
 		{ value: 'DEBIT', label: 'Debit' }, { value: 'CHECKING', label: 'Checking' },
 		{ value: 'SAVINGS', label: 'Savings' }, { value: 'CASH', label: 'Cash' }, { value: 'CREDIT', label: 'Credit' },
 	];
+	const kindLabel = (kind: string) => kinds.find((item) => item.value === kind)?.label ?? kind;
 	const setupTotal = $derived(setupAccounts.reduce((sum, account) => sum + Number(account.openingBalance || 0), 0));
 
 	function openAddAccount() {
@@ -79,18 +83,19 @@
 	{:else}
 		<section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 			{#each accounts as account}
-				<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{account.kind}</Card.Description><Card.Title>{account.name}</Card.Title><p class:text-destructive={account.kind === 'CREDIT' && account.balance < 0} class="text-xl tabular-nums">{account.kind === 'CREDIT' && account.balance < 0 ? `${fmt.format(Math.abs(account.balance))} owed` : fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
+				<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{kindLabel(account.kind)}</Card.Description><Card.Title>{account.name}</Card.Title><p class:text-destructive={account.kind === 'CREDIT' && account.balance < 0} class="text-xl tabular-nums">{account.kind === 'CREDIT' && account.balance < 0 ? `${fmt.format(Math.abs(account.balance))} owed` : fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
 			{/each}
 		</section>
 
 		<Card.Root>
 			<Card.Header><Card.Title>Transfer</Card.Title><Card.Description>Transfers move money between Accounts and never affect Net Balance or Boxes.</Card.Description></Card.Header>
-			<Card.Content><form method="POST" action="?/transfer" use:enhance class="grid gap-3 sm:grid-cols-4">
+			<Card.Content><form method="POST" action="?/transfer" use:enhance class="grid gap-3 sm:grid-cols-6">
 				<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="sourceAccountId"><option value="">From</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
 				<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="destinationAccountId"><option value="">To</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
 				<Input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount" />
+				<NativeDatePicker name="transferDate" value={transferDate} onValueChange={(value) => transferDate = value} aria-label="Transfer date" />
+				<Input name="notes" placeholder="Note (optional)" />
 				<Button type="submit"><ArrowLeftRight /> Transfer</Button>
-				<input type="hidden" name="transferDate" value={today} /><input type="hidden" name="notes" value="" />
 			</form></Card.Content>
 		</Card.Root>
 
@@ -102,7 +107,21 @@
 				{:else}
 					<div class="divide-y rounded-md border">
 						{#each transfers as transfer}
-							<div class="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="text-muted-foreground">{transfer.transferDate}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="tabular-nums">{fmt.format(transfer.amount)}</span></div>
+							<details class="p-3 text-sm">
+								<summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="text-muted-foreground">{transfer.transferDate}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="tabular-nums">{fmt.format(transfer.amount)}</span></summary>
+								<div class="mt-3 space-y-3 border-t pt-3">
+									<form method="POST" action="?/updateTransfer" use:enhance class="grid gap-3 sm:grid-cols-3">
+										<input type="hidden" name="id" value={transfer.id} />
+										<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="sourceAccountId" value={transfer.sourceAccountId}>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
+										<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="destinationAccountId" value={transfer.destinationAccountId}>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
+										<Input name="amount" type="number" step="0.01" min="0.01" value={transfer.amount} />
+										<NativeDatePicker name="transferDate" value={transferDates[transfer.id] ?? transfer.transferDate} onValueChange={(value) => transferDates = { ...transferDates, [transfer.id]: value }} aria-label="Transfer date" />
+										<Input name="notes" value={transfer.notes ?? ''} placeholder="Note (optional)" />
+										<div class="flex gap-2"><Button type="submit" size="sm">Save changes</Button></div>
+									</form>
+									<form method="POST" action="?/deleteTransfer" use:enhance><input type="hidden" name="id" value={transfer.id} /><Button type="submit" size="sm" variant="destructive">Delete transfer</Button></form>
+								</div>
+							</details>
 						{/each}
 					</div>
 				{/if}
@@ -154,7 +173,7 @@
 				<div><h2 class="text-lg font-semibold">Archived accounts</h2><p class="text-sm text-muted-foreground">Historical activity is preserved. Restore an account before using it again.</p></div>
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{#each archivedAccounts as account}
-						<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full opacity-75 transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{account.kind} · Archived</Card.Description><Card.Title>{account.name}</Card.Title><p class="text-xl tabular-nums">{fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
+						<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full opacity-75 transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{kindLabel(account.kind)} · Archived</Card.Description><Card.Title>{account.name}</Card.Title><p class="text-xl tabular-nums">{fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
 					{/each}
 				</div>
 			</section>

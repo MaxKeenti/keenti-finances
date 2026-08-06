@@ -40,6 +40,7 @@ export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 		: {};
 
 	let summary: DashboardSummary = { ...EMPTY_SUMMARY, year };
+	let accountWarnings: Array<{ title: string; description: string; href: string }> = [];
 
 	try {
 		const res = await fetch(`${BACKEND}/api/dashboard/summary?year=${year}`, {
@@ -57,5 +58,29 @@ export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 		console.error('[dashboard] load: backend unreachable');
 	}
 
-	return { summary, year };
+	try {
+		const accountsRes = await fetch(`${BACKEND}/api/accounts`, { headers: authHeaders });
+		const accounts = accountsRes.ok ? await accountsRes.json() as Array<{ id: number; name: string; kind: string; balance: number }> : [];
+		accountWarnings = accounts
+			.filter((account) => account.kind !== 'CREDIT' && account.balance < 0)
+			.map((account) => ({ title: `${account.name} is overdrawn`, description: `Its balance is ${account.balance.toFixed(2)}. Review recent account activity.`, href: `/accounts/${account.id}` }));
+		const creditWarnings = await Promise.all(accounts.filter((account) => account.kind === 'CREDIT').map(async (account) => {
+			const [settingsRes, statementsRes] = await Promise.all([
+				fetch(`${BACKEND}/api/accounts/${account.id}/credit-settings`, { headers: authHeaders }),
+				fetch(`${BACKEND}/api/accounts/${account.id}/credit-statements`, { headers: authHeaders }),
+			]);
+			const warnings: Array<{ title: string; description: string; href: string }> = [];
+			const settings = settingsRes.ok ? await settingsRes.json() as { creditLimit: number } : null;
+			if (settings && account.balance < -settings.creditLimit) warnings.push({ title: `${account.name} exceeds its credit limit`, description: 'Make a payment or correct the account balance.', href: `/accounts/${account.id}` });
+			const statements = statementsRes.ok ? await statementsRes.json() as Array<{ dueDate: string; outstandingBalance: number }> : [];
+			const next = statements.filter((statement) => statement.outstandingBalance > 0).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+			if (next) warnings.push({ title: `${account.name} payment due ${next.dueDate}`, description: `${next.outstandingBalance.toFixed(2)} remains on a confirmed statement.`, href: `/accounts/${account.id}` });
+			return warnings;
+		}));
+		accountWarnings.push(...creditWarnings.flat());
+	} catch {
+		// The dashboard remains useful when account-specific data is temporarily unavailable.
+	}
+
+	return { summary, year, accountWarnings };
 };
