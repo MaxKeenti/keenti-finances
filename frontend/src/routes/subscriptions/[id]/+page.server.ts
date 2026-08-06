@@ -261,4 +261,38 @@ export const actions: Actions = {
 		console.log(`[billing.generate] subscriptionId=${id} generated=${count}`);
 		return { generated: count };
 	},
+
+	deleteBillingPeriod: async ({ params, request, fetch, cookies }) => {
+		const id = params.id;
+		const billingDate = (await request.formData()).get('billingDate');
+		if (typeof billingDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(billingDate)) {
+			return fail(400, { message: m.subscriptions_billing_delete_failed() });
+		}
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
+		let res: Response;
+		try {
+			res = await fetch(
+				`${BACKEND}/api/subscriptions/${id}/payments/period/${encodeURIComponent(billingDate)}`,
+				{ method: 'DELETE', headers: authHeaders },
+			);
+		} catch {
+			console.error(`[subscriptions/${id}] deleteBillingPeriod: backend unreachable`);
+			return fail(502, { message: m.error_backend_unreachable() });
+		}
+
+		if (res.status === 404) return fail(404, { message: m.error_payment_record_not_found() });
+		if (res.status === 409) return fail(409, { message: m.subscriptions_billing_delete_blocked() });
+		if (!res.ok) {
+			console.error(`[subscriptions/${id}] deleteBillingPeriod: backend error ${res.status}`);
+			return fail(502, { message: m.subscriptions_billing_delete_failed() });
+		}
+
+		const result = await res.json();
+		return { deleted: result.deleted as number };
+	},
 };
