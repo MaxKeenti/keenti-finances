@@ -214,24 +214,6 @@
 		),
 	);
 	const transfers = $derived(data.transfers);
-	const unifiedActivity = $derived([
-		...data.transactions.map((transaction) => ({
-			id: `transaction-${transaction.id}`,
-			date: transaction.transactionDate,
-			type: 'Transaction',
-			title: transaction.description ?? transaction.categoryName ?? 'Transaction',
-			detail: transaction.accountName,
-			amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
-		})),
-		...transfers.map((transfer) => ({
-			id: `transfer-${transfer.id}`,
-			date: transfer.transferDate,
-			type: 'Transfer',
-			title: `${transfer.sourceAccountName ?? 'Archived account'} → ${transfer.destinationAccountName ?? 'Archived account'}`,
-			detail: transfer.notes,
-			amount: 0,
-		})),
-	].sort((left, right) => right.date.localeCompare(left.date)));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
@@ -455,10 +437,10 @@
 		</div>
 	{/if}
 
-	{#if unifiedActivity.length > 0}
+	{#if transfers.length > 0}
 		<Card.Root>
-			<Card.Header><Card.Title>Account activity</Card.Title><Card.Description>Transactions and Transfers in one chronological history. Transfers are neutral and never change Net Balance or Boxes.</Card.Description></Card.Header>
-			<Card.Content><div class="divide-y rounded-md border">{#each unifiedActivity as item (item.id)}<a href={item.type === 'Transfer' ? '/accounts' : `/transactions/${item.id.replace('transaction-', '')}`} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.type} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div><span class:invisible={item.type === 'Transfer'} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span></a>{/each}</div></Card.Content>
+			<Card.Header><Card.Title>Transferencias entre cuentas</Card.Title><Card.Description>Movimientos neutrales: no cambian el saldo neto ni las Cajas.</Card.Description></Card.Header>
+			<Card.Content><div class="divide-y rounded-md border">{#each transfers as transfer (transfer.id)}<a href="/accounts" class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Cuenta archivada'} → {transfer.destinationAccountName ?? 'Cuenta archivada'}</p><p class="text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="font-mono font-medium tabular-nums">{fmt.format(transfer.amount)}</span></a>{/each}</div></Card.Content>
 		</Card.Root>
 	{/if}
 

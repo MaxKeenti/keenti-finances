@@ -14,7 +14,9 @@
 	const balanceLabel = $derived(
 		data.account.kind === 'CREDIT' && data.account.balance < 0
 			? `${fmt.format(Math.abs(data.account.balance))} owed`
-			: fmt.format(data.account.balance),
+			: data.account.kind === 'CREDIT' && data.account.balance > 0
+				? `${fmt.format(data.account.balance)} crédito a favor`
+				: fmt.format(data.account.balance),
 	);
 	const accountKindLabel = $derived(({ CASH: 'Cash', DEBIT: 'Debit', CHECKING: 'Checking', SAVINGS: 'Savings', CREDIT: 'Credit' } as Record<string, string>)[data.account.kind] ?? data.account.kind);
 	const availableCredit = $derived(data.credit?.settings ? Math.max(data.credit.settings.creditLimit + data.account.balance, 0) : 0);
@@ -54,7 +56,7 @@
 	{/if}
 
 	<section class="grid gap-3 sm:grid-cols-3">
-		<Card.Root><Card.Header><Card.Description>Current balance</Card.Description><Card.Title class="text-2xl tabular-nums"><span class:text-destructive={data.account.kind === 'CREDIT' && data.account.balance < 0}>{balanceLabel}</span></Card.Title></Card.Header></Card.Root>
+		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? (data.account.balance > 0 ? 'Crédito a favor' : 'Deuda actual') : 'Saldo actual'}</Card.Description><Card.Title class="text-2xl tabular-nums"><span class:text-destructive={data.account.kind === 'CREDIT' && data.account.balance < 0}>{balanceLabel}</span></Card.Title></Card.Header></Card.Root>
 		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? 'Available credit' : 'Opening balance'}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? fmt.format(availableCredit) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
 		<Card.Root><Card.Header><Card.Description>Tracking started</Card.Description><Card.Title class="text-2xl">{data.account.openingDate}</Card.Title></Card.Header></Card.Root>
 	</section>
@@ -73,10 +75,10 @@
 			<Card.Content class="space-y-4">
 				{#if data.credit.msiPlans.length}<div class="divide-y rounded-md border">{#each data.credit.msiPlans as plan}<div class="flex flex-wrap justify-between gap-2 p-3 text-sm"><span>{plan.installmentCount} installments from {plan.firstInstallmentDate}</span><span>{fmt.format(plan.installmentAmount)} each · {fmt.format(plan.purchaseAmount)} total</span></div>{/each}</div>{:else}<p class="text-sm text-muted-foreground">No active MSI plans.</p>{/if}
 				<form method="POST" action="?/createMsiPlan" use:enhance={enhanceLifecycle} class="grid gap-3 sm:grid-cols-4">
-					<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="transactionId" required><option value="">Credit purchase</option>{#each data.credit.creditTransactions as transaction}<option value={transaction.id}>{transaction.transactionDate} · {transaction.description ?? 'Expense'} · {fmt.format(transaction.amount)}</option>{/each}</select>
-					<Input name="installmentCount" type="number" min="2" max="60" placeholder="Installments" />
-					<input class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="firstInstallmentDate" type="date" value={today} aria-label="First installment date" />
-					<Button type="submit">Create MSI plan</Button>
+					<div class="grid gap-1"><label class="text-xs font-medium" for="msi-purchase">Compra a meses</label><select id="msi-purchase" class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="transactionId" required disabled={data.credit.creditTransactions.length === 0}><option value="">{data.credit.creditTransactions.length ? 'Selecciona una compra' : 'No hay compras elegibles'}</option>{#each data.credit.creditTransactions as transaction}<option value={transaction.id}>{transaction.transactionDate} · {transaction.description ?? 'Gasto'} · {fmt.format(transaction.amount)}</option>{/each}</select></div>
+					<div class="grid gap-1"><label class="text-xs font-medium" for="msi-count">Mensualidades</label><Input id="msi-count" name="installmentCount" type="number" min="2" max="60" required placeholder="12" disabled={data.credit.creditTransactions.length === 0} /></div>
+					<div class="grid gap-1"><label class="text-xs font-medium" for="msi-first-date">Primera mensualidad</label><input id="msi-first-date" class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="firstInstallmentDate" type="date" value={today} required disabled={data.credit.creditTransactions.length === 0} /></div>
+					<Button class="self-end" type="submit" disabled={data.credit.creditTransactions.length === 0}>Crear plan MSI</Button>
 				</form>
 			</Card.Content>
 		</Card.Root>

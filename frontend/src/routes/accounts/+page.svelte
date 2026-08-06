@@ -88,19 +88,19 @@
 		</section>
 
 		<Card.Root>
-			<Card.Header><Card.Title>Transfer</Card.Title><Card.Description>Transfers move money between Accounts and never affect Net Balance or Boxes.</Card.Description></Card.Header>
+			<Card.Header><Card.Title>Transferencia</Card.Title><Card.Description>Mueve dinero entre cuentas sin afectar el saldo neto ni las Cajas.</Card.Description></Card.Header>
 			<Card.Content><form method="POST" action="?/transfer" use:enhance class="grid gap-3 sm:grid-cols-6">
-				<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="sourceAccountId"><option value="">From</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
-				<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="destinationAccountId"><option value="">To</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select>
-				<Input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount" />
-				<NativeDatePicker name="transferDate" value={transferDate} onValueChange={(value) => transferDate = value} aria-label="Transfer date" />
-				<Input name="notes" placeholder="Note (optional)" />
-				<Button type="submit"><ArrowLeftRight /> Transfer</Button>
+				<div class="grid gap-1"><label class="text-xs font-medium" for="transfer-source">Desde</label><select id="transfer-source" class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="sourceAccountId" required><option value="">Selecciona una cuenta</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select></div>
+				<div class="grid gap-1"><label class="text-xs font-medium" for="transfer-destination">Hacia</label><select id="transfer-destination" class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="destinationAccountId" required><option value="">Selecciona una cuenta</option>{#each accounts as account}<option value={account.id}>{account.name}</option>{/each}</select></div>
+				<div class="grid gap-1"><label class="text-xs font-medium" for="transfer-amount">Monto</label><Input id="transfer-amount" name="amount" type="number" step="0.01" min="0.01" required placeholder="$0.00" /></div>
+				<div class="grid gap-1"><span class="text-xs font-medium">Fecha</span><NativeDatePicker name="transferDate" value={transferDate} onValueChange={(value) => transferDate = value} aria-label="Fecha de transferencia" /></div>
+				<div class="grid gap-1"><label class="text-xs font-medium" for="transfer-notes">Nota</label><Input id="transfer-notes" name="notes" placeholder="Opcional" /></div>
+				<Button class="self-end" type="submit"><ArrowLeftRight /> Transferir</Button>
 			</form></Card.Content>
 		</Card.Root>
 
 		<Card.Root>
-			<Card.Header><Card.Title>Transfer history</Card.Title><Card.Description>Every Transfer remains separate from Transactions and does not affect Net Balance.</Card.Description></Card.Header>
+			<Card.Header><Card.Title>Historial de transferencias</Card.Title><Card.Description>Las transferencias son neutrales y no afectan el saldo neto.</Card.Description></Card.Header>
 			<Card.Content>
 				{#if transfers.length === 0}
 					<p class="text-sm text-muted-foreground">No Transfers recorded yet.</p>
