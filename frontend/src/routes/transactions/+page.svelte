@@ -37,7 +37,7 @@
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
 	import * as Card from '$lib/components/ui/card';
-	import { dateInTimeZone, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { transactionSchema } from '$lib/schemas/transaction';
 	import {
@@ -467,7 +467,7 @@
 								<div class="flex items-start justify-between gap-2">
 									<a href="/transactions/{tx.id}" class="flex-1 min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 										<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
-										<p class="text-xs text-muted-foreground mt-0.5">{tx.transactionDate}</p>
+										<p class="text-xs text-muted-foreground mt-0.5">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p>
 									</a>
 									<a
 										href="/transactions/{tx.id}"
@@ -608,7 +608,7 @@
 									})}
 								/>
 							</Table.Cell>
-							<Table.Cell class="whitespace-nowrap">{tx.transactionDate}</Table.Cell>
+							<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
 							<Table.Cell class="text-muted-foreground">
 								<div class="space-y-1.5">
 									<a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">

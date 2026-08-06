@@ -9,7 +9,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import * as ScrollArea from '$lib/components/ui/scroll-area';
-	import { monthYearFormatter, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, monthYearFormatter, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -55,6 +55,10 @@
 
 	function periodLabel(billingDate: string): string {
 		return monthFmt.format(new Date(`${billingDate}T00:00:00`));
+	}
+
+	function transactionAmount(tx: TransactionResponse): string {
+		return `${tx.direction === 'EGRESS' ? '-' : '+'}${fmt.format(tx.amount)}`;
 	}
 
 	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
@@ -172,7 +176,7 @@
 
 			<div class="grid gap-1 text-sm">
 				<p class="text-muted-foreground">
-					{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{data.subscription.nextBillingDate}</span>
+					{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{formatDateOnly(data.subscription.nextBillingDate, data.preferences.locale)}</span>
 				</p>
 				{#if data.subscription.type === 'SHARED'}
 					<p class="text-muted-foreground">
@@ -241,13 +245,13 @@
 						<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 							<div class="min-w-0 space-y-0.5">
 								<p class="text-sm font-medium truncate">{tx.description}</p>
-								<p class="text-xs text-muted-foreground">{tx.transactionDate}</p>
+								<p class="text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p>
 							</div>
 							<div class="flex items-center gap-2 shrink-0">
 								{#if tx.categoryName}
 									<Badge variant="secondary">{tx.categoryName}</Badge>
 								{/if}
-								<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+								<span class="text-sm font-medium {tx.direction === 'EGRESS' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}">{transactionAmount(tx)}</span>
 							</div>
 						</li>
 					{/each}
@@ -315,7 +319,7 @@
 											<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
 											<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
 											{#if payment.paidDate}
-												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: payment.paidDate })}</p>
+												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: formatDateOnly(payment.paidDate, data.preferences.locale) })}</p>
 											{/if}
 											{#if tx}
 												<p class="text-xs text-muted-foreground truncate">
@@ -424,13 +428,13 @@
 							>
 								<span class="min-w-0 flex-1 space-y-0.5">
 									<span class="block truncate text-sm font-medium">{tx.description}</span>
-									<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+									<span class="block text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</span>
 								</span>
 								<span class="flex shrink-0 items-center gap-2">
 									{#if tx.categoryName}
 										<Badge variant="secondary">{tx.categoryName}</Badge>
 									{/if}
-									<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+									<span class="text-sm font-medium text-red-600 dark:text-red-400">{transactionAmount(tx)}</span>
 								</span>
 							</button>
 						</li>
@@ -499,13 +503,13 @@
 								>
 									<span class="min-w-0 flex-1 space-y-0.5">
 										<span class="block truncate text-sm font-medium">{tx.description}</span>
-										<span class="block text-xs text-muted-foreground">{tx.transactionDate}</span>
+										<span class="block text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</span>
 									</span>
 									<span class="flex shrink-0 items-center gap-2">
 										{#if tx.categoryName}
 											<Badge variant="secondary">{tx.categoryName}</Badge>
 										{/if}
-										<span class="text-sm font-medium">{fmt.format(tx.amount)}</span>
+										<span class="text-sm font-medium text-red-600 dark:text-red-400">{transactionAmount(tx)}</span>
 									</span>
 								</button>
 							</div>

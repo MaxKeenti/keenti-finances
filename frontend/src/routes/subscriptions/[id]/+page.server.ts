@@ -106,7 +106,9 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	}
 
 	const linkedIds = new Set(linkedTransactions.map((t) => t.id));
-	const unlinkedTransactions = allTransactions.filter((t) => !t.subscriptionId && !linkedIds.has(t.id));
+	const unlinkedTransactions = allTransactions.filter(
+		(t) => t.direction === 'EGRESS' && !t.subscriptionId && !linkedIds.has(t.id),
+	);
 
 	return { subscription, members, payments, linkedTransactions, unlinkedTransactions };
 };

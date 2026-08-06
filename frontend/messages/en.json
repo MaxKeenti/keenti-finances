@@ -439,7 +439,7 @@
 	"subscriptions_link_transaction": "Link Transaction",
 	"subscriptions_record_payment": "Record Payment",
 	"subscriptions_link_transactions_title": "Link Transactions",
-	"subscriptions_link_transactions_description": "Select transactions to link to this subscription.",
+	"subscriptions_link_transactions_description": "Select unlinked expenses to link to this subscription.",
 	"subscriptions_no_unlinked_transactions": "No unlinked transactions available.",
 	"subscriptions_link_selected": "Link {count}",
 	"subscriptions_link_one_payment_title": "Link a transaction",

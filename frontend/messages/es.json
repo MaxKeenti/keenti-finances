@@ -439,7 +439,7 @@
 	"subscriptions_link_transaction": "Vincular movimiento",
 	"subscriptions_record_payment": "Registrar pago",
 	"subscriptions_link_transactions_title": "Vincular movimientos",
-	"subscriptions_link_transactions_description": "Selecciona movimientos para vincularlos a esta suscripcion.",
+	"subscriptions_link_transactions_description": "Selecciona gastos sin vincular para vincularlos a esta suscripcion.",
 	"subscriptions_no_unlinked_transactions": "No hay movimientos disponibles sin vincular.",
 	"subscriptions_link_selected": "Vincular {count}",
 	"subscriptions_link_one_payment_title": "Vincular un movimiento",

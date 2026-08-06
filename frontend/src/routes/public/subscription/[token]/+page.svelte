@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -78,7 +78,7 @@
 
 				<div class="text-sm text-muted-foreground">
 					{m.public_next_billing()}
-					<span class="font-medium text-foreground">{data.subscription.nextBillingDate}</span>
+					<span class="font-medium text-foreground">{formatDateOnly(data.subscription.nextBillingDate, data.preferences.locale)}</span>
 				</div>
 
 				<p class="text-xs text-muted-foreground">
@@ -119,7 +119,7 @@
 					{#each rowsByDate() as [date, rows] (date)}
 						<div class="space-y-2">
 							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-								{m.subscriptions_billing_period({ date })}
+								{m.subscriptions_billing_period({ date: formatDateOnly(date, data.preferences.locale) })}
 							</p>
 							<ul class="divide-y rounded-md border">
 								{#each rows as row (row.payment.paymentId)}
@@ -128,7 +128,7 @@
 											<p class="text-sm font-medium">{row.memberName}</p>
 											<p class="text-sm text-muted-foreground">{fmt.format(row.payment.amount)}</p>
 											{#if row.payment.paidDate}
-												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: row.payment.paidDate })}</p>
+												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: formatDateOnly(row.payment.paidDate, data.preferences.locale) })}</p>
 											{/if}
 										</div>
 										<Badge variant={statusBadgeVariant[row.payment.status]}>

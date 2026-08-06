@@ -19,7 +19,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/ui/category-badge';
-	import { dateInTimeZone, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { transactionSchema } from '$lib/schemas/transaction';
 	import {
@@ -205,7 +205,7 @@
 			<!-- Date -->
 			<div>
 				<p class="text-sm text-muted-foreground">{m.common_date()}</p>
-				<p class="text-base tabular-nums">{tx.transactionDate}</p>
+				<p class="text-base tabular-nums">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p>
 			</div>
 
 			<!-- Category -->
