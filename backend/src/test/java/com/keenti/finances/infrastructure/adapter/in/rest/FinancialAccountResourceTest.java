@@ -25,7 +25,7 @@ class FinancialAccountResourceTest {
             .then().statusCode(200)
             .body("active", equalTo(false))
             .body("transactionNetBalance", equalTo(700.0f))
-            .body("accountNetBalance", equalTo(0.0f));
+            .body("accountNetBalance", equalTo(0));
 
         activate(user, List.of(account("BBVA", "DEBIT", "100.00")))
             .statusCode(400);
@@ -128,7 +128,7 @@ class FinancialAccountResourceTest {
                 "officialBalance", "100.00", "officialMinimumPayment", "20.00",
                 "officialAvoidInterest", "100.00"))
             .when().post("/api/accounts/{id}/credit-statements", plata)
-            .then().statusCode(201).body("estimatedBalance", equalTo(0.0f));
+            .then().statusCode(201).body("estimatedBalance", equalTo(0));
 
         given().header("X-WorkOS-User-Id", user).contentType(ContentType.JSON)
             .body(Map.of("sourceAccountId", cash, "destinationAccountId", plata,
