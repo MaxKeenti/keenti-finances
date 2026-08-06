@@ -39,6 +39,27 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 };
 
 export const actions: Actions = {
+	create: async ({ request, fetch, cookies }) => {
+		const data = await request.formData();
+		const name = String(data.get('name') ?? '').trim();
+		const kind = String(data.get('kind') ?? '').toUpperCase();
+		const validKinds = new Set(['CASH', 'DEBIT', 'CHECKING', 'SAVINGS', 'CREDIT']);
+		if (!name) return fail(400, { message: 'Account name is required.' });
+		if (!validKinds.has(kind)) return fail(400, { message: 'Choose a valid account kind.' });
+
+		const response = await fetch(`${BACKEND}/api/accounts`, {
+			method: 'POST', headers: headers(cookies, true),
+			body: JSON.stringify({ name, kind, openingBalance: 0 }),
+		});
+		if (!response.ok) {
+			return fail(response.status === 409 ? 409 : 400, {
+				message: response.status === 409
+					? 'An active account with that name already exists.'
+					: 'The account could not be created. New accounts must start at a zero opening balance.',
+			});
+		}
+		return { accountCreated: true };
+	},
 	activate: async ({ request, fetch, cookies }) => {
 		const data = await request.formData();
 		let accounts: unknown;

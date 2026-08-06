@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { Plus, ArrowLeftRight } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { mxnFormatter } from '$lib/formatting';
@@ -13,6 +15,8 @@
 	const accounts = $derived(data.accounts as Account[]);
 	const creditDetails = $derived(data.creditDetails as Record<number, CreditDetail>);
 	let setupAccounts = $state([{ name: '', kind: 'DEBIT', openingBalance: 0 }]);
+	let addAccountOpen = $state(false);
+	let addAccountError = $state('');
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const today = new Date().toISOString().slice(0, 10);
 	const kinds = [
@@ -20,12 +24,35 @@
 		{ value: 'SAVINGS', label: 'Savings' }, { value: 'CASH', label: 'Cash' }, { value: 'CREDIT', label: 'Credit' },
 	];
 	const setupTotal = $derived(setupAccounts.reduce((sum, account) => sum + Number(account.openingBalance || 0), 0));
+
+	function openAddAccount() {
+		addAccountError = '';
+		addAccountOpen = true;
+	}
+
+	function enhanceCreateAccount({ formElement }: { formElement: HTMLFormElement }) {
+		return async ({ result, update }: { result: { type: string; data?: { message?: string } }; update: () => Promise<void> }) => {
+			if (result.type === 'success') {
+				addAccountOpen = false;
+				addAccountError = '';
+				formElement.reset();
+			} else if (result.type === 'failure') {
+				addAccountError = result.data?.message ?? 'The account could not be created.';
+			}
+			await update();
+		};
+	}
 </script>
 
 <div class="space-y-6">
-	<div>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div>
 		<h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
 		<p class="text-sm text-muted-foreground">Track real money and credit debt without changing Net Balance when you transfer between accounts.</p>
+		</div>
+		{#if data.status.active}
+			<Button onclick={openAddAccount}><Plus /> Add account</Button>
+		{/if}
 	</div>
 
 	{#if !data.status.active}
@@ -105,3 +132,36 @@
 		{/each}
 	{/if}
 </div>
+
+{#if data.status.active}
+	<Dialog.Root bind:open={addAccountOpen}>
+		<Dialog.Content class="sm:max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>Add account</Dialog.Title>
+				<Dialog.Description>New Financial Accounts start at a zero opening balance. Record a Transfer or Transaction to reflect money already in the account.</Dialog.Description>
+			</Dialog.Header>
+
+			{#if addAccountError}
+				<Alert.Root variant="destructive"><Alert.Description>{addAccountError}</Alert.Description></Alert.Root>
+			{/if}
+
+			<form method="POST" action="?/create" use:enhance={enhanceCreateAccount} class="grid gap-4">
+				<div class="grid gap-2">
+					<label class="text-sm font-medium" for="account-name">Account name</label>
+					<Input id="account-name" name="name" required maxlength={100} placeholder="e.g. BBVA Savings" />
+				</div>
+				<div class="grid gap-2">
+					<label class="text-sm font-medium" for="account-kind">Account kind</label>
+					<select id="account-kind" class="border-input bg-background h-9 rounded-md border px-3 text-sm" name="kind">
+						{#each kinds as kind}<option value={kind.value}>{kind.label}</option>{/each}
+					</select>
+				</div>
+				<input type="hidden" name="openingBalance" value="0" />
+				<div class="flex justify-end gap-2">
+					<Button type="button" variant="outline" onclick={() => addAccountOpen = false}>Cancel</Button>
+					<Button type="submit">Add account</Button>
+				</div>
+			</form>
+		</Dialog.Content>
+	</Dialog.Root>
+{/if}
