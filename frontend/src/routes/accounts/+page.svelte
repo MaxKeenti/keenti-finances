@@ -11,8 +11,11 @@
 
 	let { data }: { data: PageData } = $props();
 	type Account = { id: number; name: string; kind: string; balance: number };
+	type Transfer = { id: number; sourceAccountName: string | null; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
 	type CreditDetail = { settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null; statements: Array<{ id: number; dueDate: string; officialBalance: number; officialMinimumPayment: number; officialAvoidInterest: number; paidAmount: number; outstandingBalance: number }> };
 	const accounts = $derived(data.accounts as Account[]);
+	const archivedAccounts = $derived(data.archivedAccounts as Account[]);
+	const transfers = $derived(data.transfers as Transfer[]);
 	const creditDetails = $derived(data.creditDetails as Record<number, CreditDetail>);
 	let setupAccounts = $state([{ name: '', kind: 'DEBIT', openingBalance: 0 }]);
 	let addAccountOpen = $state(false);
@@ -76,7 +79,7 @@
 	{:else}
 		<section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 			{#each accounts as account}
-				<Card.Root><Card.Header><Card.Description>{account.kind}</Card.Description><Card.Title>{account.name}</Card.Title><p class:text-destructive={account.kind === 'CREDIT' && account.balance < 0} class="text-xl tabular-nums">{account.kind === 'CREDIT' && account.balance < 0 ? `${fmt.format(Math.abs(account.balance))} owed` : fmt.format(account.balance)}</p></Card.Header></Card.Root>
+				<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{account.kind}</Card.Description><Card.Title>{account.name}</Card.Title><p class:text-destructive={account.kind === 'CREDIT' && account.balance < 0} class="text-xl tabular-nums">{account.kind === 'CREDIT' && account.balance < 0 ? `${fmt.format(Math.abs(account.balance))} owed` : fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
 			{/each}
 		</section>
 
@@ -89,6 +92,21 @@
 				<Button type="submit"><ArrowLeftRight /> Transfer</Button>
 				<input type="hidden" name="transferDate" value={today} /><input type="hidden" name="notes" value="" />
 			</form></Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header><Card.Title>Transfer history</Card.Title><Card.Description>Every Transfer remains separate from Transactions and does not affect Net Balance.</Card.Description></Card.Header>
+			<Card.Content>
+				{#if transfers.length === 0}
+					<p class="text-sm text-muted-foreground">No Transfers recorded yet.</p>
+				{:else}
+					<div class="divide-y rounded-md border">
+						{#each transfers as transfer}
+							<div class="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="text-muted-foreground">{transfer.transferDate}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="tabular-nums">{fmt.format(transfer.amount)}</span></div>
+						{/each}
+					</div>
+				{/if}
+			</Card.Content>
 		</Card.Root>
 
 		{#each accounts.filter((account) => account.kind === 'CREDIT') as account}
@@ -130,6 +148,17 @@
 				</Card.Content>
 			</Card.Root>
 		{/each}
+
+		{#if archivedAccounts.length}
+			<section class="space-y-3">
+				<div><h2 class="text-lg font-semibold">Archived accounts</h2><p class="text-sm text-muted-foreground">Historical activity is preserved. Restore an account before using it again.</p></div>
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+					{#each archivedAccounts as account}
+						<a class="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={`/accounts/${account.id}`}><Card.Root class="h-full opacity-75 transition-colors hover:bg-muted/40"><Card.Header><Card.Description>{account.kind} · Archived</Card.Description><Card.Title>{account.name}</Card.Title><p class="text-xl tabular-nums">{fmt.format(account.balance)}</p></Card.Header></Card.Root></a>
+					{/each}
+				</div>
+			</section>
+		{/if}
 	{/if}
 </div>
 

@@ -110,6 +110,40 @@ class FinancialAccountResourceTest {
     }
 
     @Test
+    void zeroBalanceAccountsCanBeArchivedAndRestored() {
+        String user = "account-archive-" + UUID.randomUUID();
+        long accountId = activate(user, List.of(account("Cash", "CASH", "0.00")))
+            .statusCode(201)
+            .extract().jsonPath().getLong("[0].id");
+
+        given().header("X-WorkOS-User-Id", user)
+            .when().post("/api/accounts/{id}/archive", accountId)
+            .then().statusCode(200).body("archived", equalTo(true));
+
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/accounts?archived=true")
+            .then().statusCode(200).body("size()", equalTo(1));
+
+        given().header("X-WorkOS-User-Id", user)
+            .when().post("/api/accounts/{id}/restore", accountId)
+            .then().statusCode(200).body("archived", equalTo(false));
+    }
+
+    @Test
+    void accountsWithABalanceCannotBeArchived() {
+        String user = "account-archive-balance-" + UUID.randomUUID();
+        long categoryId = createIncomeCategory(user);
+        long accountId = activate(user, List.of(account("Cash", "CASH", "0.00")))
+            .statusCode(201)
+            .extract().jsonPath().getLong("[0].id");
+        transaction(user, categoryId, accountId).statusCode(201);
+
+        given().header("X-WorkOS-User-Id", user)
+            .when().post("/api/accounts/{id}/archive", accountId)
+            .then().statusCode(400);
+    }
+
+    @Test
     void creditTransfersAllocateToTheOldestConfirmedStatement() {
         String user = "credit-statement-" + UUID.randomUUID();
         var activation = activate(user, List.of(

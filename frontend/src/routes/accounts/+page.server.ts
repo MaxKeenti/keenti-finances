@@ -11,9 +11,10 @@ function headers(cookies: Parameters<typeof getSession>[0], json = false): Recor
 
 export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	const auth = headers(cookies);
-	const [statusRes, accountsRes, transfersRes] = await Promise.all([
+	const [statusRes, accountsRes, archivedAccountsRes, transfersRes] = await Promise.all([
 		fetch(`${BACKEND}/api/accounts/status`, { headers: auth }),
 		fetch(`${BACKEND}/api/accounts`, { headers: auth }),
+		fetch(`${BACKEND}/api/accounts?archived=true`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
 	]);
 	const status = statusRes.ok ? await statusRes.json() : { active: false, transactionNetBalance: 0, accountNetBalance: 0 };
@@ -33,6 +34,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	return {
 		status,
 		accounts,
+		archivedAccounts: archivedAccountsRes.ok ? await archivedAccountsRes.json() : [],
 		transfers: transfersRes.ok ? await transfersRes.json() : [],
 		creditDetails: Object.fromEntries(creditDetails),
 	};

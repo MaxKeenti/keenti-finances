@@ -42,6 +42,20 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
+    public Optional<FinancialAccount> lockById(Long id) {
+        return em.createQuery("""
+                SELECT account FROM FinancialAccountEntity account
+                WHERE account.id = :id AND account.user.id = :userId
+                """, FinancialAccountEntity.class)
+            .setParameter("id", id)
+            .setParameter("userId", userContext.getUserId())
+            .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+            .getResultStream()
+            .findFirst()
+            .map(this::toDomain);
+    }
+
+    @Override
     public FinancialAccount save(FinancialAccount account) {
         LocalDateTime now = LocalDateTime.now();
         FinancialAccountEntity entity = new FinancialAccountEntity();
@@ -56,6 +70,27 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
         entity.persist();
         em.flush();
         return toDomain(entity);
+    }
+
+    @Override
+    public FinancialAccount setArchived(Long id, boolean archived) {
+        int updated = em.createQuery("""
+                UPDATE FinancialAccountEntity account
+                SET account.archived = :archived, account.updatedAt = :updatedAt,
+                    account.version = account.version + 1
+                WHERE account.id = :id AND account.user.id = :userId
+                """)
+            .setParameter("archived", archived)
+            .setParameter("updatedAt", LocalDateTime.now())
+            .setParameter("id", id)
+            .setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        if (updated != 1) {
+            throw new IllegalStateException("Financial Account was not found while updating archive state");
+        }
+        em.clear();
+        return findById(id).orElseThrow(() ->
+            new IllegalStateException("Financial Account was not found after updating archive state"));
     }
 
     @Override

@@ -9,7 +9,9 @@ import java.util.Optional;
 public interface FinancialAccountRepository {
     List<FinancialAccount> findAll(boolean archived);
     Optional<FinancialAccount> findById(Long id);
+    Optional<FinancialAccount> lockById(Long id);
     FinancialAccount save(FinancialAccount account);
+    FinancialAccount setArchived(Long id, boolean archived);
     boolean existsActiveByName(String name);
     boolean isTrackingActive();
     Optional<LocalDate> getTrackingActivationDate();

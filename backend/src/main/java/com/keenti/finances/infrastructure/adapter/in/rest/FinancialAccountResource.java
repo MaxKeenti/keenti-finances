@@ -127,6 +127,18 @@ public class FinancialAccountResource {
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
+    @POST
+    @Path("/{id}/archive")
+    public Response archive(@PathParam("id") Long id) {
+        return Response.ok(toResponse(financialAccountUseCase.archive(id))).build();
+    }
+
+    @POST
+    @Path("/{id}/restore")
+    public Response restore(@PathParam("id") Long id) {
+        return Response.ok(toResponse(financialAccountUseCase.restore(id))).build();
+    }
+
     private static FinancialAccount toDomain(FinancialAccountRequest request, LocalDate openingDate) {
         return new FinancialAccount(
             null, request.name().trim(), request.kind().trim().toUpperCase(java.util.Locale.ROOT),

@@ -1,0 +1,123 @@
+import { error, fail } from '@sveltejs/kit';
+import { getSession } from '$lib/server/workos-session';
+import type { Actions, PageServerLoad } from './$types';
+
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
+
+type Account = {
+	id: number;
+	name: string;
+	kind: string;
+	openingBalance: number;
+	openingDate: string;
+	balance: number;
+	archived: boolean;
+};
+
+type Transaction = {
+	id: number;
+	amount: number;
+	direction: 'INGRESS' | 'EGRESS';
+	description: string | null;
+	transactionDate: string;
+	categoryName: string | null;
+	accountId: number | null;
+};
+
+type Transfer = {
+	id: number;
+	sourceAccountId: number;
+	destinationAccountId: number;
+	sourceAccountName: string | null;
+	destinationAccountName: string | null;
+	amount: number;
+	transferDate: string;
+	notes: string | null;
+};
+
+type Activity = {
+	id: string;
+	type: 'TRANSACTION' | 'TRANSFER';
+	date: string;
+	title: string;
+	detail: string | null;
+	amount: number;
+};
+
+function headers(cookies: Parameters<typeof getSession>[0], json = false): Record<string, string> {
+	const token = getSession(cookies)?.accessToken;
+	return { ...(json ? { 'content-type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
+	const id = Number(params.id);
+	if (!Number.isInteger(id) || id <= 0) error(404, 'Financial Account not found');
+
+	const auth = headers(cookies);
+	const accountRes = await fetch(`${BACKEND}/api/accounts/${id}`, { headers: auth });
+	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, 'Financial Account not found');
+	const account = await accountRes.json() as Account;
+
+	const [transactionsRes, transfersRes] = await Promise.all([
+		fetch(`${BACKEND}/api/transactions`, { headers: auth }),
+		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
+	]);
+	const transactions = transactionsRes.ok ? await transactionsRes.json() as Transaction[] : [];
+	const transfers = transfersRes.ok ? await transfersRes.json() as Transfer[] : [];
+	const activity: Activity[] = [
+		...transactions
+			.filter((transaction) => transaction.accountId === id)
+			.map((transaction) => ({
+				id: `transaction-${transaction.id}`,
+				type: 'TRANSACTION' as const,
+				date: transaction.transactionDate,
+				title: transaction.description || transaction.categoryName || 'Transaction',
+				detail: transaction.categoryName,
+				amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
+			})),
+		...transfers
+			.filter((transfer) => transfer.sourceAccountId === id || transfer.destinationAccountId === id)
+			.map((transfer) => {
+				const outgoing = transfer.sourceAccountId === id;
+				return {
+					id: `transfer-${transfer.id}`,
+					type: 'TRANSFER' as const,
+					date: transfer.transferDate,
+					title: outgoing
+						? `Transfer to ${transfer.destinationAccountName ?? 'Archived account'}`
+						: `Transfer from ${transfer.sourceAccountName ?? 'Archived account'}`,
+					detail: transfer.notes,
+					amount: outgoing ? -transfer.amount : transfer.amount,
+				};
+			}),
+	].sort((left, right) => right.date.localeCompare(left.date));
+
+	return { account, activity };
+};
+
+export const actions: Actions = {
+	archive: async ({ params, fetch, cookies }) => {
+		const response = await fetch(`${BACKEND}/api/accounts/${params.id}/archive`, {
+			method: 'POST', headers: headers(cookies, true),
+		});
+		if (!response.ok) {
+			return fail(response.status === 409 ? 409 : 400, {
+				message: response.status === 409
+					? 'Settle all confirmed Credit Statements before archiving this account.'
+					: 'Bring the account balance to zero before archiving it.',
+			});
+		}
+		return { archived: true };
+	},
+	restore: async ({ params, fetch, cookies }) => {
+		const response = await fetch(`${BACKEND}/api/accounts/${params.id}/restore`, {
+			method: 'POST', headers: headers(cookies, true),
+		});
+		if (!response.ok) {
+			return fail(response.status === 409 ? 409 : 400, {
+				message: 'An active account with this name already exists.',
+			});
+		}
+		return { restored: true };
+	},
+};

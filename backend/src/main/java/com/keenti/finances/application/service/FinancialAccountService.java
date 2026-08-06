@@ -3,6 +3,7 @@ package com.keenti.finances.application.service;
 import com.keenti.finances.domain.model.AccountTrackingStatus;
 import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
+import com.keenti.finances.domain.port.out.CreditStatementRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -10,6 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ClientErrorException;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -17,10 +19,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class FinancialAccountService implements FinancialAccountUseCase {
 
+    private static final Logger LOG = Logger.getLogger(FinancialAccountService.class);
     private static final Set<String> VALID_KINDS = Set.of(
         "CASH", "DEBIT", "CHECKING", "SAVINGS", "CREDIT");
 
@@ -29,6 +33,9 @@ public class FinancialAccountService implements FinancialAccountUseCase {
 
     @Inject
     TransactionRepository transactionRepository;
+
+    @Inject
+    CreditStatementRepository creditStatementRepository;
 
     @Override
     public AccountTrackingStatus status() {
@@ -103,6 +110,41 @@ public class FinancialAccountService implements FinancialAccountUseCase {
             throw new ClientErrorException("A Financial Account with that name already exists", Response.Status.CONFLICT);
         }
         return financialAccountRepository.save(account);
+    }
+
+    @Override
+    @Transactional
+    public FinancialAccount archive(Long id) {
+        FinancialAccount account = financialAccountRepository.lockById(id)
+            .filter(candidate -> !candidate.isArchived())
+            .orElseThrow(() -> new NotFoundException("Active Financial Account not found: " + id));
+        if (account.getBalance().signum() != 0) {
+            throw new BadRequestException("Bring the Financial Account balance to zero before archiving");
+        }
+        if (account.isCredit() && creditStatementRepository.findByAccountId(id).stream()
+                .anyMatch(statement -> statement.officialBalance().subtract(statement.paidAmount()).signum() > 0)) {
+            throw new ClientErrorException(
+                "Settle every confirmed Credit Statement before archiving this Financial Account",
+                Response.Status.CONFLICT);
+        }
+        FinancialAccount archived = financialAccountRepository.setArchived(id, true);
+        LOG.infof("financial-account.archive id=%d", id);
+        return archived;
+    }
+
+    @Override
+    @Transactional
+    public FinancialAccount restore(Long id) {
+        FinancialAccount account = financialAccountRepository.lockById(id)
+            .filter(FinancialAccount::isArchived)
+            .orElseThrow(() -> new NotFoundException("Archived Financial Account not found: " + id));
+        if (financialAccountRepository.existsActiveByName(account.getName())) {
+            throw new ClientErrorException(
+                "An active Financial Account with that name already exists", Response.Status.CONFLICT);
+        }
+        FinancialAccount restored = financialAccountRepository.setArchived(id, false);
+        LOG.infof("financial-account.restore id=%d", id);
+        return restored;
     }
 
     private void validate(FinancialAccount account, LocalDate expectedOpeningDate) {
