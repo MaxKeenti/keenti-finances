@@ -105,7 +105,7 @@ public class DebtService implements DebtUseCase {
     @Override
     @Transactional
     public DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate,
-                                     Long categoryId, String notes) {
+                                     Long categoryId, Long accountId, String notes) {
         Debt debt = debtRepository.findById(debtId).orElseThrow(() ->
             new NotFoundException("Debt not found: " + debtId));
 
@@ -125,7 +125,8 @@ public class DebtService implements DebtUseCase {
         Transaction tx = transactionUseCase.create(new Transaction(
             null, amount, "INGRESS",
             "Debt payment: " + debt.getDescription(),
-            paymentDate, categoryId, debt.getContactId(), null));
+            paymentDate, categoryId, debt.getContactId(), null, accountId,
+            List.of(), List.of()));
 
         DebtPayment payment = debtPaymentRepository.save(new DebtPayment(
             null, debtId, amount, paymentDate, tx.getId(), notes, null));
@@ -161,7 +162,8 @@ public class DebtService implements DebtUseCase {
     @Override
     @Transactional
     public BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount,
-                                          LocalDate paymentDate, Long categoryId, String notes) {
+                                          LocalDate paymentDate, Long categoryId, Long accountId,
+                                          String notes) {
         List<Debt> activeDebts = debtRepository.findActiveByContactIdOrderByCreatedAt(contactId);
 
         if (activeDebts.isEmpty()) {
@@ -182,7 +184,8 @@ public class DebtService implements DebtUseCase {
             Transaction tx = transactionUseCase.create(new Transaction(
                 null, apply, "INGRESS",
                 "Bulk payment: " + debt.getDescription(),
-                paymentDate, categoryId, contactId, null));
+                paymentDate, categoryId, contactId, null, accountId,
+                List.of(), List.of()));
 
             debtPaymentRepository.save(new DebtPayment(
                 null, debt.getId(), apply, paymentDate, tx.getId(), notes, null));

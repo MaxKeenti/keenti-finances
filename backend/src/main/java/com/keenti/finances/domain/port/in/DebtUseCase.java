@@ -14,9 +14,11 @@ public interface DebtUseCase {
     Debt create(Debt debt);
     Debt update(Long id, Debt debt);
     void delete(Long id);
-    DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate, Long categoryId, String notes);
+    DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate,
+                              Long categoryId, Long accountId, String notes);
     List<DebtPayment> listPayments(Long debtId);
-    BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount, LocalDate paymentDate, Long categoryId, String notes);
+    BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount, LocalDate paymentDate,
+                                  Long categoryId, Long accountId, String notes);
     void restore(Long id);
     void permanentDelete(Long id);
     List<TrashItem> listDeleted();

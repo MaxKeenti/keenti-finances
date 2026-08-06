@@ -14,13 +14,14 @@ public record TransactionRequest(
     @NotNull LocalDate transactionDate,
     @NotNull Long categoryId,
     Long contactId,
+    Long accountId,
     List<@Valid BoxFundingRequest> boxFunding,
     List<@Valid BoxDistributionRequest> boxDistributions
 ) {
 
     public TransactionRequest(BigDecimal amount, String direction, String description,
                               LocalDate transactionDate, Long categoryId, Long contactId) {
-        this(amount, direction, description, transactionDate, categoryId, contactId,
+        this(amount, direction, description, transactionDate, categoryId, contactId, null,
             List.of(), List.of());
     }
 }

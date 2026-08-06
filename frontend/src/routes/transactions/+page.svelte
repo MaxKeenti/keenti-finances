@@ -93,6 +93,7 @@
 				transactionDate: today,
 				categoryId: data.categories[0]?.id ?? 0,
 				contactId: '',
+				accountId: '',
 				boxFunding: [],
 				boxDistributions: [],
 			},
@@ -122,6 +123,7 @@
 			transactionDate: tx.transactionDate,
 			categoryId: tx.categoryId,
 			contactId: tx.contactId ?? '',
+			accountId: tx.accountId ?? '',
 			boxFunding: tx.boxFunding.map(({ boxId, amount }) => ({ boxId, amount })),
 			boxDistributions: [],
 		});
@@ -790,6 +792,29 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			{#if data.accountTracking.active}
+				<Form.Field form={sf} name="accountId">
+					<Form.Control>
+						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
+							<Form.Label>Financial Account</Form.Label>
+							<NativeSelect
+								name={fieldName}
+								value={$form.accountId ? String($form.accountId) : ''}
+								onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }}
+								placeholder="Select an account"
+								items={data.accounts.map(account => ({
+									value: String(account.id),
+									label: `${account.name} · ${fmt.format(account.balance)}`,
+								}))}
+								{...triggerProps}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+			{/if}
 
 			<Form.Field form={sf} name="categoryId">
 				<Form.Control>

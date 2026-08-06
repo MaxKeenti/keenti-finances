@@ -17,6 +17,8 @@ const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Category = { id: number; name: string; type: string; color?: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
+type FinancialAccount = { id: number; name: string; kind: string; balance: number; archived: boolean };
+type AccountTracking = { active: boolean; activatedAt: string | null };
 type Transaction = {
 	id: number;
 	amount: number;
@@ -28,6 +30,9 @@ type Transaction = {
 	categoryHue: number | null;
 	contactId: number | null;
 	contactName: string | null;
+	accountId: number | null;
+	accountName: string | null;
+	accountKind: string | null;
 	boxFunding: BoxFundingDto[];
 	boxDistributions: BoxDistributionDto[];
 	availableToSpendAmount: number;
@@ -119,13 +124,17 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	let categories: Category[] = [];
 	let contacts: Contact[] = [];
 	let boxes: BoxDto[] = [];
+	let accounts: FinancialAccount[] = [];
+	let accountTracking: AccountTracking = { active: false, activatedAt: null };
 
 	try {
-		const [txRes, catRes, conRes, boxRes] = await Promise.all([
+		const [txRes, catRes, conRes, boxRes, accountRes, accountStatusRes] = await Promise.all([
 			fetch(`${BACKEND}/api/transactions?${txParams}`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/boxes?archived=false`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts/status`, { headers: authHeaders }),
 		]);
 
 		if (txRes.ok) {
@@ -155,6 +164,12 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 
 		if (boxRes.ok) boxes = await boxRes.json();
 		else console.error(`[transactions] load: backend returned ${boxRes.status} for boxes`);
+
+		if (accountRes.ok) accounts = await accountRes.json();
+		else console.error(`[transactions] load: backend returned ${accountRes.status} for accounts`);
+
+		if (accountStatusRes.ok) accountTracking = await accountStatusRes.json();
+		else console.error(`[transactions] load: backend returned ${accountStatusRes.status} for account status`);
 	} catch {
 		console.error('[transactions] load: backend unreachable');
 	}
@@ -168,13 +183,17 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 			transactionDate: today,
 			categoryId: 0,
 			contactId: '' as '',
+			accountId: '' as '',
 			boxFunding: [],
 			boxDistributions: [],
 		},
 		zod4(transactionSchema),
 		);
 
-	return { transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes, form };
+	return {
+		transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes,
+		accounts, accountTracking, form,
+	};
 };
 
 export const actions: Actions = {
@@ -189,6 +208,7 @@ export const actions: Actions = {
 		if (!form.valid) return fail(400, { form });
 
 		const contactId = !form.data.contactId ? null : form.data.contactId;
+		const accountId = !form.data.accountId ? null : form.data.accountId;
 
 		let res: Response;
 		try {
@@ -202,6 +222,7 @@ export const actions: Actions = {
 					transactionDate: form.data.transactionDate,
 					categoryId: form.data.categoryId,
 					contactId,
+					accountId,
 					boxFunding: form.data.direction === 'EGRESS' ? form.data.boxFunding : [],
 					boxDistributions:
 						form.data.direction === 'INGRESS' ? form.data.boxDistributions : [],
@@ -253,6 +274,7 @@ export const actions: Actions = {
 		if (!id) return fail(400, { form: { ...form, message: m.error_missing_transaction_id_update() } });
 
 		const contactId = !form.data.contactId ? null : form.data.contactId;
+		const accountId = !form.data.accountId ? null : form.data.accountId;
 
 		let res: Response;
 		try {
@@ -266,6 +288,7 @@ export const actions: Actions = {
 					transactionDate: form.data.transactionDate,
 					categoryId: form.data.categoryId,
 					contactId,
+					accountId,
 					boxFunding: form.data.direction === 'EGRESS' ? form.data.boxFunding : [],
 				}),
 			});

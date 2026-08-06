@@ -9,5 +9,6 @@ public record DebtPaymentRequest(
     @NotNull @Positive BigDecimal amount,
     @NotNull LocalDate paymentDate,
     @NotNull Long categoryId,
+    Long accountId,
     String notes
 ) {}

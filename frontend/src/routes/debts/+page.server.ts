@@ -19,6 +19,7 @@ const bulkPaymentSchema = z.object({
 	totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
 	paymentDate: z.string().min(1, m.validation_payment_date_required()),
 	categoryId: z.coerce.number().positive(m.validation_category_required()),
+	accountId: z.union([z.literal(''), z.coerce.number().positive()]).optional(),
 	notes: z.string().optional(),
 });
 
@@ -37,6 +38,7 @@ type Debt = {
 	createdAt: string;
 };
 type Category = { id: number; name: string; type: string };
+type FinancialAccount = { id: number; name: string; kind: string; balance: number };
 
 export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	const session = getSession(cookies);
@@ -48,12 +50,16 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	let debts: Debt[] = [];
 	let contacts: Contact[] = [];
 	let categories: Category[] = [];
+	let accounts: FinancialAccount[] = [];
+	let accountTracking = { active: false };
 
 	try {
-		const [debtRes, conRes, catRes] = await Promise.all([
+		const [debtRes, conRes, catRes, accountRes, trackingRes] = await Promise.all([
 			fetch(`${BACKEND}/api/debts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/accounts/status`, { headers: authHeaders }),
 		]);
 
 		if (debtRes.ok) debts = await debtRes.json();
@@ -64,6 +70,9 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 
 		if (catRes.ok) categories = await catRes.json();
 		else console.error(`[debts] load: backend returned ${catRes.status} for categories`);
+
+		if (accountRes.ok) accounts = await accountRes.json();
+		if (trackingRes.ok) accountTracking = await trackingRes.json();
 	} catch {
 		console.error('[debts] load: backend unreachable');
 	}
@@ -72,12 +81,12 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	const [form, bulkForm] = await Promise.all([
 		superValidate({ contactId: 0, description: '', totalAmount: 0, createdAt: today }, zod4(debtSchema)),
 		superValidate(
-			{ contactId: 0, totalAmount: 0, paymentDate: today, categoryId: 0, notes: '' },
+			{ contactId: 0, totalAmount: 0, paymentDate: today, categoryId: 0, accountId: '' as '', notes: '' },
 			zod4(bulkPaymentSchema),
 		),
 	]);
 
-	return { debts, contacts, categories, form, bulkForm };
+	return { debts, contacts, categories, accounts, accountTracking, form, bulkForm };
 };
 
 export const actions: Actions = {
@@ -179,6 +188,7 @@ export const actions: Actions = {
 
 		const form = await superValidate(request, zod4(bulkPaymentSchema));
 		if (!form.valid) return fail(400, { bulkForm: form });
+		const accountId = !form.data.accountId ? null : form.data.accountId;
 
 		let res: Response;
 		try {
@@ -190,6 +200,7 @@ export const actions: Actions = {
 					totalAmount: form.data.totalAmount,
 					paymentDate: form.data.paymentDate,
 					categoryId: form.data.categoryId,
+					accountId,
 					notes: form.data.notes || null,
 				}),
 			});

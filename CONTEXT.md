@@ -7,7 +7,7 @@ A multi-user personal finance tracker. Users record money flowing in and out, gr
 ### Money movement
 
 **Transaction**:
-A single movement of money, in or out. Carries a Direction, an MXN amount, a date, a Category, and optionally a Contact and a Subscription link.
+A single movement of money, in or out. Once a User activates Financial Account tracking, every new Transaction belongs to one Financial Account. It carries a Direction, an MXN amount, a date, a Category, and optionally a Contact and a Subscription link.
 _Avoid_: Entry, record, line item.
 
 **Direction**:
@@ -23,14 +23,40 @@ The counterparty on the other side of a Transaction — a person or entity from 
 _Avoid_: Party, counterparty (in user-facing copy), payee, payer.
 
 **Net Balance**:
-The headline dashboard figure: the all-time sum of INGRESS Transactions minus EGRESS Transactions. Internal Box allocations never change it.
+The headline dashboard figure. Before Financial Account tracking is activated, it is the all-time sum of INGRESS Transactions minus EGRESS Transactions. Afterwards, it is the sum of signed Financial Account balances. Internal Box allocations and Transfers never change it.
 _Avoid_: Balance (ambiguous — also used colloquially for "money in account"), cash flow (related but distinct; cash flow is the time series, net balance is the scalar).
+
+### Financial Accounts
+
+**Financial Account**:
+A User-defined record of where money is held or owed. It has an Account Kind, a signed opening balance, dated activity, and a current signed balance. Asset Financial Accounts show money available; Credit Financial Accounts show money owed when their balance is negative and an available credit when they have a limit. A Financial Account may represent a bank account, cash, or a single credit line shared by several physical or virtual cards.
+_Avoid_: Box (a Box is an internal allocation), card (a Financial Account can have multiple cards), wallet.
+
+**Account Kind**:
+The presentation and balance behavior selected for a Financial Account: `CASH`, `DEBIT`, `CHECKING`, `SAVINGS`, or `CREDIT`. `CREDIT` is a liability-oriented Financial Account; the others are asset-oriented.
+_Avoid_: Type (overloaded).
+
+**Account Opening Balance**:
+The signed balance used to establish a Financial Account at its tracking start date. It is not an INGRESS or EGRESS Transaction and has no Category. A positive amount represents money held; a negative amount represents credit owed.
+_Avoid_: Adjustment, income, expense.
+
+**Transfer**:
+An atomic dated movement of an MXN amount from one Financial Account to another Financial Account of the same User. It subtracts the amount from the source and adds it to the destination. It never changes Net Balance, Box balances, income, expense, Category, or Contact.
+_Avoid_: Transaction, transfer Transaction, payment Transaction.
+
+**Credit Statement**:
+The amount and payment obligations issued by a Credit Financial Account for one billing period. Keenti continuously estimates it from registered activity; the User may confirm the bank-issued balance, minimum payment, payment required to avoid interest, and due date. Confirmed figures are immutable snapshots until deliberately reconfirmed.
+_Avoid_: Transaction, invoice.
+
+**MSI Plan**:
+A no-interest installment plan attached to an EGRESS Transaction on a Credit Financial Account. The whole purchase changes Net Balance and the Credit Financial Account immediately; the plan schedules one installment into each relevant Credit Statement.
+_Avoid_: Interest-bearing installment, recurring Transaction.
 
 ### Boxes
 
 **Box**:
 A User-defined envelope that reserves part of the Net Balance for a purpose without moving money outside the app. A Box has a non-negative balance, personalized presentation, dated history, and at most one active Box Plan. A Box must have a zero balance and no active Box Plan before it can be archived; the User explicitly completes, abandons, or ends the plan first.
-_Avoid_: Account (a Box does not represent a bank account), Category (describes a Transaction's purpose), wallet, pot, section.
+_Avoid_: Financial Account (a Box does not represent a bank account), Category (describes a Transaction's purpose), wallet, pot, section.
 
 **In Boxes**:
 The sum of the current balances of all active Boxes. Displayed alongside Net Balance and Available to Spend; clicking it opens the Boxes overview.
@@ -111,8 +137,8 @@ _Avoid_: Repayment, instalment.
 ### Identity
 
 **User**:
-The owner of a slice of data in the app. Created just-in-time on the first request from an authenticated WorkOS identity. Holds personalization preferences (primary hue, heading font, body font). Each User's data is fully isolated — Categories, Contacts, Transactions, Subscriptions, and Debts are scoped by User.
-_Avoid_: Account (the app has no separate "account" concept), tenant, customer.
+The owner of a slice of data in the app. Created just-in-time on the first request from an authenticated WorkOS identity. Holds personalization preferences (primary hue, heading font, body font). Each User's data is fully isolated — Categories, Contacts, Transactions, Financial Accounts, Subscriptions, and Debts are scoped by User.
+_Avoid_: tenant, customer.
 
 ## Flagged ambiguities
 

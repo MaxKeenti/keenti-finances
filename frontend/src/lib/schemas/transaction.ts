@@ -44,6 +44,7 @@ export const transactionSchema = z
 		// turns an empty string into 0, which made the optional contact select
 		// visibly change from "None" to "0" whenever client validation reran.
 		contactId: z.union([z.literal(''), z.coerce.number()]).optional(),
+		accountId: z.union([z.literal(''), z.coerce.number().int().positive()]).optional(),
 		boxFunding: z.array(boxAllocationSchema).default([]),
 		boxDistributions: z.array(boxAllocationSchema).default([]),
 	})

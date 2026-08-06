@@ -234,7 +234,7 @@
 
 			<Tabs.Content value="overview" class="mt-4 space-y-4">
 				{#if plan.type === 'SAVING_GOAL'}
-					<div class="rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
+					<div class="rounded-xl bg-linear-to-br from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
 						<div class="flex flex-wrap items-end justify-between gap-2">
 							<div><p class="text-sm text-muted-foreground">{m.box_plan_saved()}</p><p class="text-3xl font-semibold tabular-nums">{fmt.format(goalDisplayBalance)}</p></div>
 							<p class="text-sm font-medium tabular-nums">{Math.round(goalProgress)}%</p>
@@ -268,7 +268,7 @@
 						</section>
 					{/if}
 				{:else}
-					<div class="rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
+					<div class="rounded-xl bg-linear-to-br from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
 						<div class="flex flex-wrap items-end justify-between gap-2"><div><p class="text-sm text-muted-foreground">{m.box_plan_current_balance()}</p><p class="text-3xl font-semibold tabular-nums">{fmt.format(plan.boxBalance)}</p></div><p class="text-sm font-medium tabular-nums">{Math.round(budgetProgress)}%</p></div>
 						<Progress class="mt-3 h-2" value={budgetProgress} max={100} aria-label={`${fmt.format(plan.boxBalance)} / ${fmt.format(plan.desiredBalance)}`} />
 					</div>

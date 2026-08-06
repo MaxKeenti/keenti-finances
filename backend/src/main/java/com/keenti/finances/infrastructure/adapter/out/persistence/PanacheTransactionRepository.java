@@ -88,6 +88,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.subscription = transaction.getSubscriptionId() != null
                 ? SubscriptionEntity.findById(transaction.getSubscriptionId())
                 : null;
+        entity.account = transaction.getAccountId() != null
+                ? FinancialAccountEntity.findById(transaction.getAccountId())
+                : null;
         return toDomain(entity);
     }
 
@@ -230,6 +233,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         e.subscription = t.getSubscriptionId() != null
                 ? SubscriptionEntity.findById(t.getSubscriptionId())
                 : null;
+        e.account = t.getAccountId() != null
+                ? FinancialAccountEntity.findById(t.getAccountId())
+                : null;
         e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
@@ -257,7 +263,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
             e.transactionDate,
             e.category != null ? e.category.id : null,
             e.contact != null ? e.contact.id : null,
-            e.subscription != null ? e.subscription.id : null
+            e.subscription != null ? e.subscription.id : null,
+            e.account != null ? e.account.id : null,
+            java.util.List.of(), java.util.List.of()
         );
     }
 }

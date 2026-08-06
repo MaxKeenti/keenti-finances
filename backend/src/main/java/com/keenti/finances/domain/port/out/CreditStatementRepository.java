@@ -1,0 +1,16 @@
+package com.keenti.finances.domain.port.out;
+
+import com.keenti.finances.domain.model.CreditStatement;
+import java.time.LocalDate;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
+public interface CreditStatementRepository {
+    List<CreditStatement> findByAccountId(Long accountId);
+    Optional<CreditStatement> findByAccountIdAndPeriod(Long accountId, LocalDate periodStart,
+                                                        LocalDate periodEnd);
+    CreditStatement save(CreditStatement statement);
+    void allocateOldestOutstanding(Long accountId, Long transferId, LocalDate paymentDate,
+                                   BigDecimal amount);
+}

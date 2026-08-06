@@ -102,7 +102,8 @@ public class DebtResource {
     @Path("/{id}/payments")
     public Response recordPayment(@PathParam("id") Long id, @Valid DebtPaymentRequest request) {
         DebtPayment payment = debtUseCase.recordPayment(
-            id, request.amount(), request.paymentDate(), request.categoryId(), request.notes());
+            id, request.amount(), request.paymentDate(), request.categoryId(), request.accountId(),
+            request.notes());
         return Response.status(Response.Status.CREATED).entity(toPaymentResponse(payment)).build();
     }
 
@@ -127,7 +128,7 @@ public class DebtResource {
 
         BulkPaymentResult result = debtUseCase.bulkPayment(
             request.contactId(), request.totalAmount(),
-            request.paymentDate(), request.categoryId(), request.notes());
+            request.paymentDate(), request.categoryId(), request.accountId(), request.notes());
 
         String contactName = contactUseCase.getById(request.contactId())
                 .map(Contact::getName).orElse(null);

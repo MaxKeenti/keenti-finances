@@ -9,6 +9,7 @@ import com.keenti.finances.domain.model.BoxTransferResult;
 import com.keenti.finances.domain.port.in.BoxUseCase;
 import com.keenti.finances.domain.port.out.BoxPlanRepository;
 import com.keenti.finances.domain.port.out.BoxRepository;
+import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,6 +45,9 @@ public class BoxService implements BoxUseCase {
     TransactionRepository transactionRepository;
 
     @Inject
+    FinancialAccountRepository financialAccountRepository;
+
+    @Inject
     BoxPlanRepository boxPlanRepository;
 
     @Inject
@@ -77,7 +81,9 @@ public class BoxService implements BoxUseCase {
     @Override
     @Transactional
     public BoxBalanceSummary summary() {
-        BigDecimal netBalance = transactionRepository.getNetBalance();
+        BigDecimal netBalance = financialAccountRepository.isTrackingActive()
+            ? financialAccountRepository.getTotalBalance()
+            : transactionRepository.getNetBalance();
         BigDecimal inBoxes = boxRepository.getTotalBalance();
         return new BoxBalanceSummary(
             netBalance,
