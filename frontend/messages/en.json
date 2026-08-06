@@ -671,6 +671,7 @@
 	"box_plan_cadence": "Period cadence",
 	"box_plan_daily": "Daily",
 	"box_plan_weekly": "Weekly",
+	"box_plan_biweekly": "Biweekly",
 	"box_plan_monthly": "Monthly",
 	"box_plan_weekday": "Period starts on",
 	"box_plan_month_day": "Day of the month",

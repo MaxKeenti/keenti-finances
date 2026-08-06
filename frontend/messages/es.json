@@ -671,6 +671,7 @@
 	"box_plan_cadence": "Frecuencia del periodo",
 	"box_plan_daily": "Diaria",
 	"box_plan_weekly": "Semanal",
+	"box_plan_biweekly": "Quincenal",
 	"box_plan_monthly": "Mensual",
 	"box_plan_weekday": "El periodo comienza el",
 	"box_plan_month_day": "Dia del mes",

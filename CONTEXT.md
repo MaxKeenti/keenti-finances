@@ -53,7 +53,7 @@ Optional guidance attached to a Box. A Box has at most one active plan, either a
 _Avoid_: Box Type (the Box remains the same when its plan changes), automation (plans never move money).
 
 **Saving Goal**:
-A Box Plan for growing the Box to a target balance by a target date. It has a daily, weekly, or monthly cadence, a cadence anchor, a regular saving commitment, and automatically evaluated Mini Goals. Reaching the target makes it ready for User-confirmed completion.
+A Box Plan for growing the Box to a target balance by a target date. It has a daily, weekly, biweekly, or monthly cadence, a cadence anchor, a regular saving commitment, and automatically evaluated Mini Goals. Reaching the target makes it ready for User-confirmed completion.
 _Avoid_: Spending Budget, target Transaction.
 
 **Mini Goal**:

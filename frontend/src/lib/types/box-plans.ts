@@ -1,4 +1,4 @@
-export type PlanCadence = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+export type PlanCadence = 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
 export type BoxPlanType = 'SAVING_GOAL' | 'SPENDING_BUDGET';
 export type SavingGoalStatus =
 	| 'ACTIVE'

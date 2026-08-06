@@ -51,6 +51,7 @@
 	const cadenceItems = $derived([
 		{ value: 'DAILY', label: m.box_plan_daily() },
 		{ value: 'WEEKLY', label: m.box_plan_weekly() },
+		{ value: 'BIWEEKLY', label: m.box_plan_biweekly() },
 		{ value: 'MONTHLY', label: m.box_plan_monthly() },
 	]);
 	const weekdayItems = $derived(weekdays(locale));
@@ -97,7 +98,7 @@
 	}
 
 	function currentRequest(): { payload: Record<string, unknown> | null; error: string } {
-		if (cadence === 'WEEKLY' && (anchorWeekday < 1 || anchorWeekday > 7)) {
+		if (['WEEKLY', 'BIWEEKLY'].includes(cadence) && (anchorWeekday < 1 || anchorWeekday > 7)) {
 			return { payload: null, error: m.box_plan_invalid_anchor() };
 		}
 		if (cadence === 'MONTHLY' && (anchorDayOfMonth < 1 || anchorDayOfMonth > 31)) {
@@ -117,7 +118,7 @@
 					targetAmount,
 					targetDate,
 					cadence,
-					anchorWeekday: cadence === 'WEEKLY' ? anchorWeekday : null,
+					anchorWeekday: ['WEEKLY', 'BIWEEKLY'].includes(cadence) ? anchorWeekday : null,
 					anchorDayOfMonth: cadence === 'MONTHLY' ? anchorDayOfMonth : null,
 					regularCommitment: autoCommitment ? null : customCommitment,
 				},
@@ -130,7 +131,7 @@
 			payload: {
 				desiredBalance,
 				cadence,
-				anchorWeekday: cadence === 'WEEKLY' ? anchorWeekday : null,
+				anchorWeekday: ['WEEKLY', 'BIWEEKLY'].includes(cadence) ? anchorWeekday : null,
 				anchorDayOfMonth: cadence === 'MONTHLY' ? anchorDayOfMonth : null,
 			},
 			error: '',
@@ -258,7 +259,7 @@
 					<Label for="revision-cadence">{m.box_plan_cadence()}</Label>
 					<NativeSelect id="revision-cadence" name="revision-cadence" value={cadence} onValueChange={(value) => (cadence = value as PlanCadence)} items={cadenceItems} />
 				</div>
-				{#if cadence === 'WEEKLY'}
+				{#if cadence === 'WEEKLY' || cadence === 'BIWEEKLY'}
 					<div class="grid gap-2">
 						<Label for="revision-weekday">{m.box_plan_weekday()}</Label>
 						<NativeSelect id="revision-weekday" name="revision-weekday" value={String(anchorWeekday)} onValueChange={(value) => (anchorWeekday = Number(value))} items={weekdayItems} />
