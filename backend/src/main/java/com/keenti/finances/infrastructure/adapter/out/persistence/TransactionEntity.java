@@ -56,6 +56,10 @@ public class TransactionEntity extends PanacheEntityBase {
     @JoinColumn(name = "subscription_id")
     public SubscriptionEntity subscription;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    public FinancialAccountEntity account;
+
     @Column(name = "deleted_at")
     public LocalDateTime deletedAt;
 

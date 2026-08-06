@@ -4,6 +4,7 @@ import com.keenti.finances.domain.model.DashboardSummary;
 import com.keenti.finances.domain.model.MonthSummary;
 import com.keenti.finances.domain.port.in.DashboardUseCase;
 import com.keenti.finances.domain.port.out.BoxRepository;
+import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -22,12 +23,17 @@ public class DashboardService implements DashboardUseCase {
     @Inject
     BoxRepository boxRepository;
 
+    @Inject
+    FinancialAccountRepository financialAccountRepository;
+
     @Override
     public DashboardSummary getSummary(int year) {
         LOG.infof("dashboard.aggregation year=%d", year);
 
         List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year);
-        BigDecimal netBalance = transactionRepository.getNetBalance();
+        BigDecimal netBalance = financialAccountRepository.isTrackingActive()
+            ? financialAccountRepository.getTotalBalance()
+            : transactionRepository.getNetBalance();
         BigDecimal inBoxes = boxRepository.getTotalBalance();
         BigDecimal availableToSpend = netBalance.subtract(inBoxes);
 

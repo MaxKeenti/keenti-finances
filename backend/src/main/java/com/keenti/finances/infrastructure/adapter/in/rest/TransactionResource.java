@@ -4,10 +4,12 @@ import com.keenti.finances.domain.model.Category;
 import com.keenti.finances.domain.model.BoxDistribution;
 import com.keenti.finances.domain.model.BoxFunding;
 import com.keenti.finances.domain.model.Contact;
+import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.CategoryUseCase;
 import com.keenti.finances.domain.port.in.ContactUseCase;
 import com.keenti.finances.domain.port.in.FundingTriggerUseCase;
+import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -54,6 +56,9 @@ public class TransactionResource {
 
     @Inject
     FundingTriggerUseCase fundingTriggerUseCase;
+
+    @Inject
+    FinancialAccountUseCase financialAccountUseCase;
 
     @GET
     public Response list(
@@ -171,7 +176,7 @@ public class TransactionResource {
                 requested.getId(), requested.getAmount(), requested.getDirection(),
                 requested.getDescription(), requested.getTransactionDate(),
                 requested.getCategoryId(), requested.getContactId(),
-                existing.getSubscriptionId(), existing.getBoxFunding(),
+                existing.getSubscriptionId(), requested.getAccountId(), existing.getBoxFunding(),
                 requested.getBoxDistributions());
         }
         Transaction updated = transactionUseCase.update(id, requested);
@@ -195,7 +200,7 @@ public class TransactionResource {
     private Transaction toTransaction(Long id, TransactionRequest r) {
         return new Transaction(id, r.amount(), r.direction(), r.description(),
                 r.transactionDate(), r.categoryId(), r.contactId(), null,
-                toBoxFunding(r.boxFunding()), toBoxDistributions(r.boxDistributions()));
+                r.accountId(), toBoxFunding(r.boxFunding()), toBoxDistributions(r.boxDistributions()));
     }
 
     private java.util.List<BoxDistribution> toBoxDistributions(
@@ -228,10 +233,15 @@ public class TransactionResource {
         String contactName = t.getContactId() != null
                 ? contactUseCase.getById(t.getContactId()).map(Contact::getName).orElse(null)
                 : null;
+        Optional<FinancialAccount> account = t.getAccountId() != null
+                ? financialAccountUseCase.getById(t.getAccountId())
+                : Optional.empty();
         return new TransactionResponse(
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
             t.getTransactionDate(), t.getCategoryId(), categoryName, categoryHue,
             t.getContactId(), contactName, t.getSubscriptionId(),
+            t.getAccountId(), account.map(FinancialAccount::getName).orElse(null),
+            account.map(FinancialAccount::getKind).orElse(null),
             t.getBoxFunding().stream()
                 .map(f -> new BoxFundingResponse(
                     f.boxId(), f.boxName(), f.amount(), f.lineOrder()))

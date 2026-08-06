@@ -5,10 +5,10 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record DebtPaymentRequest(
+public record FinancialAccountTransferRequest(
+    @NotNull Long sourceAccountId,
+    @NotNull Long destinationAccountId,
     @NotNull @Positive BigDecimal amount,
-    @NotNull LocalDate paymentDate,
-    @NotNull Long categoryId,
-    Long accountId,
+    @NotNull LocalDate transferDate,
     String notes
 ) {}

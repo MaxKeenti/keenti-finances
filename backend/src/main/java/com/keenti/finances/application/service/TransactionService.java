@@ -9,6 +9,7 @@ import com.keenti.finances.domain.port.in.TransactionUseCase;
 import com.keenti.finances.domain.port.out.BoxDistributionRepository;
 import com.keenti.finances.domain.port.out.BoxFundingRepository;
 import com.keenti.finances.domain.port.out.BoxRepository;
+import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
@@ -55,6 +56,9 @@ public class TransactionService implements TransactionUseCase {
     BoxDistributionRepository boxDistributionRepository;
 
     @Inject
+    FinancialAccountRepository financialAccountRepository;
+
+    @Inject
     UserTimeZoneProvider userTimeZoneProvider;
 
     @Override
@@ -89,6 +93,7 @@ public class TransactionService implements TransactionUseCase {
     @Override
     @Transactional
     public Transaction create(Transaction transaction) {
+        validateAccount(transaction);
         List<BoxFunding> funding = normalizeAndValidateFunding(transaction);
         List<BoxDistribution> distributions = normalizeAndValidateDistributions(transaction);
         validateFundingTransition(
@@ -121,6 +126,7 @@ public class TransactionService implements TransactionUseCase {
     public Transaction update(Long id, Transaction transaction) {
         Transaction existing = transactionRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + id));
+        validateAccount(transaction);
         if (!transaction.getBoxDistributions().isEmpty()) {
             throw new BadRequestException(
                 "Applied Box distributions are independent and cannot be changed with the Transaction");
@@ -144,7 +150,7 @@ public class TransactionService implements TransactionUseCase {
         Transaction updated = transactionRepository.update(new Transaction(
             id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
             transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId(),
-            existing.getSubscriptionId(), newFunding));
+            existing.getSubscriptionId(), transaction.getAccountId(), newFunding, List.of()));
         if (fundingChanges) {
             boxFundingRepository.saveForTransaction(
                 id, transaction.getTransactionDate(), fundingCreatedAt, newFunding);
@@ -226,7 +232,7 @@ public class TransactionService implements TransactionUseCase {
         Transaction updated = transactionRepository.update(new Transaction(
             existing.getId(), existing.getAmount(), existing.getDirection(), existing.getDescription(),
             existing.getTransactionDate(), existing.getCategoryId(), existing.getContactId(),
-            subscriptionId));
+            subscriptionId, existing.getAccountId(), List.of(), List.of()));
         LOG.infof("transaction.link transactionId=%d subscriptionId=%s", transactionId,
             subscriptionId != null ? subscriptionId.toString() : "null");
         return withBoxAllocations(updated);
@@ -287,6 +293,20 @@ public class TransactionService implements TransactionUseCase {
             throw new BadRequestException("Box funding cannot exceed the Transaction amount");
         }
         return List.copyOf(normalized);
+    }
+
+    private void validateAccount(Transaction transaction) {
+        if (financialAccountRepository.isTrackingActive() && transaction.getAccountId() == null) {
+            throw new BadRequestException("Financial Account is required after Account tracking is activated");
+        }
+        if (transaction.getAccountId() == null) {
+            return;
+        }
+        var account = financialAccountRepository.findById(transaction.getAccountId()).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + transaction.getAccountId()));
+        if (account.isArchived()) {
+            throw conflict("Financial Account must be restored before recording activity: " + account.getId());
+        }
     }
 
     private List<BoxDistribution> normalizeAndValidateDistributions(Transaction transaction) {

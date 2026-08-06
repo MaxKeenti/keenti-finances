@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import java.util.Optional;
 
 @Entity
@@ -74,6 +75,9 @@ public class UserEntity extends PanacheEntityBase {
 
     @Column(name = "time_zone", nullable = false, length = 64)
     public String timeZone = DEFAULT_TIME_ZONE;
+
+    @Column(name = "account_tracking_activated_at")
+    public LocalDate accountTrackingActivatedAt;
 
     public static Optional<UserEntity> findByWorkosId(String workosId) {
         return find("workosId", workosId).firstResultOptional();

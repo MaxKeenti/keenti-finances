@@ -10,5 +10,6 @@ public record BulkPaymentRequest(
     @NotNull @Positive BigDecimal totalAmount,
     @NotNull LocalDate paymentDate,
     @NotNull Long categoryId,
+    Long accountId,
     String notes
 ) {}
