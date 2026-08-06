@@ -1,6 +1,7 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.PaymentRecord;
+import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.Transaction;
 import com.keenti.finances.domain.port.in.PaymentRecordUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
