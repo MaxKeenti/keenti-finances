@@ -17,7 +17,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -191,7 +191,7 @@
 						</div>
 
 						<div class="text-xs text-muted-foreground space-y-0.5">
-							<p>{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{sub.nextBillingDate}</span></p>
+							<p>{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{formatDateOnly(sub.nextBillingDate, data.preferences.locale)}</span></p>
 							{#if sub.type === 'SHARED'}
 								<p>{m.subscriptions_members_count()} <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
 							{/if}

@@ -13,6 +13,16 @@ import {
 
 const PUBLIC_PATHS = ['/callback', '/logout', '/public', '/health'];
 
+const testAuthBypassEnabled =
+	process.env.TEST_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production';
+
+const testUser = {
+	id: process.env.TEST_WORKOS_USER_ID ?? 'development-demo',
+	email: 'development-demo@example.test',
+	firstName: 'Development',
+	lastName: 'Demo',
+};
+
 function isTokenExpired(accessToken: string): boolean {
 	try {
 		const [, payload] = accessToken.split('.');
@@ -57,6 +67,14 @@ const authHandle: Handle = async ({ event, resolve }) => {
 
 	if (isPublic) {
 		event.locals.session = null;
+		return resolve(event);
+	}
+
+	// Browser-driven test environments need a deterministic identity without
+	// completing an interactive WorkOS flow. This is intentionally a two-part
+	// opt-in: the flag must be enabled and the process must not be production.
+	if (testAuthBypassEnabled) {
+		event.locals.session = { user: testUser };
 		return resolve(event);
 	}
 

@@ -18,6 +18,11 @@ jobs:
     name: backend-test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Backend integration fixtures use the app's default user-local calendar day.
+      # GitHub runners are UTC, which otherwise makes them one day ahead around
+      # Mexico City evenings and turns valid same-day Box movements into futures.
+      TZ: America/Mexico_City
     defaults:
       run:
         working-directory: backend

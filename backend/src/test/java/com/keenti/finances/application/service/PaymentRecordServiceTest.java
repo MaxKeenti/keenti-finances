@@ -11,6 +11,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.WebApplicationException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -77,6 +78,19 @@ class PaymentRecordServiceTest {
         WebApplicationException ex = assertThrows(WebApplicationException.class,
             () -> paymentRecordService.linkTransaction(sub.id, record.id, tx.id));
         assertEquals(409, ex.getResponse().getStatus());
+    }
+
+    @Test
+    @Transactional
+    void linkTransactionRejectsIngressTransaction() {
+        UserEntity user = ensureUser("test-link-ingress-rejected");
+        SubscriptionEntity sub = sharedSubscription(user);
+        SubscriptionMemberEntity member = member(sub, contact(user, "Member C"));
+        PaymentRecordEntity record = pendingRecord(sub, member, "50.00");
+        TransactionEntity tx = ingressTransaction(user, "Refund", "50.00", LocalDate.now());
+
+        assertThrows(BadRequestException.class,
+            () -> paymentRecordService.linkTransaction(sub.id, record.id, tx.id));
     }
 
     // --- fixtures ---
@@ -154,9 +168,17 @@ class PaymentRecordServiceTest {
     }
 
     private TransactionEntity egressTransaction(UserEntity user, String description, String amount, LocalDate date) {
+        return transaction(user, description, amount, date, "EGRESS");
+    }
+
+    private TransactionEntity ingressTransaction(UserEntity user, String description, String amount, LocalDate date) {
+        return transaction(user, description, amount, date, "INGRESS");
+    }
+
+    private TransactionEntity transaction(UserEntity user, String description, String amount, LocalDate date, String direction) {
         TransactionEntity t = new TransactionEntity();
         t.amount = new BigDecimal(amount);
-        t.direction = "EGRESS";
+        t.direction = direction;
         t.description = description;
         t.transactionDate = date;
         t.category = category(user);
