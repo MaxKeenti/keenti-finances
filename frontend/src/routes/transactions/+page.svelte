@@ -458,10 +458,36 @@
 	{/if}
 
 	{#if activityItems.length > 0}
-		<Card.Root>
-			<Card.Header><Card.Title>Activity history</Card.Title><Card.Description>Transactions and neutral Transfers in one chronological list.</Card.Description></Card.Header>
-				<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground tabular-nums">↔ {fmt.format(item.amount)}</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
-		</Card.Root>
+		<section aria-label="All records" class="rounded-lg border">
+			<div class="overflow-x-auto">
+				<Table.Root>
+					<Table.Header>
+						<Table.Row>
+							<Table.Head>{m.common_date()}</Table.Head>
+							<Table.Head>Type</Table.Head>
+							<Table.Head>{m.common_description()}</Table.Head>
+							<Table.Head>Details</Table.Head>
+							<Table.Head class="text-right">{m.common_amount()}</Table.Head>
+						</Table.Row>
+					</Table.Header>
+					<Table.Body>
+						{#each activityItems as item (item.key)}
+							<Table.Row>
+								<Table.Cell class="whitespace-nowrap">{formatDateOnly(item.date, data.preferences.locale)}</Table.Cell>
+								<Table.Cell>
+									<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {item.kind === 'Transfer' ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'}">{item.kind}</span>
+								</Table.Cell>
+								<Table.Cell><a href={item.href} class="font-medium hover:underline">{item.title}</a></Table.Cell>
+								<Table.Cell class="text-muted-foreground">{item.detail ?? '—'}</Table.Cell>
+								<Table.Cell class="text-right font-mono font-medium tabular-nums {item.kind === 'Transfer' ? 'text-violet-700 dark:text-violet-300' : item.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}">
+									{#if item.kind === 'Transfer'}↔ {fmt.format(item.amount)}{:else}{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}{/if}
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
+			</div>
+		</section>
 	{/if}
 
 	{#if data.transactionPage.totalItems === 0}
