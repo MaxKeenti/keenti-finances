@@ -492,24 +492,33 @@
 		<!-- grid-cols-1 (minmax(0,1fr)) keeps the single column from growing to the
 		     cards' max-content width; without it the truncated (nowrap) descriptions
 		     blow the track past the viewport and the page overflows horizontally. -->
-		<div class="grid grid-cols-1 gap-3 md:hidden">
+		<div class="grid grid-cols-1 gap-4 md:hidden">
 			{#each ledgerPageItems as item (item.key)}
 				{#if item.kind === 'Transaction'}
 					{@const tx = item.transaction}
 					{@const selected = selectedTxIds.has(tx.id)}
-					<Card.Root class="relative transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
-						<Card.Content class="space-y-3 py-4 pl-11">
-							<div class="absolute left-3 top-4"><Checkbox checked={selected} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></div>
-							<div class="flex min-w-0 items-start justify-between gap-3"><div class="min-w-0"><span class="inline-flex rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">Transaction</span><a href="/transactions/{tx.id}" class="mt-2 block truncate font-medium hover:underline">{tx.description ?? '—'}</a><p class="text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono font-semibold {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</span></div>
-							<div class="flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
-							{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}
-							<div class="flex justify-end gap-2"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div>
-						</Card.Content>
-					</Card.Root>
+					<div class="relative">
+						<div class="absolute left-3 top-4 z-1">
+							<Checkbox checked={selected} onclick={(event) => { event.preventDefault(); event.stopPropagation(); toggleSelectedTx(tx.id); }} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} />
+						</div>
+						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
+							<Card.Content class="pt-4 pl-10">
+								<div class="flex items-start justify-between gap-2">
+									<a href="/transactions/{tx.id}" class="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><p class="truncate text-sm text-muted-foreground">{tx.description ?? '—'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></a>
+									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
+								</div>
+								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
+								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
+							</Card.Content>
+						</Card.Root>
+					</div>
 				{:else}
 					{@const transfer = item.transfer}
-					<Card.Root class="border-violet-500/20 bg-violet-500/[0.04]">
-						<Card.Content class="space-y-2 py-4"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span><a href="/accounts" class="mt-2 block break-words font-medium hover:underline">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</a><p class="text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>{#if transfer.notes}<p class="text-sm text-muted-foreground">{transfer.notes}</p>{/if}</Card.Content>
+					<Card.Root class="border-violet-500/20 bg-violet-500/4">
+						<Card.Content class="pt-4">
+							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>
+							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
+						</Card.Content>
 					</Card.Root>
 				{/if}
 			{/each}
@@ -543,7 +552,6 @@
 								{m.common_date()} {@render sortIcon('transactionDate')}
 							</Button>
 						</Table.Head>
-						<Table.Head>Type</Table.Head>
 						<Table.Head>
 							<Button
 								variant="ghost"
@@ -615,7 +623,6 @@
 							<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
 								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
-								<Table.Cell><span class="inline-flex rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">Transaction</span></Table.Cell>
 								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}</div></Table.Cell>
 								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
 								<Table.Cell>{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{:else}—{/if}</Table.Cell>
@@ -625,13 +632,12 @@
 							</Table.Row>
 						{:else}
 							{@const transfer = item.transfer}
-							<Table.Row class="bg-violet-500/[0.04]">
+							<Table.Row class="bg-violet-500/4">
 								<Table.Cell></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</Table.Cell>
-								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span></Table.Cell>
 								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
 								<Table.Cell class="font-mono font-medium text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</Table.Cell>
-								<Table.Cell>—</Table.Cell>
+								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span></Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell></Table.Cell>

@@ -297,7 +297,7 @@
 							</div>
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
+						<div class="flex gap-2 mt-auto pt-1 relative z-1">
 							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
 								{m.debts_payments()}
 							</Button>
@@ -445,7 +445,7 @@
 						<Table.Body>
 							{#each bulkResult.payments as item (item.debtId)}
 								<Table.Row>
-									<Table.Cell class="text-sm max-w-[180px] truncate">{item.description}</Table.Cell>
+									<Table.Cell class="text-sm max-w-45 truncate">{item.description}</Table.Cell>
 									<Table.Cell class="text-right tabular-nums text-green-600 dark:text-green-400 font-medium">
 										{fmt.format(item.applied)}
 									</Table.Cell>
