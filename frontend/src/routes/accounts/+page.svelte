@@ -160,25 +160,27 @@
 				<Card.Header><Card.Title>{account.name} credit payment</Card.Title><Card.Description>Confirm bank statements here. Transfers into this account remain payments and never affect Net Balance.</Card.Description></Card.Header>
 				<Card.Content class="space-y-5">
 					<details>
-						<summary class="cursor-pointer text-sm font-medium">Credit account settings</summary>
+						<summary class="cursor-pointer text-sm font-medium">Credit account schedule</summary>
+						<p class="mt-2 text-sm text-muted-foreground">Set the card's usual monthly closing and payment days. These help describe your regular schedule; confirm each bank statement below using the exact dates printed by the bank.</p>
 						<form method="POST" action="?/saveCreditSettings" use:enhance class="mt-3 grid gap-3 sm:grid-cols-4">
 							<input type="hidden" name="accountId" value={account.id} />
-							<Input name="creditLimit" type="number" min="0.01" step="0.01" required value={detail?.settings?.creditLimit ?? ''} placeholder="Credit limit" />
-							<Input name="statementClosingDay" type="number" min="1" max="31" required value={detail?.settings?.statementClosingDay ?? ''} placeholder="Closing day" />
-							<Input name="paymentDueDay" type="number" min="1" max="31" required value={detail?.settings?.paymentDueDay ?? ''} placeholder="Due day" />
+							<div class="grid gap-1"><label class="text-xs font-medium" for={`credit-limit-${account.id}`}>Credit limit</label><Input id={`credit-limit-${account.id}`} name="creditLimit" type="number" min="0.01" step="0.01" required value={detail?.settings?.creditLimit ?? ''} placeholder="Credit limit" /></div>
+							<div class="grid gap-1"><label class="text-xs font-medium" for={`closing-day-${account.id}`}>Usual closing day</label><Input id={`closing-day-${account.id}`} name="statementClosingDay" type="number" min="1" max="31" required value={detail?.settings?.statementClosingDay ?? ''} placeholder="e.g. 8" /></div>
+							<div class="grid gap-1"><label class="text-xs font-medium" for={`due-day-${account.id}`}>Usual due day</label><Input id={`due-day-${account.id}`} name="paymentDueDay" type="number" min="1" max="31" required value={detail?.settings?.paymentDueDay ?? ''} placeholder="e.g. 28" /></div>
 							<Button type="submit">Save settings</Button>
 						</form>
 					</details>
 
+					<div class="space-y-1"><p class="text-sm font-medium">Confirm a bank statement</p><p class="text-sm text-muted-foreground">Enter the exact dates and amounts shown on this statement. They can differ from the usual schedule above.</p></div>
 					<form method="POST" action="?/confirmCreditStatement" use:enhance class="grid gap-3 sm:grid-cols-3">
 						<input type="hidden" name="accountId" value={account.id} />
-						<Input name="periodStart" type="date" required aria-label="Statement period start" />
-						<Input name="periodEnd" type="date" required aria-label="Statement period end" />
-						<Input name="dueDate" type="date" required aria-label="Statement due date" />
-						<Input name="officialBalance" type="number" min="0" step="0.01" required placeholder="Official balance" />
-						<Input name="officialMinimumPayment" type="number" min="0" step="0.01" required placeholder="Minimum payment" />
-						<Input name="officialAvoidInterest" type="number" min="0" step="0.01" required placeholder="Avoid-interest payment" />
-						<Input name="officialNote" class="sm:col-span-2" placeholder="Optional note" />
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`statement-start-${account.id}`}>Statement period start</label><Input id={`statement-start-${account.id}`} name="periodStart" type="date" required /></div>
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`statement-end-${account.id}`}>Statement closing date</label><Input id={`statement-end-${account.id}`} name="periodEnd" type="date" required /></div>
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`statement-due-${account.id}`}>Statement payment due date</label><Input id={`statement-due-${account.id}`} name="dueDate" type="date" required /></div>
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`official-balance-${account.id}`}>Statement balance</label><Input id={`official-balance-${account.id}`} name="officialBalance" type="number" min="0" step="0.01" required placeholder="$0.00" /></div>
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`minimum-payment-${account.id}`}>Minimum payment</label><Input id={`minimum-payment-${account.id}`} name="officialMinimumPayment" type="number" min="0" step="0.01" required placeholder="$0.00" /></div>
+						<div class="grid gap-1"><label class="text-xs font-medium" for={`avoid-interest-${account.id}`}>Payment to avoid interest</label><Input id={`avoid-interest-${account.id}`} name="officialAvoidInterest" type="number" min="0" step="0.01" required placeholder="$0.00" /></div>
+						<div class="grid gap-1 sm:col-span-2"><label class="text-xs font-medium" for={`statement-note-${account.id}`}>Note</label><Input id={`statement-note-${account.id}`} name="officialNote" placeholder="Optional" /></div>
 						<Button type="submit">Confirm statement</Button>
 					</form>
 
