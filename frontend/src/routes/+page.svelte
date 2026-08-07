@@ -127,6 +127,7 @@
 	const nextYear = $derived(data.year + 1);
 	const currentYear = new Date().getFullYear();
 	const isUnreconciled = $derived(data.summary.availableToSpend < 0);
+	const accountWarnings = $derived(data.accountWarnings);
 </script>
 
 <div class="space-y-6 p-6">
@@ -142,6 +143,15 @@
 			</Alert.Action>
 		</Alert.Root>
 	{/if}
+
+	{#each accountWarnings as warning}
+		<Alert.Root variant="destructive">
+			<AlertTriangle aria-hidden="true" />
+			<Alert.Title>{warning.title}</Alert.Title>
+			<Alert.Description>{warning.description}</Alert.Description>
+			<Alert.Action><Button href={warning.href} size="sm" variant="outline">Review account</Button></Alert.Action>
+		</Alert.Root>
+	{/each}
 
 	<!-- All-time balance cards -->
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">

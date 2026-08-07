@@ -279,7 +279,7 @@
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<Button type="submit" disabled={isPaid || $submitting} class="w-full sm:w-auto">
+					<Button type="submit" disabled={isPaid || $submitting || data.accountTracking.setupRequired} class="w-full sm:w-auto">
 						{$submitting ? m.common_recording() : m.common_record_payment()}
 					</Button>
 				</fieldset>

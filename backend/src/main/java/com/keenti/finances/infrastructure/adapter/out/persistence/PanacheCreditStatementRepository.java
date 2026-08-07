@@ -47,6 +47,17 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
     }
 
     @Override
+    public Optional<CreditStatement> findById(Long id) {
+        return em.createQuery("""
+                SELECT statement FROM CreditStatementEntity statement
+                JOIN statement.account account
+                WHERE statement.id = :id AND account.user.id = :userId
+                """, CreditStatementEntity.class)
+            .setParameter("id", id).setParameter("userId", userContext.getUserId())
+            .getResultList().stream().findFirst().map(this::toDomain);
+    }
+
+    @Override
     public CreditStatement save(CreditStatement statement) {
         CreditStatementEntity entity = new CreditStatementEntity();
         entity.account = em.getReference(FinancialAccountEntity.class, statement.accountId());
@@ -62,6 +73,52 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         em.persist(entity);
         em.flush();
         return toDomain(entity);
+    }
+
+    @Override
+    public CreditStatement updateOfficialFigures(CreditStatement statement) {
+        CreditStatementEntity entity = em.createQuery("""
+                SELECT statement FROM CreditStatementEntity statement
+                JOIN statement.account account
+                WHERE statement.id = :id AND account.user.id = :userId
+                """, CreditStatementEntity.class)
+            .setParameter("id", statement.id()).setParameter("userId", userContext.getUserId())
+            .getResultList().stream().findFirst().orElseThrow();
+        entity.dueDate = statement.dueDate();
+        entity.estimatedBalance = statement.estimatedBalance();
+        entity.officialBalance = statement.officialBalance();
+        entity.officialMinimumPayment = statement.officialMinimumPayment();
+        entity.officialAvoidInterest = statement.officialAvoidInterest();
+        entity.officialNote = statement.officialNote();
+        entity.confirmedAt = LocalDateTime.now();
+        em.flush();
+        return toDomain(entity);
+    }
+
+    @Override
+    public void saveRevision(CreditStatement statement) {
+        em.createNativeQuery("""
+                INSERT INTO credit_statement_revision (statement_id, due_date, official_balance,
+                    official_minimum_payment, official_avoid_interest, official_note, estimated_balance,
+                    confirmed_at)
+                VALUES (:statementId, :dueDate, :officialBalance, :minimumPayment, :avoidInterest,
+                    :officialNote, :estimatedBalance, :confirmedAt)
+                """)
+            .setParameter("statementId", statement.id()).setParameter("dueDate", statement.dueDate())
+            .setParameter("officialBalance", statement.officialBalance())
+            .setParameter("minimumPayment", statement.officialMinimumPayment())
+            .setParameter("avoidInterest", statement.officialAvoidInterest())
+            .setParameter("officialNote", statement.officialNote())
+            .setParameter("estimatedBalance", statement.estimatedBalance())
+            .setParameter("confirmedAt", statement.confirmedAt())
+            .executeUpdate();
+    }
+
+    @Override
+    public long revisionCount(Long statementId) {
+        Object raw = em.createNativeQuery("SELECT COUNT(*) FROM credit_statement_revision WHERE statement_id = :id")
+            .setParameter("id", statementId).getSingleResult();
+        return ((Number) raw).longValue();
     }
 
     @Override
@@ -98,6 +155,54 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
             remainingPayment = remainingPayment.subtract(allocated);
         }
         em.flush();
+    }
+
+    @Override
+    public void removeAllocationsForTransfer(Long transferId) {
+        em.createNativeQuery("""
+                DELETE FROM credit_statement_payment payment
+                USING financial_account_transfer transfer
+                WHERE payment.transfer_id = transfer.id
+                  AND transfer.id = :transferId
+                  AND transfer.user_id = :userId
+                """)
+            .setParameter("transferId", transferId).setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        em.flush();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void reallocatePayments(Long accountId) {
+        em.createNativeQuery("""
+                DELETE FROM credit_statement_payment payment
+                USING credit_statement statement, financial_account account
+                WHERE payment.statement_id = statement.id
+                  AND statement.account_id = :accountId
+                  AND account.id = statement.account_id
+                  AND account.user_id = :userId
+                """)
+            .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        em.flush();
+
+        List<Object[]> transfers = em.createNativeQuery("""
+                SELECT transfer.id, transfer.transfer_date, transfer.amount
+                FROM financial_account_transfer transfer
+                WHERE transfer.destination_account_id = :accountId
+                  AND transfer.user_id = :userId
+                  AND transfer.deleted_at IS NULL
+                ORDER BY transfer.transfer_date, transfer.created_at, transfer.id
+                """)
+            .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
+            .getResultList();
+        for (Object[] transfer : transfers) {
+            LocalDate transferDate = transfer[1] instanceof LocalDate date
+                ? date
+                : ((java.sql.Date) transfer[1]).toLocalDate();
+            allocateOldestOutstanding(accountId, ((Number) transfer[0]).longValue(),
+                transferDate, decimal(transfer[2]));
+        }
     }
 
     private CreditStatement toDomain(CreditStatementEntity entity) {

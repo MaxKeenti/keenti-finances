@@ -213,6 +213,27 @@
 			data.transactionPage.totalItems,
 		),
 	);
+	const transfers = $derived(data.transfers);
+	const activityItems = $derived([
+		...data.activityTransactions.map((transaction) => ({
+			key: `transaction-${transaction.id}`,
+			date: transaction.transactionDate,
+			kind: 'Transaction',
+			title: transaction.description ?? transaction.categoryName ?? 'Transaction',
+			detail: transaction.accountName ?? transaction.categoryName ?? null,
+			amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
+			href: `/transactions/${transaction.id}`,
+		})),
+		...transfers.map((transfer) => ({
+			key: `transfer-${transfer.id}`,
+			date: transfer.transferDate,
+			kind: 'Transfer',
+			title: `${transfer.sourceAccountName ?? 'Archived account'} → ${transfer.destinationAccountName ?? 'Archived account'}`,
+			detail: transfer.notes,
+			amount: transfer.amount,
+			href: '/accounts',
+		})),
+	].sort((left, right) => right.date.localeCompare(left.date)));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
@@ -436,6 +457,13 @@
 		</div>
 	{/if}
 
+	{#if activityItems.length > 0}
+		<Card.Root>
+			<Card.Header><Card.Title>Activity history</Card.Title><Card.Description>Transactions and neutral Transfers in one chronological list.</Card.Description></Card.Header>
+				<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground tabular-nums">↔ {fmt.format(item.amount)}</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
+		</Card.Root>
+	{/if}
+
 	{#if data.transactionPage.totalItems === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.transactions_empty_title()}</Empty.Title>
@@ -451,7 +479,7 @@
 				{@const tx = row.original}
 				{@const selected = selectedTxIds.has(tx.id)}
 				<div class="relative">
-					<div class="absolute left-3 top-4 z-[1]">
+					<div class="absolute left-3 top-4 z-1">
 						<Checkbox
 							checked={selected}
 							onclick={(event) => {
@@ -486,6 +514,9 @@
 									{/if}
 									{#if tx.contactName}
 										<span class="text-xs text-muted-foreground">{tx.contactName}</span>
+									{/if}
+									{#if tx.accountName}
+										<span class="text-xs text-muted-foreground">{tx.accountName}</span>
 									{/if}
 								</div>
 								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
@@ -594,7 +625,8 @@
 								{m.common_contact()} {@render sortIcon('contactName')}
 							</Button>
 						</Table.Head>
-						<Table.Head class="w-[120px] text-right">{m.common_actions()}</Table.Head>
+						<Table.Head>Account</Table.Head>
+						<Table.Head class="w-30 text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
@@ -643,6 +675,7 @@
 								{/if}
 							</Table.Cell>
 							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
+							<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
 							<Table.Cell class="text-right">
 								<div class="flex justify-end gap-2">
 									<Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button>
@@ -699,6 +732,13 @@
 		{#if $message}
 			<Alert.Root variant="destructive">
 				<Alert.Description>{$message}</Alert.Description>
+			</Alert.Root>
+		{/if}
+
+		{#if !editMode && data.accountTracking.setupRequired}
+			<Alert.Root>
+				<Alert.Title>Set up Account tracking first</Alert.Title>
+				<Alert.Description>New Users need at least one Financial Account before recording activity. <a class="underline" href="/accounts">Set up Accounts</a>.</Alert.Description>
 			</Alert.Root>
 		{/if}
 
@@ -893,7 +933,7 @@
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={$submitting || allocationInvalid}>
+				<Button type="submit" disabled={$submitting || allocationInvalid || (!editMode && data.accountTracking.setupRequired)}>
 					{$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
 				</Button>
 			</Dialog.Footer>

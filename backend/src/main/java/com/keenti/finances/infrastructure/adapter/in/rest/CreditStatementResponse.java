@@ -8,4 +8,5 @@ public record CreditStatementResponse(Long id, Long accountId, LocalDate periodS
     LocalDate periodEnd, LocalDate dueDate, BigDecimal estimatedBalance,
     BigDecimal officialBalance, BigDecimal officialMinimumPayment,
     BigDecimal officialAvoidInterest, String officialNote, LocalDateTime confirmedAt,
-    BigDecimal paidAmount, BigDecimal outstandingBalance) {}
+    BigDecimal paidAmount, BigDecimal outstandingBalance, boolean reconciliationMismatch,
+    BigDecimal mismatchAmount, long priorRevisionCount) {}

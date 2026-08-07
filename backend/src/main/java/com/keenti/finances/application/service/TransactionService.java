@@ -9,6 +9,7 @@ import com.keenti.finances.domain.port.in.TransactionUseCase;
 import com.keenti.finances.domain.port.out.BoxDistributionRepository;
 import com.keenti.finances.domain.port.out.BoxFundingRepository;
 import com.keenti.finances.domain.port.out.BoxRepository;
+import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
@@ -17,6 +18,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -57,6 +59,9 @@ public class TransactionService implements TransactionUseCase {
 
     @Inject
     FinancialAccountRepository financialAccountRepository;
+
+    @Inject
+    CreditMsiPlanRepository creditMsiPlanRepository;
 
     @Inject
     UserTimeZoneProvider userTimeZoneProvider;
@@ -126,7 +131,9 @@ public class TransactionService implements TransactionUseCase {
     public Transaction update(Long id, Transaction transaction) {
         Transaction existing = transactionRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + id));
-        validateAccount(transaction);
+        validateAccount(transaction, existing.getAccountId());
+        creditMsiPlanRepository.findByTransactionId(id)
+            .ifPresent(plan -> validateMsiSourceChange(transaction, plan));
         if (!transaction.getBoxDistributions().isEmpty()) {
             throw new BadRequestException(
                 "Applied Box distributions are independent and cannot be changed with the Transaction");
@@ -151,6 +158,8 @@ public class TransactionService implements TransactionUseCase {
             id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
             transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId(),
             existing.getSubscriptionId(), transaction.getAccountId(), newFunding, List.of()));
+        creditMsiPlanRepository.findByTransactionId(id).ifPresent(plan ->
+            creditMsiPlanRepository.updateSource(plan.id(), transaction.getAccountId(), transaction.getAmount()));
         if (fundingChanges) {
             boxFundingRepository.saveForTransaction(
                 id, transaction.getTransactionDate(), fundingCreatedAt, newFunding);
@@ -166,12 +175,18 @@ public class TransactionService implements TransactionUseCase {
     @Override
     @Transactional
     public void delete(Long id) {
+        financialAccountRepository.lockTrackingScope();
         Transaction existing = transactionRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + id));
+        validateExistingActivityAccount(existing);
         List<BoxFunding> funding = boxFundingRepository.findByTransactionId(id);
         validateFundingTransition(
             funding, true, existing.getTransactionDate(),
             List.of(), false, existing.getTransactionDate());
+        // An MSI plan is derived from this source Transaction. Removing the source
+        // also removes the plan so a later permanent delete cannot violate its FK
+        // and a restore cannot resurrect stale installment metadata.
+        creditMsiPlanRepository.deleteByTransactionId(id);
         transactionRepository.softDeleteById(id);
         LOG.infof("transaction.soft_deleted id=%d", id);
     }
@@ -179,8 +194,10 @@ public class TransactionService implements TransactionUseCase {
     @Override
     @Transactional
     public void restore(Long id) {
+        financialAccountRepository.lockTrackingScope();
         Transaction deleted = transactionRepository.findDeletedTransactionById(id).orElseThrow(() ->
             new NotFoundException("Deleted transaction not found: " + id));
+        validateExistingActivityAccount(deleted);
         List<BoxFunding> funding = boxFundingRepository.findByTransactionId(id);
         validateFundingTransition(
             List.of(), false, deleted.getTransactionDate(),
@@ -204,8 +221,11 @@ public class TransactionService implements TransactionUseCase {
     @Override
     @Transactional
     public void permanentDelete(Long id) {
-        transactionRepository.findDeletedById(id).orElseThrow(() ->
+        financialAccountRepository.lockTrackingScope();
+        Transaction deleted = transactionRepository.findDeletedTransactionById(id).orElseThrow(() ->
             new NotFoundException("Deleted transaction not found: " + id));
+        validateExistingActivityAccount(deleted);
+        creditMsiPlanRepository.deleteByTransactionId(id);
         transactionRepository.deleteById(id);
         LOG.infof("transaction.permanent_deleted id=%d", id);
     }
@@ -295,17 +315,65 @@ public class TransactionService implements TransactionUseCase {
         return List.copyOf(normalized);
     }
 
-    private void validateAccount(Transaction transaction) {
+    private void validateAccount(Transaction transaction, Long... relatedAccountIds) {
+        // Serialize the activation check with activation itself. Without this lock,
+        // a request that observed inactive tracking could commit an unassigned
+        // Transaction after the Account ledger has been activated.
+        financialAccountRepository.lockTrackingScope();
+        if (!financialAccountRepository.isTrackingActive()
+                && financialAccountRepository.isTrackingSetupRequired()) {
+            throw new ClientErrorException(
+                "Set up a Financial Account before recording activity", Response.Status.CONFLICT);
+        }
         if (financialAccountRepository.isTrackingActive() && transaction.getAccountId() == null) {
             throw new BadRequestException("Financial Account is required after Account tracking is activated");
         }
-        if (transaction.getAccountId() == null) {
-            return;
+        Set<Long> accountIds = new java.util.TreeSet<>();
+        if (transaction.getAccountId() != null) {
+            accountIds.add(transaction.getAccountId());
         }
-        var account = financialAccountRepository.findById(transaction.getAccountId()).orElseThrow(() ->
+        for (Long relatedAccountId : relatedAccountIds) {
+            if (relatedAccountId != null) {
+                accountIds.add(relatedAccountId);
+            }
+        }
+        for (Long accountId : accountIds) {
+            var account = financialAccountRepository.lockById(accountId).orElseThrow(() ->
+                new NotFoundException("Financial Account not found: " + accountId));
+            if (account.isArchived()) {
+                throw conflict("Financial Account must be restored before recording activity: " + account.getId());
+            }
+        }
+    }
+
+    private void validateExistingActivityAccount(Transaction transaction) {
+        if (transaction.getAccountId() == null) {
+            return; // Legacy Transactions predate Financial Account tracking.
+        }
+        var account = financialAccountRepository.lockById(transaction.getAccountId()).orElseThrow(() ->
             new NotFoundException("Financial Account not found: " + transaction.getAccountId()));
         if (account.isArchived()) {
-            throw conflict("Financial Account must be restored before recording activity: " + account.getId());
+            throw conflict("Financial Account must be restored before changing activity: " + account.getId());
+        }
+    }
+
+    private void validateMsiSourceChange(Transaction transaction,
+                                         com.keenti.finances.domain.model.CreditMsiPlan plan) {
+        if (!"EGRESS".equals(transaction.getDirection()) || transaction.getAccountId() == null) {
+            throw new BadRequestException("An MSI plan requires its source to remain an EGRESS Transaction on a Credit Financial Account");
+        }
+        var account = financialAccountRepository.lockById(transaction.getAccountId()).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + transaction.getAccountId()));
+        if (!account.isCredit()) {
+            throw new BadRequestException("An MSI plan requires its source to remain on a Credit Financial Account");
+        }
+        if (transaction.getTransactionDate().isAfter(plan.firstInstallmentDate())) {
+            throw new BadRequestException("An MSI purchase cannot be dated after its first installment");
+        }
+        try {
+            transaction.getAmount().divide(BigDecimal.valueOf(plan.installmentCount()));
+        } catch (ArithmeticException exception) {
+            throw new BadRequestException("An MSI purchase amount must divide exactly into MXN-cent installments");
         }
     }
 

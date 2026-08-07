@@ -66,8 +66,8 @@ public class UserScopeFilter implements ContainerRequestFilter {
         // competing inserts wait for the winning transaction before returning
         // zero, so the lookup below sees the committed User.
         int inserted = em.createNativeQuery("""
-                INSERT INTO app_user (username, password_hash, workos_id)
-                VALUES (:username, NULL, :workosId)
+                INSERT INTO app_user (username, password_hash, workos_id, account_tracking_required)
+                VALUES (:username, NULL, :workosId, TRUE)
                 ON CONFLICT DO NOTHING
                 """)
             .setParameter("username", "workos:" + workosId)

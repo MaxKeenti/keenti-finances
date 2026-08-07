@@ -520,7 +520,7 @@
 
 				<Dialog.Footer>
 					<Button type="button" variant="outline" onclick={() => (bulkDialogOpen = false)}>{m.common_cancel()}</Button>
-					<Button type="submit" disabled={$bulkSubmitting}>
+					<Button type="submit" disabled={$bulkSubmitting || data.accountTracking.setupRequired}>
 						{$bulkSubmitting ? m.common_processing() : m.debts_apply_bulk_payment()}
 					</Button>
 				</Dialog.Footer>

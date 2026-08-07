@@ -315,6 +315,7 @@ class TransactionBoxFundingResourceTest {
     private static Response createTransactionRequest(
             String user, long categoryId, String amount, String direction, String date,
             String description, String boxFundingJson) {
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
         String fundingProperty = boxFundingJson == null
             ? ""
             : ",\"boxFunding\":" + boxFundingJson;
@@ -325,9 +326,10 @@ class TransactionBoxFundingResourceTest {
               "description": "%s",
               "transactionDate": "%s",
               "categoryId": %d,
-              "contactId": null%s
+              "contactId": null,
+              "accountId": %d%s
             }
-            """.formatted(amount, direction, description, date, categoryId, fundingProperty);
+            """.formatted(amount, direction, description, date, categoryId, accountId, fundingProperty);
         return given()
             .header("X-WorkOS-User-Id", user)
             .contentType(ContentType.JSON)
@@ -338,6 +340,7 @@ class TransactionBoxFundingResourceTest {
     private static Response updateTransaction(
             String user, long transactionId, long categoryId, String amount,
             String direction, String date, String description, String boxFundingJson) {
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
         String fundingProperty = boxFundingJson == null
             ? ""
             : ",\"boxFunding\":" + boxFundingJson;
@@ -348,9 +351,10 @@ class TransactionBoxFundingResourceTest {
               "description": "%s",
               "transactionDate": "%s",
               "categoryId": %d,
-              "contactId": null%s
+              "contactId": null,
+              "accountId": %d%s
             }
-            """.formatted(amount, direction, description, date, categoryId, fundingProperty);
+            """.formatted(amount, direction, description, date, categoryId, accountId, fundingProperty);
         return given()
             .header("X-WorkOS-User-Id", user)
             .contentType(ContentType.JSON)

@@ -51,7 +51,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	let contacts: Contact[] = [];
 	let categories: Category[] = [];
 	let accounts: FinancialAccount[] = [];
-	let accountTracking = { active: false };
+	let accountTracking = { active: false, setupRequired: false };
 
 	try {
 		const [debtRes, conRes, catRes, accountRes, trackingRes] = await Promise.all([

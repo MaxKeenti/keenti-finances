@@ -6,6 +6,7 @@ import com.keenti.finances.domain.port.in.ContactUseCase;
 import com.keenti.finances.domain.port.in.DebtUseCase;
 import com.keenti.finances.domain.port.in.SubscriptionUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
+import com.keenti.finances.domain.port.in.FinancialAccountTransferUseCase;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -23,13 +24,14 @@ import java.util.Set;
 @Produces(MediaType.APPLICATION_JSON)
 public class TrashResource {
 
-    private static final Set<String> VALID_TYPES = Set.of("transaction", "category", "contact", "subscription", "debt");
+    private static final Set<String> VALID_TYPES = Set.of("transaction", "category", "contact", "subscription", "debt", "transfer");
 
     @Inject CategoryUseCase categoryUseCase;
     @Inject ContactUseCase contactUseCase;
     @Inject TransactionUseCase transactionUseCase;
     @Inject SubscriptionUseCase subscriptionUseCase;
     @Inject DebtUseCase debtUseCase;
+    @Inject FinancialAccountTransferUseCase transferUseCase;
 
     @GET
     public Response list() {
@@ -39,6 +41,7 @@ public class TrashResource {
         all.addAll(contactUseCase.listDeleted());
         all.addAll(subscriptionUseCase.listDeleted());
         all.addAll(debtUseCase.listDeleted());
+        all.addAll(transferUseCase.listDeleted());
         all.sort((a, b) -> b.deletedAt().compareTo(a.deletedAt()));
 
         var body = all.stream()
@@ -90,6 +93,7 @@ public class TrashResource {
             case "contact" -> contactUseCase.restore(id);
             case "subscription" -> subscriptionUseCase.restore(id);
             case "debt" -> debtUseCase.restore(id);
+            case "transfer" -> transferUseCase.restore(id);
         }
     }
 
@@ -100,6 +104,7 @@ public class TrashResource {
             case "contact" -> contactUseCase.permanentDelete(id);
             case "subscription" -> subscriptionUseCase.permanentDelete(id);
             case "debt" -> debtUseCase.permanentDelete(id);
+            case "transfer" -> transferUseCase.permanentDelete(id);
         }
     }
 }

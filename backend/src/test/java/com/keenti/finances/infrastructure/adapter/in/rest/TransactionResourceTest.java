@@ -63,6 +63,7 @@ class TransactionResourceTest {
     }
 
     private void createTransaction(String user, int categoryId, String amount, String description, String date) {
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
         String body = """
                 {
                   "amount": %s,
@@ -70,9 +71,10 @@ class TransactionResourceTest {
                   "description": "%s",
                   "transactionDate": "%s",
                   "categoryId": %d,
-                  "contactId": null
+                  "contactId": null,
+                  "accountId": %d
                 }
-                """.formatted(amount, description, date, categoryId);
+                """.formatted(amount, description, date, categoryId, accountId);
 
         given()
                 .header("X-WorkOS-User-Id", user)

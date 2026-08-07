@@ -1,8 +1,11 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.CreditStatement;
+import com.keenti.finances.domain.model.CreditStatementEstimate;
 import com.keenti.finances.domain.port.in.CreditStatementUseCase;
 import com.keenti.finances.domain.port.out.CreditStatementRepository;
+import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
+import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -14,6 +17,7 @@ import jakarta.ws.rs.core.Response;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 
 @ApplicationScoped
@@ -21,6 +25,8 @@ public class CreditStatementService implements CreditStatementUseCase {
 
     @Inject FinancialAccountRepository financialAccountRepository;
     @Inject CreditStatementRepository creditStatementRepository;
+    @Inject CreditMsiPlanRepository creditMsiPlanRepository;
+    @Inject CreditAccountSettingsRepository creditAccountSettingsRepository;
 
     @Override
     public List<CreditStatement> list(Long accountId) {
@@ -35,13 +41,34 @@ public class CreditStatementService implements CreditStatementUseCase {
             throw new BadRequestException("Statement period end is required");
         }
         BigDecimal signedBalance = financialAccountRepository.getBalanceAt(accountId, periodEnd);
-        return signedBalance.signum() < 0 ? signedBalance.negate() : BigDecimal.ZERO;
+        BigDecimal statementBalance = signedBalance.add(
+            creditMsiPlanRepository.statementBalanceAdjustment(accountId, periodEnd));
+        return statementBalance.signum() < 0 ? statementBalance.negate() : BigDecimal.ZERO;
+    }
+
+    @Override
+    public CreditStatementEstimate estimateCurrentStatement(Long accountId, LocalDate today) {
+        requireCreditAccount(accountId);
+        var settings = creditAccountSettingsRepository.findByAccountId(accountId).orElseThrow(() ->
+            new ClientErrorException("Configure the Credit Account statement schedule first", Response.Status.CONFLICT));
+        LocalDate currentClosing = closingDate(today.getYear(), today.getMonthValue(), settings.statementClosingDay());
+        LocalDate periodEnd = today.isAfter(currentClosing)
+            ? closingDate(today.plusMonths(1).getYear(), today.plusMonths(1).getMonthValue(), settings.statementClosingDay())
+            : currentClosing;
+        LocalDate previousClosing = closingDate(periodEnd.minusMonths(1).getYear(), periodEnd.minusMonths(1).getMonthValue(), settings.statementClosingDay());
+        LocalDate periodStart = previousClosing.plusDays(1);
+        LocalDate dueDate = dueDate(periodEnd, settings.paymentDueDay());
+        return new CreditStatementEstimate(periodStart, periodEnd, dueDate,
+            // This is a live estimate for the open cycle. Using the future closing
+            // date here would include future-dated activity instead of activity the
+            // User has actually recorded so far.
+            estimateOutstandingBalance(accountId, today));
     }
 
     @Override
     @Transactional
     public CreditStatement confirm(CreditStatement statement) {
-        requireCreditAccount(statement.accountId());
+        requireActiveCreditAccount(statement.accountId());
         validate(statement);
         if (creditStatementRepository.findByAccountIdAndPeriod(
                 statement.accountId(), statement.periodStart(), statement.periodEnd()).isPresent()) {
@@ -49,10 +76,34 @@ public class CreditStatementService implements CreditStatementUseCase {
                 Response.Status.CONFLICT);
         }
         BigDecimal estimate = estimateOutstandingBalance(statement.accountId(), statement.periodEnd());
-        return creditStatementRepository.save(new CreditStatement(null, statement.accountId(),
+        CreditStatement saved = creditStatementRepository.save(new CreditStatement(null, statement.accountId(),
             statement.periodStart(), statement.periodEnd(), statement.dueDate(), estimate,
             statement.officialBalance(), statement.officialMinimumPayment(),
             statement.officialAvoidInterest(), statement.officialNote(), LocalDateTime.now(), BigDecimal.ZERO));
+        creditStatementRepository.reallocatePayments(statement.accountId());
+        return creditStatementRepository.findById(saved.id()).orElseThrow();
+    }
+
+    @Override
+    @Transactional
+    public CreditStatement reconfirm(Long statementId, CreditStatement statement) {
+        CreditStatement existing = creditStatementRepository.findById(statementId).orElseThrow(() ->
+            new NotFoundException("Credit statement not found: " + statementId));
+        requireActiveCreditAccount(existing.accountId());
+        if (!existing.accountId().equals(statement.accountId())
+                || !existing.periodStart().equals(statement.periodStart())
+                || !existing.periodEnd().equals(statement.periodEnd())) {
+            throw new BadRequestException("A reconfirmation cannot change the statement period or Financial Account");
+        }
+        validate(statement);
+        creditStatementRepository.saveRevision(existing);
+        BigDecimal currentEstimate = estimateOutstandingBalance(existing.accountId(), existing.periodEnd());
+        CreditStatement updated = creditStatementRepository.updateOfficialFigures(new CreditStatement(statementId,
+            existing.accountId(), existing.periodStart(), existing.periodEnd(), statement.dueDate(),
+            currentEstimate, statement.officialBalance(), statement.officialMinimumPayment(),
+            statement.officialAvoidInterest(), statement.officialNote(), existing.confirmedAt(), existing.paidAmount()));
+        creditStatementRepository.reallocatePayments(existing.accountId());
+        return creditStatementRepository.findById(updated.id()).orElseThrow();
     }
 
     private void requireCreditAccount(Long accountId) {
@@ -64,6 +115,16 @@ public class CreditStatementService implements CreditStatementUseCase {
             new NotFoundException("Financial Account not found: " + accountId));
         if (!account.isCredit()) {
             throw new BadRequestException("Credit statements require a CREDIT Financial Account");
+        }
+    }
+
+    private void requireActiveCreditAccount(Long accountId) {
+        requireCreditAccount(accountId);
+        var account = financialAccountRepository.lockById(accountId).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + accountId));
+        if (account.isArchived()) {
+            throw new ClientErrorException("Restore the Financial Account before changing Credit Statements",
+                Response.Status.CONFLICT);
         }
     }
 
@@ -94,5 +155,20 @@ public class CreditStatementService implements CreditStatementUseCase {
                 || amount.stripTrailingZeros().scale() > 2) {
             throw new BadRequestException(name + " must be non-negative with at most two decimal places");
         }
+    }
+
+    private LocalDate closingDate(int year, int month, int day) {
+        YearMonth cycle = YearMonth.of(year, month);
+        return cycle.atDay(Math.min(day, cycle.lengthOfMonth()));
+    }
+
+    private LocalDate dueDate(LocalDate periodEnd, int dueDay) {
+        YearMonth cycle = YearMonth.from(periodEnd);
+        LocalDate candidate = cycle.atDay(Math.min(dueDay, cycle.lengthOfMonth()));
+        if (candidate.isBefore(periodEnd)) {
+            cycle = cycle.plusMonths(1);
+            candidate = cycle.atDay(Math.min(dueDay, cycle.lengthOfMonth()));
+        }
+        return candidate;
     }
 }

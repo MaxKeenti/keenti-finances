@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 import { EMPTY_BALANCE_SUMMARY, type BalanceSummary } from '$lib/types/boxes';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -29,7 +30,7 @@ type Preferences = {
 	timeZone: string;
 };
 
-export const load: LayoutServerLoad = async ({ locals, fetch, cookies }) => {
+export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) => {
 	const cookieLocale = cookies.get('PARAGLIDE_LOCALE');
 	let preferences: Preferences = {
 		...DEFAULT_PREFERENCES,
@@ -38,10 +39,22 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies }) => {
 	let balanceSummary: BalanceSummary = EMPTY_BALANCE_SUMMARY;
 
 	if (locals.session) {
-		const [preferencesResult, balanceResult] = await Promise.allSettled([
+		const [preferencesResult, balanceResult, accountStatusResult] = await Promise.allSettled([
 			fetch(`${BACKEND}/api/user/preferences`),
 			fetch(`${BACKEND}/api/boxes/summary`),
+			fetch(`${BACKEND}/api/accounts/status`),
 		]);
+
+		if (
+			accountStatusResult.status === 'fulfilled' &&
+			accountStatusResult.value.ok &&
+			(await accountStatusResult.value.json() as { setupRequired?: boolean }).setupRequired &&
+			url.pathname !== '/accounts' &&
+			url.pathname !== '/logout' &&
+			!url.pathname.startsWith('/public/')
+		) {
+			redirect(303, '/accounts');
+		}
 
 		if (preferencesResult.status === 'fulfilled' && preferencesResult.value.ok) {
 			preferences = (await preferencesResult.value.json()) as Preferences;

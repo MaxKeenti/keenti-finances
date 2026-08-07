@@ -54,7 +54,7 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	let payments: DebtPayment[] = [];
 	let categories: Category[] = [];
 	let accounts: FinancialAccount[] = [];
-	let accountTracking = { active: false };
+	let accountTracking = { active: false, setupRequired: false };
 
 	try {
 		const debtRes = await fetch(`${BACKEND}/api/debts/${id}`, { headers: authHeaders });

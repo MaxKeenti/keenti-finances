@@ -42,6 +42,20 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
+    public Optional<FinancialAccount> lockById(Long id) {
+        return em.createQuery("""
+                SELECT account FROM FinancialAccountEntity account
+                WHERE account.id = :id AND account.user.id = :userId
+                """, FinancialAccountEntity.class)
+            .setParameter("id", id)
+            .setParameter("userId", userContext.getUserId())
+            .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+            .getResultStream()
+            .findFirst()
+            .map(this::toDomain);
+    }
+
+    @Override
     public FinancialAccount save(FinancialAccount account) {
         LocalDateTime now = LocalDateTime.now();
         FinancialAccountEntity entity = new FinancialAccountEntity();
@@ -59,6 +73,27 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
+    public FinancialAccount setArchived(Long id, boolean archived) {
+        int updated = em.createQuery("""
+                UPDATE FinancialAccountEntity account
+                SET account.archived = :archived, account.updatedAt = :updatedAt,
+                    account.version = account.version + 1
+                WHERE account.id = :id AND account.user.id = :userId
+                """)
+            .setParameter("archived", archived)
+            .setParameter("updatedAt", LocalDateTime.now())
+            .setParameter("id", id)
+            .setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        if (updated != 1) {
+            throw new IllegalStateException("Financial Account was not found while updating archive state");
+        }
+        em.clear();
+        return findById(id).orElseThrow(() ->
+            new IllegalStateException("Financial Account was not found after updating archive state"));
+    }
+
+    @Override
     public boolean existsActiveByName(String name) {
         return FinancialAccountEntity.count(
             "LOWER(name) = LOWER(?1) AND archived = false", name) > 0;
@@ -67,6 +102,12 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     @Override
     public boolean isTrackingActive() {
         return getTrackingActivationDate().isPresent();
+    }
+
+    @Override
+    public boolean isTrackingSetupRequired() {
+        UserEntity user = em.find(UserEntity.class, userContext.getUserId());
+        return user != null && user.accountTrackingRequired && user.accountTrackingActivatedAt == null;
     }
 
     @Override
@@ -84,6 +125,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     public void activateTracking(LocalDate activationDate) {
         UserEntity user = em.find(UserEntity.class, userContext.getUserId(), LockModeType.PESSIMISTIC_WRITE);
         user.accountTrackingActivatedAt = activationDate;
+        user.accountTrackingRequired = false;
         em.flush();
     }
 
@@ -96,6 +138,18 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     WHERE tx.account_id = account.id
                       AND tx.user_id = :userId
                       AND tx.deleted_at IS NULL
+                ), 0) + COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.destination_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
+                ), 0) - COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.source_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0)), 0)
                 FROM financial_account account
                 WHERE account.user_id = :userId
@@ -121,12 +175,14 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                       AND transfer.transfer_date <= :balanceDate
                 ), 0) - COALESCE((
                     SELECT SUM(transfer.amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.source_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                       AND transfer.transfer_date <= :balanceDate
                 ), 0)
                 FROM financial_account account
@@ -154,11 +210,13 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0) - COALESCE((
                     SELECT SUM(transfer.amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.source_account_id = account.id
                       AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0)
                 FROM financial_account account
                 LEFT JOIN transaction tx
