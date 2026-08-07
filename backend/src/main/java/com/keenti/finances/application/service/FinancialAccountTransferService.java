@@ -37,6 +37,7 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
     @Override
     @Transactional
     public FinancialAccountTransfer create(FinancialAccountTransfer transfer) {
+        financialAccountRepository.lockTrackingScope();
         if (!financialAccountRepository.isTrackingActive()) {
             throw new ClientErrorException(
                 "Activate Financial Account tracking before recording a Transfer", Response.Status.CONFLICT);
@@ -52,7 +53,7 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
     public FinancialAccountTransfer update(Long id, FinancialAccountTransfer transfer) {
         FinancialAccountTransfer existing = transferRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Financial Account Transfer not found: " + id));
-        validateTransfer(transfer);
+        validateTransfer(transfer, existing.sourceAccountId(), existing.destinationAccountId());
         FinancialAccountTransfer updated = transferRepository.update(new FinancialAccountTransfer(id,
             transfer.sourceAccountId(), transfer.destinationAccountId(), transfer.amount(),
             transfer.transferDate(), transfer.notes(), existing.createdAt()));
@@ -68,6 +69,7 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
     public void delete(Long id) {
         FinancialAccountTransfer existing = transferRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Financial Account Transfer not found: " + id));
+        validateAccountIds(existing.sourceAccountId(), existing.destinationAccountId());
         transferRepository.softDeleteById(id);
         reallocatePaymentDestination(existing.destinationAccountId());
     }
@@ -86,9 +88,9 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
     @Override
     @Transactional
     public void permanentDelete(Long id) {
-        if (transferRepository.findDeletedById(id).isEmpty()) {
-            throw new NotFoundException("Deleted Financial Account Transfer not found: " + id);
-        }
+        FinancialAccountTransfer deleted = transferRepository.findDeletedTransferById(id).orElseThrow(() ->
+            new NotFoundException("Deleted Financial Account Transfer not found: " + id));
+        validateAccountIds(deleted.sourceAccountId(), deleted.destinationAccountId());
         creditStatementRepository.removeAllocationsForTransfer(id);
         transferRepository.deleteById(id);
     }
@@ -98,7 +100,7 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         return transferRepository.findAllDeleted();
     }
 
-    private void validateTransfer(FinancialAccountTransfer transfer) {
+    private void validateTransfer(FinancialAccountTransfer transfer, Long... relatedAccountIds) {
         if (transfer.sourceAccountId() == null || transfer.destinationAccountId() == null
                 || transfer.sourceAccountId().equals(transfer.destinationAccountId())) {
             throw new BadRequestException("Transfer source and destination Financial Accounts must be different");
@@ -114,15 +116,25 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
             throw new BadRequestException("Transfer notes must be at most 500 characters");
         }
 
-        Long firstId = Math.min(transfer.sourceAccountId(), transfer.destinationAccountId());
-        Long secondId = Math.max(transfer.sourceAccountId(), transfer.destinationAccountId());
-        var first = financialAccountRepository.findById(firstId).orElseThrow(() ->
-            new NotFoundException("Financial Account not found: " + firstId));
-        var second = financialAccountRepository.findById(secondId).orElseThrow(() ->
-            new NotFoundException("Financial Account not found: " + secondId));
-        if (first.isArchived() || second.isArchived()) {
-            throw new ClientErrorException(
-                "Restore an archived Financial Account before recording a Transfer", Response.Status.CONFLICT);
+        validateAccountIds(transfer.sourceAccountId(), transfer.destinationAccountId(), relatedAccountIds);
+    }
+
+    private void validateAccountIds(Long firstAccountId, Long secondAccountId, Long... relatedAccountIds) {
+        java.util.Set<Long> accountIds = new java.util.TreeSet<>();
+        accountIds.add(firstAccountId);
+        accountIds.add(secondAccountId);
+        for (Long relatedAccountId : relatedAccountIds) {
+            if (relatedAccountId != null) {
+                accountIds.add(relatedAccountId);
+            }
+        }
+        for (Long accountId : accountIds) {
+            var account = financialAccountRepository.lockById(accountId).orElseThrow(() ->
+                new NotFoundException("Financial Account not found: " + accountId));
+            if (account.isArchived()) {
+                throw new ClientErrorException(
+                    "Restore an archived Financial Account before changing a Transfer", Response.Status.CONFLICT);
+            }
         }
     }
 

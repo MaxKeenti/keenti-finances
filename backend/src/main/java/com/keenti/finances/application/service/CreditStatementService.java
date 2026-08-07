@@ -52,20 +52,23 @@ public class CreditStatementService implements CreditStatementUseCase {
         var settings = creditAccountSettingsRepository.findByAccountId(accountId).orElseThrow(() ->
             new ClientErrorException("Configure the Credit Account statement schedule first", Response.Status.CONFLICT));
         LocalDate currentClosing = closingDate(today.getYear(), today.getMonthValue(), settings.statementClosingDay());
-        LocalDate periodEnd = today.isBefore(currentClosing)
-            ? closingDate(today.minusMonths(1).getYear(), today.minusMonths(1).getMonthValue(), settings.statementClosingDay())
+        LocalDate periodEnd = today.isAfter(currentClosing)
+            ? closingDate(today.plusMonths(1).getYear(), today.plusMonths(1).getMonthValue(), settings.statementClosingDay())
             : currentClosing;
         LocalDate previousClosing = closingDate(periodEnd.minusMonths(1).getYear(), periodEnd.minusMonths(1).getMonthValue(), settings.statementClosingDay());
         LocalDate periodStart = previousClosing.plusDays(1);
         LocalDate dueDate = dueDate(periodEnd, settings.paymentDueDay());
         return new CreditStatementEstimate(periodStart, periodEnd, dueDate,
-            estimateOutstandingBalance(accountId, periodEnd));
+            // This is a live estimate for the open cycle. Using the future closing
+            // date here would include future-dated activity instead of activity the
+            // User has actually recorded so far.
+            estimateOutstandingBalance(accountId, today));
     }
 
     @Override
     @Transactional
     public CreditStatement confirm(CreditStatement statement) {
-        requireCreditAccount(statement.accountId());
+        requireActiveCreditAccount(statement.accountId());
         validate(statement);
         if (creditStatementRepository.findByAccountIdAndPeriod(
                 statement.accountId(), statement.periodStart(), statement.periodEnd()).isPresent()) {
@@ -86,6 +89,7 @@ public class CreditStatementService implements CreditStatementUseCase {
     public CreditStatement reconfirm(Long statementId, CreditStatement statement) {
         CreditStatement existing = creditStatementRepository.findById(statementId).orElseThrow(() ->
             new NotFoundException("Credit statement not found: " + statementId));
+        requireActiveCreditAccount(existing.accountId());
         if (!existing.accountId().equals(statement.accountId())
                 || !existing.periodStart().equals(statement.periodStart())
                 || !existing.periodEnd().equals(statement.periodEnd())) {
@@ -111,6 +115,16 @@ public class CreditStatementService implements CreditStatementUseCase {
             new NotFoundException("Financial Account not found: " + accountId));
         if (!account.isCredit()) {
             throw new BadRequestException("Credit statements require a CREDIT Financial Account");
+        }
+    }
+
+    private void requireActiveCreditAccount(Long accountId) {
+        requireCreditAccount(accountId);
+        var account = financialAccountRepository.lockById(accountId).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + accountId));
+        if (account.isArchived()) {
+            throw new ClientErrorException("Restore the Financial Account before changing Credit Statements",
+                Response.Status.CONFLICT);
         }
     }
 

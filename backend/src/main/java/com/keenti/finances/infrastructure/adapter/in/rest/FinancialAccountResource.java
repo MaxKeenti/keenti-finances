@@ -9,7 +9,9 @@ import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import com.keenti.finances.domain.port.out.CreditStatementRepository;
 import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
+import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
+import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
 import com.keenti.finances.domain.model.CreditMsiPlan;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -43,8 +45,10 @@ public class FinancialAccountResource {
     CreditStatementUseCase creditStatementUseCase;
 
     @Inject CreditMsiPlanRepository creditMsiPlanRepository;
+    @Inject FinancialAccountRepository financialAccountRepository;
     @Inject TransactionRepository transactionRepository;
     @Inject CreditStatementRepository creditStatementRepository;
+    @Inject UserTimeZoneProvider userTimeZoneProvider;
 
     @GET
     public Response list(@QueryParam("archived") @DefaultValue("false") boolean archived) {
@@ -71,7 +75,7 @@ public class FinancialAccountResource {
     @GET
     @Path("/{id}/credit-settings")
     public Response creditSettings(@PathParam("id") Long id) {
-        requireCredit(id);
+        requireCredit(id, false);
         return creditAccountSettingsRepository.findByAccountId(id)
             .map(settings -> Response.ok(toResponse(settings)).build())
             .orElse(Response.status(Response.Status.NOT_FOUND)
@@ -83,7 +87,7 @@ public class FinancialAccountResource {
     @Transactional
     public Response saveCreditSettings(@PathParam("id") Long id,
                                        @Valid CreditAccountSettingsRequest request) {
-        requireCredit(id);
+        requireCredit(id, true);
         CreditAccountSettings saved = creditAccountSettingsRepository.save(new CreditAccountSettings(
             id, request.creditLimit(), request.statementClosingDay(), request.paymentDueDay()));
         return Response.ok(toResponse(saved)).build();
@@ -107,7 +111,7 @@ public class FinancialAccountResource {
     @GET
     @Path("/{id}/credit-statements/current-estimate")
     public Response currentCreditStatementEstimate(@PathParam("id") Long id) {
-        var estimate = creditStatementUseCase.estimateCurrentStatement(id, LocalDate.now());
+        var estimate = creditStatementUseCase.estimateCurrentStatement(id, userTimeZoneProvider.today());
         return Response.ok(new CreditStatementEstimateResponse(estimate.periodStart(), estimate.periodEnd(),
             estimate.dueDate(), estimate.estimatedBalance())).build();
     }
@@ -137,7 +141,7 @@ public class FinancialAccountResource {
     @GET
     @Path("/{id}/msi-plans")
     public Response msiPlans(@PathParam("id") Long id) {
-        requireCredit(id);
+        requireCredit(id, false);
         return Response.ok(creditMsiPlanRepository.findByAccountId(id).stream().map(FinancialAccountResource::toResponse).toList()).build();
     }
 
@@ -145,7 +149,7 @@ public class FinancialAccountResource {
     @Path("/{id}/msi-plans")
     @Transactional
     public Response createMsiPlan(@PathParam("id") Long id, @Valid CreditMsiPlanRequest request) {
-        requireCredit(id);
+        requireCredit(id, true);
         var transaction = transactionRepository.findById(request.transactionId()).orElseThrow(() -> new jakarta.ws.rs.NotFoundException("Transaction not found"));
         if (!idEquals(transaction.getAccountId(), id) || !"EGRESS".equals(transaction.getDirection())) throw new jakarta.ws.rs.BadRequestException("An MSI plan requires an EGRESS Transaction on this Credit Account");
         if (creditMsiPlanRepository.existsByTransactionId(request.transactionId())) throw new jakarta.ws.rs.ClientErrorException("This purchase already has an MSI plan", Response.Status.CONFLICT);
@@ -163,7 +167,7 @@ public class FinancialAccountResource {
     @Transactional
     public Response endMsiPlan(@PathParam("id") Long id, @PathParam("planId") Long planId,
                                @Valid CreditMsiPlanEndRequest request) {
-        requireCredit(id);
+        requireCredit(id, true);
         CreditMsiPlan plan = creditMsiPlanRepository.findById(planId).orElseThrow(() ->
             new jakarta.ws.rs.NotFoundException("MSI plan not found"));
         if (!plan.accountId().equals(id)) {
@@ -204,12 +208,14 @@ public class FinancialAccountResource {
 
     @POST
     @Path("/{id}/archive")
+    @Consumes(MediaType.WILDCARD)
     public Response archive(@PathParam("id") Long id) {
         return Response.ok(toResponse(financialAccountUseCase.archive(id))).build();
     }
 
     @POST
     @Path("/{id}/restore")
+    @Consumes(MediaType.WILDCARD)
     public Response restore(@PathParam("id") Long id) {
         return Response.ok(toResponse(financialAccountUseCase.restore(id))).build();
     }
@@ -294,12 +300,20 @@ public class FinancialAccountResource {
             status.transactionNetBalance(), status.accountNetBalance());
     }
 
-    private void requireCredit(Long id) {
-        FinancialAccount account = financialAccountUseCase.getById(id).orElseThrow(() ->
+    private FinancialAccount requireCredit(Long id, boolean requireActive) {
+        FinancialAccount account = (requireActive
+                ? financialAccountRepository.lockById(id)
+                : financialAccountUseCase.getById(id)).orElseThrow(() ->
             new jakarta.ws.rs.NotFoundException("Financial Account not found: " + id));
         if (!account.isCredit()) {
             throw new jakarta.ws.rs.BadRequestException("Credit settings require a CREDIT Financial Account");
         }
+        if (requireActive && account.isArchived()) {
+            throw new jakarta.ws.rs.ClientErrorException(
+                "Restore the Financial Account before changing Credit settings or MSI plans",
+                Response.Status.CONFLICT);
+        }
+        return account;
     }
 
     private static CreditAccountSettingsResponse toResponse(CreditAccountSettings settings) {

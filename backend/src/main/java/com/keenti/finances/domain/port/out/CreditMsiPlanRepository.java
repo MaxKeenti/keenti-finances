@@ -10,8 +10,11 @@ public interface CreditMsiPlanRepository {
     List<CreditMsiPlan> findByAccountId(Long accountId);
     boolean hasActiveByAccountId(Long accountId);
     boolean existsByTransactionId(Long transactionId);
+    Optional<CreditMsiPlan> findByTransactionId(Long transactionId);
     CreditMsiPlan save(CreditMsiPlan plan);
+    CreditMsiPlan updateSource(Long id, Long accountId, BigDecimal purchaseAmount);
     Optional<CreditMsiPlan> findById(Long id);
     CreditMsiPlan end(Long id, LocalDateTime endedAt, String endReason);
+    void deleteByTransactionId(Long transactionId);
     BigDecimal statementBalanceAdjustment(Long accountId, java.time.LocalDate periodEnd);
 }

@@ -230,7 +230,7 @@
 			kind: 'Transfer',
 			title: `${transfer.sourceAccountName ?? 'Archived account'} → ${transfer.destinationAccountName ?? 'Archived account'}`,
 			detail: transfer.notes,
-			amount: 0,
+			amount: transfer.amount,
 			href: '/accounts',
 		})),
 	].sort((left, right) => right.date.localeCompare(left.date)));
@@ -460,7 +460,7 @@
 	{#if activityItems.length > 0}
 		<Card.Root>
 			<Card.Header><Card.Title>Activity history</Card.Title><Card.Description>Transactions and neutral Transfers in one chronological list.</Card.Description></Card.Header>
-			<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground">Neutral</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
+				<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground tabular-nums">↔ {fmt.format(item.amount)}</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
 		</Card.Root>
 	{/if}
 
