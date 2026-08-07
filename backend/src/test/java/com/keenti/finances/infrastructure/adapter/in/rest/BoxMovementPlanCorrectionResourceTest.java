@@ -247,7 +247,8 @@ class BoxMovementPlanCorrectionResourceTest {
             .body(Map.of("amount", amount, "direction", "INGRESS",
                 "description", "Correction funds",
                 "transactionDate", LocalDate.now().toString(),
-                "categoryId", categoryId))
+                "categoryId", categoryId,
+                "accountId", AccountTrackingTestSupport.cashAccountId(user)))
             .when().post("/api/transactions")
             .then().statusCode(201);
     }

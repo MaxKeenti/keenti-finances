@@ -247,7 +247,8 @@ class SpendingBudgetResourceTest {
                 "direction", "INGRESS",
                 "description", "Budget funding",
                 "transactionDate", LocalDate.now().toString(),
-                "categoryId", categoryId))
+                "categoryId", categoryId,
+                "accountId", AccountTrackingTestSupport.cashAccountId(user)))
             .when().post("/api/transactions")
             .then().statusCode(201);
     }
@@ -263,6 +264,7 @@ class SpendingBudgetResourceTest {
                 "description", "Groceries",
                 "transactionDate", date.toString(),
                 "categoryId", categoryId,
+                "accountId", AccountTrackingTestSupport.cashAccountId(user),
                 "boxFunding", List.of(Map.of("boxId", boxId, "amount", amount))))
             .when().post("/api/transactions")
             .then().statusCode(201);

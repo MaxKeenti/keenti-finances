@@ -462,7 +462,8 @@ class SavingGoalResourceTest {
             .body(Map.of("amount", amount, "direction", "INGRESS",
                 "description", "Goal funding",
                 "transactionDate", LocalDate.now().toString(),
-                "categoryId", categoryId))
+                "categoryId", categoryId,
+                "accountId", AccountTrackingTestSupport.cashAccountId(user)))
             .when().post("/api/transactions")
             .then().statusCode(201);
     }

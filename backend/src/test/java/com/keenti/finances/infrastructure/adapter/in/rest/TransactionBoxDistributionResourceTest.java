@@ -293,6 +293,7 @@ class TransactionBoxDistributionResourceTest {
     private static Response transaction(
             String user, long categoryId, String amount, String direction,
             String date, String description, String distributionsJson) {
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
         String distributions = distributionsJson == null
             ? ""
             : ",\"boxDistributions\":" + distributionsJson;
@@ -303,9 +304,10 @@ class TransactionBoxDistributionResourceTest {
               "description": "%s",
               "transactionDate": "%s",
               "categoryId": %d,
-              "contactId": null%s
+              "contactId": null,
+              "accountId": %d%s
             }
-            """.formatted(amount, direction, description, date, categoryId, distributions);
+            """.formatted(amount, direction, description, date, categoryId, accountId, distributions);
         return given()
             .header("X-WorkOS-User-Id", user)
             .contentType(ContentType.JSON)
@@ -316,6 +318,7 @@ class TransactionBoxDistributionResourceTest {
     private static Response updateTransaction(
             String user, long transactionId, long categoryId, String amount,
             String direction, String date, String description, String distributionsJson) {
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
         String distributions = distributionsJson == null
             ? ""
             : ",\"boxDistributions\":" + distributionsJson;
@@ -326,9 +329,10 @@ class TransactionBoxDistributionResourceTest {
               "description": "%s",
               "transactionDate": "%s",
               "categoryId": %d,
-              "contactId": null%s
+              "contactId": null,
+              "accountId": %d%s
             }
-            """.formatted(amount, direction, description, date, categoryId, distributions);
+            """.formatted(amount, direction, description, date, categoryId, accountId, distributions);
         return given()
             .header("X-WorkOS-User-Id", user)
             .contentType(ContentType.JSON)
