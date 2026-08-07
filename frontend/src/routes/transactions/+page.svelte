@@ -50,6 +50,10 @@
 	import type { PageData } from './$types';
 
 	type Transaction = PageData['transactions'][number];
+	type Transfer = PageData['transfers'][number];
+	type LedgerItem =
+		| { key: string; kind: 'Transaction'; date: string; amount: number; transaction: Transaction }
+		| { key: string; kind: 'Transfer'; date: string; amount: number; transfer: Transfer };
 	type TransactionSortBy = PageData['transactionPage']['sortBy'];
 	type TransactionSortDirection = PageData['transactionPage']['sortDirection'];
 
@@ -194,46 +198,67 @@
 			renderFallbackValue: null,
 		}),
 	);
-	const visibleTxIds = $derived(table.getRowModel().rows.map((row) => row.original.id));
+	const ledgerItems = $derived.by(() => {
+		const items: LedgerItem[] = [
+			...data.activityTransactions.map((transaction) => ({
+				key: `transaction-${transaction.id}`,
+				kind: 'Transaction' as const,
+				date: transaction.transactionDate,
+				amount: transaction.amount,
+				transaction: transaction as Transaction,
+			})),
+			...data.transfers.map((transfer) => ({
+				key: `transfer-${transfer.id}`,
+				kind: 'Transfer' as const,
+				date: transfer.transferDate,
+				amount: transfer.amount,
+				transfer,
+			})),
+		];
+		const value = (item: LedgerItem): string | number => {
+			if (data.transactionPage.sortBy === 'transactionDate') return item.date;
+			if (data.transactionPage.sortBy === 'amount') return item.amount;
+			if (item.kind === 'Transfer') {
+				if (data.transactionPage.sortBy === 'description') return `${item.transfer.sourceAccountName ?? ''} ${item.transfer.destinationAccountName ?? ''}`;
+				return '';
+			}
+			return item.transaction[data.transactionPage.sortBy] ?? '';
+		};
+		const direction = data.transactionPage.sortDirection === 'asc' ? 1 : -1;
+		return items.sort((left, right) => {
+			const leftValue = value(left);
+			const rightValue = value(right);
+			const compared = typeof leftValue === 'number' && typeof rightValue === 'number'
+				? leftValue - rightValue
+				: String(leftValue).localeCompare(String(rightValue));
+			return compared === 0 ? right.date.localeCompare(left.date) : compared * direction;
+		});
+	});
+	const ledgerTotalPages = $derived(Math.ceil(ledgerItems.length / data.transactionPage.pageSize));
+	const ledgerPageIndex = $derived(Math.min(data.transactionPage.pageIndex, Math.max(ledgerTotalPages - 1, 0)));
+	const ledgerPageItems = $derived(ledgerItems.slice(
+		ledgerPageIndex * data.transactionPage.pageSize,
+		(ledgerPageIndex + 1) * data.transactionPage.pageSize,
+	));
+	const visibleTxIds = $derived(ledgerPageItems.filter((item) => item.kind === 'Transaction').map((item) => item.transaction.id));
 	const allVisibleSelected = $derived(
 		visibleTxIds.length > 0 && visibleTxIds.every((id) => selectedTxIds.has(id)),
 	);
 	const someVisibleSelected = $derived(
 		visibleTxIds.some((id) => selectedTxIds.has(id)) && !allVisibleSelected,
 	);
-	const currentPage = $derived(data.transactionPage.totalPages === 0 ? 0 : data.transactionPage.pageIndex + 1);
+	const currentPage = $derived(ledgerItems.length === 0 ? 0 : ledgerPageIndex + 1);
 	const pageRangeStart = $derived(
-		data.transactionPage.totalItems === 0
+		ledgerItems.length === 0
 			? 0
-			: data.transactionPage.pageIndex * data.transactionPage.pageSize + 1,
+			: ledgerPageIndex * data.transactionPage.pageSize + 1,
 	);
 	const pageRangeEnd = $derived(
 		Math.min(
-			(data.transactionPage.pageIndex + 1) * data.transactionPage.pageSize,
-			data.transactionPage.totalItems,
+			(ledgerPageIndex + 1) * data.transactionPage.pageSize,
+			ledgerItems.length,
 		),
 	);
-	const transfers = $derived(data.transfers);
-	const activityItems = $derived([
-		...data.activityTransactions.map((transaction) => ({
-			key: `transaction-${transaction.id}`,
-			date: transaction.transactionDate,
-			kind: 'Transaction',
-			title: transaction.description ?? transaction.categoryName ?? 'Transaction',
-			detail: transaction.accountName ?? transaction.categoryName ?? null,
-			amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
-			href: `/transactions/${transaction.id}`,
-		})),
-		...transfers.map((transfer) => ({
-			key: `transfer-${transfer.id}`,
-			date: transfer.transferDate,
-			kind: 'Transfer',
-			title: `${transfer.sourceAccountName ?? 'Archived account'} → ${transfer.destinationAccountName ?? 'Archived account'}`,
-			detail: transfer.notes,
-			amount: transfer.amount,
-			href: '/accounts',
-		})),
-	].sort((left, right) => right.date.localeCompare(left.date)));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
@@ -421,13 +446,13 @@
 		<Button onclick={openCreate} disabled={data.categories.length === 0}>{m.transactions_new()}</Button>
 	</div>
 
-	{#if data.transactionPage.totalItems > 0}
+	{#if ledgerItems.length > 0}
 		<div class="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
 			<p class="text-sm text-muted-foreground">
 				{m.transactions_showing({
 					start: pageRangeStart,
 					end: pageRangeEnd,
-					total: data.transactionPage.totalItems,
+					total: ledgerItems.length,
 				})}
 			</p>
 			<div class="grid gap-2 sm:grid-cols-[minmax(11rem,1fr)_minmax(9rem,auto)_minmax(8rem,auto)]">
@@ -457,14 +482,7 @@
 		</div>
 	{/if}
 
-	{#if activityItems.length > 0}
-		<Card.Root>
-			<Card.Header><Card.Title>Activity history</Card.Title><Card.Description>Transactions and neutral Transfers in one chronological list.</Card.Description></Card.Header>
-				<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground tabular-nums">↔ {fmt.format(item.amount)}</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if data.transactionPage.totalItems === 0}
+	{#if ledgerItems.length === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.transactions_empty_title()}</Empty.Title>
 			<Empty.Description>{m.transactions_empty_description()}</Empty.Description>
@@ -475,70 +493,39 @@
 		     cards' max-content width; without it the truncated (nowrap) descriptions
 		     blow the track past the viewport and the page overflows horizontally. -->
 		<div class="grid grid-cols-1 gap-4 md:hidden">
-			{#each table.getRowModel().rows as row (row.original.id)}
-				{@const tx = row.original}
-				{@const selected = selectedTxIds.has(tx.id)}
-				<div class="relative">
-					<div class="absolute left-3 top-4 z-1">
-						<Checkbox
-							checked={selected}
-							onclick={(event) => {
-								event.preventDefault();
-								event.stopPropagation();
-								toggleSelectedTx(tx.id);
-							}}
-							aria-label={m.transactions_select_transaction({
-								description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS'),
-							})}
-						/>
-					</div>
-					<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
-						<Card.Content class="pt-4 pl-10">
+			{#each ledgerPageItems as item (item.key)}
+				{#if item.kind === 'Transaction'}
+					{@const tx = item.transaction}
+					{@const selected = selectedTxIds.has(tx.id)}
+					<div class="relative">
+						<div class="absolute left-3 top-4 z-1">
+							<Checkbox checked={selected} onclick={(event) => { event.preventDefault(); event.stopPropagation(); toggleSelectedTx(tx.id); }} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} />
+						</div>
+						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
+							<Card.Content class="pt-4 pl-10">
 								<div class="flex items-start justify-between gap-2">
-									<a href="/transactions/{tx.id}" class="flex-1 min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-										<p class="text-sm text-muted-foreground truncate">{tx.description ?? '—'}</p>
-										<p class="text-xs text-muted-foreground mt-0.5">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p>
-									</a>
-									<a
-										href="/transactions/{tx.id}"
-										class="font-mono font-semibold text-sm shrink-0 {tx.direction === 'INGRESS'
-											? 'text-green-600 dark:text-green-400'
-											: 'text-red-600 dark:text-red-400'}"
-									>
-										{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-									</a>
+									<a href="/transactions/{tx.id}" class="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><p class="truncate text-sm text-muted-foreground">{tx.description ?? '—'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></a>
+									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
 								</div>
-								<div class="flex items-center gap-2 mt-2">
-									{#if tx.categoryName}
-										<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
-									{/if}
-									{#if tx.contactName}
-										<span class="text-xs text-muted-foreground">{tx.contactName}</span>
-									{/if}
-									{#if tx.accountName}
-										<span class="text-xs text-muted-foreground">{tx.accountName}</span>
-									{/if}
-								</div>
-								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
-									<div class="mt-3">
-										<TransactionBoxBreakdown
-											direction={tx.direction as TransactionDirection}
-											amount={tx.amount}
-											boxFunding={tx.boxFunding}
-											boxDistributions={tx.boxDistributions}
-											availableToSpendAmount={tx.availableToSpendAmount}
-											locale={data.preferences.locale}
-										/>
-									</div>
-								{/if}
+								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
+								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
 							</Card.Content>
 						</Card.Root>
-				</div>
+					</div>
+				{:else}
+					{@const transfer = item.transfer}
+					<Card.Root class="border-violet-500/20 bg-violet-500/4">
+						<Card.Content class="pt-4">
+							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>
+							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
+						</Card.Content>
+					</Card.Root>
+				{/if}
 			{/each}
 		</div>
 
 		<!-- Desktop table (>= md) -->
-		<div class="hidden md:block rounded-lg border">
+		<div class="hidden overflow-x-auto rounded-lg border md:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
@@ -630,59 +617,32 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each table.getRowModel().rows as row (row.original.id)}
-						{@const tx = row.original}
-						<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
-							<Table.Cell>
-								<Checkbox
-									checked={selectedTxIds.has(tx.id)}
-									onclick={() => toggleSelectedTx(tx.id)}
-									aria-label={m.transactions_select_transaction({
-										description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS'),
-									})}
-								/>
-							</Table.Cell>
-							<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
-							<Table.Cell class="text-muted-foreground">
-								<div class="space-y-1.5">
-									<a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">
-										{tx.description ?? '—'}
-									</a>
-									{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}
-										<TransactionBoxBreakdown
-											direction={tx.direction as TransactionDirection}
-											amount={tx.amount}
-											boxFunding={tx.boxFunding}
-											boxDistributions={tx.boxDistributions}
-											availableToSpendAmount={tx.availableToSpendAmount}
-											locale={data.preferences.locale}
-										/>
-									{/if}
-								</div>
-							</Table.Cell>
-							<Table.Cell
-								class="font-mono font-medium {tx.direction === 'INGRESS'
-									? 'text-green-600 dark:text-green-400'
-									: 'text-red-600 dark:text-red-400'}"
-							>
-								{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-							</Table.Cell>
-							<Table.Cell>
-								{#if tx.categoryName}
-									<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />
-								{:else}
-									—
-								{/if}
-							</Table.Cell>
-							<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
-							<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
-							<Table.Cell class="text-right">
-								<div class="flex justify-end gap-2">
-									<Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button>
-									<Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>{m.common_delete()}</Button>
-								</div>
-							</Table.Cell>
-						</Table.Row>
+					{#each ledgerPageItems as item (item.key)}
+						{#if item.kind === 'Transaction'}
+							{@const tx = item.transaction}
+							<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
+								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></Table.Cell>
+								<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
+								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}</div></Table.Cell>
+								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
+								<Table.Cell>{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{:else}—{/if}</Table.Cell>
+								<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
+								<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
+								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div></Table.Cell>
+							</Table.Row>
+						{:else}
+							{@const transfer = item.transfer}
+							<Table.Row class="bg-violet-500/4">
+								<Table.Cell></Table.Cell>
+								<Table.Cell class="whitespace-nowrap">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</Table.Cell>
+								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
+								<Table.Cell class="font-mono font-medium text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</Table.Cell>
+								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span></Table.Cell>
+								<Table.Cell>—</Table.Cell>
+								<Table.Cell>—</Table.Cell>
+								<Table.Cell></Table.Cell>
+							</Table.Row>
+						{/if}
 					{/each}
 				</Table.Body>
 			</Table.Root>
@@ -692,15 +652,15 @@
 			<p class="text-sm text-muted-foreground">
 				{m.transactions_page_of({
 					page: currentPage,
-					total: Math.max(data.transactionPage.totalPages, 1),
+					total: Math.max(ledgerTotalPages, 1),
 				})}
 			</p>
 			<div class="flex items-center gap-2">
 				<Button
 					variant="outline"
 					size="sm"
-					href={transactionHref({ pageIndex: data.transactionPage.pageIndex - 1 })}
-					disabled={data.transactionPage.pageIndex <= 0}
+					href={transactionHref({ pageIndex: ledgerPageIndex - 1 })}
+					disabled={ledgerPageIndex <= 0}
 				>
 					<ChevronLeftIcon data-icon="inline-start" />
 					{m.transactions_previous()}
@@ -708,8 +668,8 @@
 				<Button
 					variant="outline"
 					size="sm"
-					href={transactionHref({ pageIndex: data.transactionPage.pageIndex + 1 })}
-					disabled={data.transactionPage.pageIndex + 1 >= data.transactionPage.totalPages}
+					href={transactionHref({ pageIndex: ledgerPageIndex + 1 })}
+					disabled={ledgerPageIndex + 1 >= ledgerTotalPages}
 				>
 					{m.transactions_next()}
 					<ChevronRightIcon data-icon="inline-end" />

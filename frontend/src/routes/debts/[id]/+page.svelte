@@ -55,6 +55,7 @@
 	const isPaid = $derived(data.debt.status === 'PAID');
 
 	const sf = superForm(data.form, {
+		dataType: 'json',
 		validators: zod4Client(paymentSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {

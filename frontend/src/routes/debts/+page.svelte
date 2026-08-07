@@ -68,6 +68,7 @@
 	};
 
 	type Category = { id: number; name: string; type: string };
+	type DebtorSummary = { key: string; name: string; outstanding: number; debtCount: number };
 
 	let { data }: { data: PageData } = $props();
 
@@ -172,6 +173,26 @@
 
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const shortDate = $derived(shortDateFormatter(data.preferences.locale));
+	const debtorSummaries = $derived.by(() => {
+		const summaries = new Map<string, DebtorSummary>();
+		for (const debt of data.debts as Debt[]) {
+			if (debt.status !== 'ACTIVE' || debt.remaining <= 0) continue;
+			const key = debt.contactId === null ? `debt-${debt.id}` : `contact-${debt.contactId}`;
+			const current = summaries.get(key);
+			if (current) {
+				current.outstanding += debt.remaining;
+				current.debtCount += 1;
+			} else {
+				summaries.set(key, {
+					key,
+					name: debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }),
+					outstanding: debt.remaining,
+					debtCount: 1,
+				});
+			}
+		}
+		return [...summaries.values()].sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
+	});
 
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
 		ACTIVE: 'warning',
@@ -196,6 +217,29 @@
 			<Button onclick={openCreate}>{m.debts_new()}</Button>
 		</div>
 	</div>
+
+	{#if debtorSummaries.length > 0}
+		<section class="space-y-3" aria-labelledby="debtor-outstanding-title">
+			<div>
+				<h2 id="debtor-outstanding-title" class="text-lg font-semibold">{m.debts_outstanding_by_debtor()}</h2>
+				<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_debtor_description()}</p>
+			</div>
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+				{#each debtorSummaries as debtor (debtor.key)}
+					<Card.Root>
+						<Card.Content class="space-y-2 py-4">
+							<p class="truncate font-semibold">{debtor.name}</p>
+							<p class="text-sm text-muted-foreground">{debtor.debtCount === 1 ? m.debts_one_active_debt() : m.debts_active_debt_count({ count: debtor.debtCount })}</p>
+							<div class="border-t pt-2">
+								<p class="text-xs font-medium text-muted-foreground">{m.debts_amount_owed_to_you()}</p>
+								<p class="text-xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{fmt.format(debtor.outstanding)}</p>
+							</div>
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
+		</section>
+	{/if}
 
 	{#if data.debts.length === 0}
 		<Empty.Root class="border">
@@ -253,7 +297,7 @@
 							</div>
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
+						<div class="flex gap-2 mt-auto pt-1 relative z-1">
 							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
 								{m.debts_payments()}
 							</Button>
@@ -401,7 +445,7 @@
 						<Table.Body>
 							{#each bulkResult.payments as item (item.debtId)}
 								<Table.Row>
-									<Table.Cell class="text-sm max-w-[180px] truncate">{item.description}</Table.Cell>
+									<Table.Cell class="text-sm max-w-45 truncate">{item.description}</Table.Cell>
 									<Table.Cell class="text-right tabular-nums text-green-600 dark:text-green-400 font-medium">
 										{fmt.format(item.applied)}
 									</Table.Cell>
