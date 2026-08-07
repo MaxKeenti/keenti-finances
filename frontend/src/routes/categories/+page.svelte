@@ -14,8 +14,8 @@
   import { Input } from "$lib/components/ui/input";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
-  import { CategoryBadge } from "$lib/components/ui/category-badge";
-  import { ColorPicker } from "$lib/components/ui/color-picker";
+  import { CategoryBadge } from "$lib/components/categories";
+  import { ColorPicker } from "$lib/components/color-picker";
   import { m } from "$lib/paraglide/messages.js";
   import type { PageData } from "./$types";
 

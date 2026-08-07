@@ -32,7 +32,7 @@
 		{ href: '/', label: m.nav_dashboard(), icon: LayoutDashboard },
 		{ href: '/transactions', label: m.nav_transactions(), icon: ArrowLeftRight },
 		{ href: '/boxes', label: m.nav_boxes(), icon: PackageOpen },
-		{ href: '/accounts', label: 'Accounts', icon: Landmark },
+		{ href: '/accounts', label: m.nav_accounts(), icon: Landmark },
 		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
 		{ href: '/debts', label: m.nav_debts(), icon: HandCoins },
 		{

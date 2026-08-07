@@ -9,7 +9,7 @@
 		Users,
 	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
-	import { ColorPicker } from '$lib/components/ui/color-picker';
+	import { ColorPicker } from '$lib/components/color-picker';
 	import * as Card from '$lib/components/ui/card';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect } from '$lib/components/native-select';

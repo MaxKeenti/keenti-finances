@@ -35,7 +35,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { CategoryBadge } from '$lib/components/ui/category-badge';
+	import { CategoryBadge } from '$lib/components/categories';
 	import * as Card from '$lib/components/ui/card';
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
