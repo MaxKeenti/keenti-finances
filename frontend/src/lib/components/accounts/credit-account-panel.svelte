@@ -33,6 +33,7 @@
 		<Card.Description>{m.credit_payment_description()}</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-6">
+		{#if !account.archived}
 		<Collapsible.Root>
 			<Collapsible.Trigger class={buttonVariants({ variant: 'outline', class: 'w-full justify-between' })}>
 				{m.account_credit_settings()}<ChevronsUpDown />
@@ -74,7 +75,10 @@
 				</div>
 				<div class="flex justify-end"><Button type="submit" variant="outline">{m.credit_confirm()}</Button></div>
 			</form>
-		</section>
+				</section>
+			{:else}
+				<p class="border-t pt-6 text-sm text-muted-foreground">{m.account_no_statements()}</p>
+			{/if}
 
 		{#if detail?.statements?.length}
 			<section class="space-y-3 border-t pt-6" aria-labelledby={`confirmed-statements-${account.id}`}>
@@ -86,7 +90,7 @@
 							<span class="text-muted-foreground">{fmt.format(statement.officialAvoidInterest)} · {m.account_avoid_interest()}</span>
 						</div>
 						{#if statement.reconciliationMismatch}<Alert.Root><Alert.Description>{m.credit_mismatch({ amount: fmt.format(Math.abs(statement.mismatchAmount)) })}</Alert.Description></Alert.Root>{/if}
-						<Collapsible.Root>
+						{#if !account.archived}<Collapsible.Root>
 							<Collapsible.Trigger class={buttonVariants({ variant: 'ghost', size: 'sm' })}>{m.credit_reconfirm()}<ChevronsUpDown /></Collapsible.Trigger>
 							<Collapsible.Content class="pt-3">
 								<form method="POST" action="?/reconfirmCreditStatement" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
@@ -99,7 +103,7 @@
 									<div class="flex justify-end md:col-span-2"><Button type="submit" variant="outline">{m.credit_reconfirm_submit()}</Button></div>
 								</form>
 							</Collapsible.Content>
-						</Collapsible.Root>
+						</Collapsible.Root>{/if}
 					</div>
 				{/each}
 			</section>

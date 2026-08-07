@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
 	import Archive from '@lucide/svelte/icons/archive';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import Palette from '@lucide/svelte/icons/palette';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import { CreditAccountPanel } from '$lib/components/accounts';
+	import { ColorPicker } from '$lib/components/color-picker';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
 	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { mxnFormatter } from '$lib/formatting';
@@ -16,6 +21,8 @@
 
 	let { data }: { data: PageData } = $props();
 	let lifecycleError = $state('');
+	let appearanceOpen = $state(false);
+	let accountHue = $state(untrack(() => data.account.hue));
 	let selectedPurchaseId = $state('');
 	let firstInstallmentDate = $state(new Date().toISOString().slice(0, 10));
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
@@ -35,21 +42,35 @@
 			await update();
 		};
 	}
+
+	function enhanceAppearance() {
+		return async ({ result, update }: { result: { type: string; data?: { message?: string } }; update: () => Promise<void> }) => {
+			if (result.type === 'success') appearanceOpen = false;
+			lifecycleError = result.type === 'failure' ? result.data?.message ?? m.account_update_error() : '';
+			await update();
+		};
+	}
 </script>
 
 <svelte:head><title>{data.account.name} · {m.accounts_title()} · Keenti</title></svelte:head>
 
 <div class="space-y-6">
-	<header class="flex flex-wrap items-start justify-between gap-4">
+	<header
+		class="flex flex-wrap items-start justify-between gap-4 rounded-xl border bg-gradient-to-br from-[oklch(0.97_0.025_var(--account-hue))] to-card p-5 dark:from-[oklch(0.27_0.035_var(--account-hue))]"
+		style:--account-hue={String(data.account.hue)}
+	>
 		<div class="space-y-2">
 			<Button href="/accounts" variant="ghost" size="sm"><ArrowLeft />{m.accounts_title()}</Button>
 			<div><p class="text-sm text-muted-foreground">{accountKindLabel}{data.account.archived ? ` · ${m.account_archived()}` : ''}</p><h1 class="text-2xl font-semibold tracking-tight">{data.account.name}</h1></div>
 		</div>
-		{#if data.account.archived}
-			<form method="POST" action="?/restore" use:enhance={enhanceLifecycle}><Button type="submit"><RotateCcw />{m.account_restore()}</Button></form>
-		{:else}
-			<form method="POST" action="?/archive" use:enhance={enhanceLifecycle}><Button type="submit" variant="outline" disabled={data.account.balance !== 0}><Archive />{m.account_archive()}</Button></form>
-		{/if}
+		<div class="flex flex-wrap gap-2">
+			<Button type="button" variant="outline" onclick={() => (appearanceOpen = true)}><Palette />{m.account_personalize()}</Button>
+			{#if data.account.archived}
+				<form method="POST" action="?/restore" use:enhance={enhanceLifecycle}><Button type="submit"><RotateCcw />{m.account_restore()}</Button></form>
+			{:else}
+				<form method="POST" action="?/archive" use:enhance={enhanceLifecycle}><Button type="submit" variant="outline" disabled={data.account.balance !== 0}><Archive />{m.account_archive()}</Button></form>
+			{/if}
+		</div>
 	</header>
 
 	{#if lifecycleError}<Alert.Root variant="destructive"><Alert.Description>{lifecycleError}</Alert.Description></Alert.Root>{/if}
@@ -68,10 +89,7 @@
 		</section>
 		{#if data.credit.currentEstimate}<Card.Root><Card.Header><Card.Description>{m.account_current_estimate({ date: data.credit.currentEstimate.periodEnd })}</Card.Description><Card.Title class="text-2xl tabular-nums">{fmt.format(data.credit.currentEstimate.estimatedBalance)}</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">{m.account_estimate_description({ date: data.credit.currentEstimate.dueDate })}</p></Card.Content></Card.Root>{/if}
 
-		<Card.Root>
-			<Card.Header><Card.Title>{m.account_statements_title()}</Card.Title><Card.Description>{m.account_statements_description()}</Card.Description></Card.Header>
-			<Card.Content>{#if data.credit.statements.length === 0}<p class="text-sm text-muted-foreground">{m.account_no_statements()}</p>{:else}<div class="divide-y rounded-lg border">{#each data.credit.statements as statement}<div class="flex flex-wrap items-center justify-between gap-2 p-4 text-sm"><span>{m.account_statement_due_remaining({ date: statement.dueDate, amount: fmt.format(statement.outstandingBalance) })}</span></div>{/each}</div>{/if}</Card.Content>
-		</Card.Root>
+		<CreditAccountPanel account={data.account} detail={data.credit} locale={data.preferences.locale} />
 
 		<Card.Root>
 			<Card.Header><Card.Title>{m.account_msi_title()}</Card.Title><Card.Description>{m.account_msi_description()}</Card.Description></Card.Header>
@@ -99,3 +117,14 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<Dialog.Root bind:open={appearanceOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header><Dialog.Title>{m.account_personalize()}</Dialog.Title><Dialog.Description>{m.account_personalize_description()}</Dialog.Description></Dialog.Header>
+		<form method="POST" action="?/updateAppearance" use:enhance={enhanceAppearance} class="grid gap-4">
+			<input type="hidden" name="hue" value={accountHue} />
+			<div class="grid gap-1.5"><span class="text-sm font-medium">{m.common_colour()}</span><ColorPicker name={data.account.name} hue={accountHue} onchange={(hue) => (accountHue = hue)} /></div>
+			<Dialog.Footer><Button type="button" variant="outline" onclick={() => (appearanceOpen = false)}>{m.common_cancel()}</Button><Button type="submit">{m.common_save()}</Button></Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>

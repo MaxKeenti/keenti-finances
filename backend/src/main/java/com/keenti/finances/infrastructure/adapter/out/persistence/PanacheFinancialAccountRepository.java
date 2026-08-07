@@ -62,6 +62,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
         entity.user = em.getReference(UserEntity.class, userContext.getUserId());
         entity.name = account.getName();
         entity.kind = account.getKind();
+        entity.hue = account.getHue();
         entity.openingBalance = account.getOpeningBalance();
         entity.openingDate = account.getOpeningDate();
         entity.archived = false;
@@ -70,6 +71,27 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
         entity.persist();
         em.flush();
         return toDomain(entity);
+    }
+
+    @Override
+    public FinancialAccount setHue(Long id, int hue) {
+        int updated = em.createQuery("""
+                UPDATE FinancialAccountEntity account
+                SET account.hue = :hue, account.updatedAt = :updatedAt,
+                    account.version = account.version + 1
+                WHERE account.id = :id AND account.user.id = :userId
+                """)
+            .setParameter("hue", hue)
+            .setParameter("updatedAt", LocalDateTime.now())
+            .setParameter("id", id)
+            .setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        if (updated != 1) {
+            throw new IllegalStateException("Financial Account was not found while updating hue");
+        }
+        em.clear();
+        return findById(id).orElseThrow(() ->
+            new IllegalStateException("Financial Account was not found after updating hue"));
     }
 
     @Override
@@ -197,7 +219,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
 
     private FinancialAccount toDomain(FinancialAccountEntity entity) {
         return new FinancialAccount(
-            entity.id, entity.name, entity.kind, entity.openingBalance, entity.openingDate,
+            entity.id, entity.name, entity.kind, entity.hue, entity.openingBalance, entity.openingDate,
             balance(entity.id), entity.archived, entity.createdAt, entity.updatedAt, entity.version);
     }
 

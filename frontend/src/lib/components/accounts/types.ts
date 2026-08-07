@@ -2,7 +2,9 @@ export type Account = {
 	id: number;
 	name: string;
 	kind: string;
+	hue: number;
 	balance: number;
+	archived?: boolean;
 };
 
 export type Transfer = {
@@ -32,6 +34,10 @@ export type CreditStatement = {
 };
 
 export type CreditDetail = {
-	settings: { creditLimit: number; statementClosingDay: number; paymentDueDay: number } | null;
+	settings: {
+		creditLimit: number;
+		statementClosingDay: number;
+		paymentDueDay: number;
+	} | null;
 	statements: CreditStatement[];
 };

@@ -115,6 +115,17 @@ public class FinancialAccountService implements FinancialAccountUseCase {
 
     @Override
     @Transactional
+    public FinancialAccount updateHue(Long id, int hue) {
+        financialAccountRepository.lockById(id)
+            .orElseThrow(() -> new NotFoundException("Financial Account not found: " + id));
+        if (hue < 0 || hue > 359) {
+            throw new BadRequestException("Financial Account hue must be between 0 and 359");
+        }
+        return financialAccountRepository.setHue(id, hue);
+    }
+
+    @Override
+    @Transactional
     public FinancialAccount archive(Long id) {
         FinancialAccount account = financialAccountRepository.lockById(id)
             .filter(candidate -> !candidate.isArchived())
@@ -161,6 +172,9 @@ public class FinancialAccountService implements FinancialAccountUseCase {
         }
         if (!VALID_KINDS.contains(account.getKind())) {
             throw new BadRequestException("Invalid Financial Account kind");
+        }
+        if (account.getHue() < 0 || account.getHue() > 359) {
+            throw new BadRequestException("Financial Account hue must be between 0 and 359");
         }
         if (account.getOpeningBalance() == null || account.getOpeningBalance().stripTrailingZeros().scale() > 2) {
             throw new BadRequestException("Financial Account opening balance supports at most two decimal places");

@@ -29,6 +29,7 @@ final class AccountTrackingTestSupport {
                 "accounts", List.of(Map.of(
                     "name", "Test cash account",
                     "kind", "CASH",
+					"hue", 220,
                     "openingBalance", "0.00"))))
             .when().post("/api/accounts/activate")
             .then().statusCode(201)

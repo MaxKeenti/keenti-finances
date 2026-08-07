@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { ColorPicker } from '$lib/components/color-picker';
 	import { CurrencyInput } from '$lib/components/currency-input';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
@@ -26,6 +27,7 @@
 	type SetupAccount = {
 		name: string;
 		kind: string;
+		hue: number;
 		openingBalance: string | number;
 		creditLimit: string | number;
 		statementClosingDay: string | number;
@@ -44,8 +46,8 @@
 		{ value: 'CREDIT', label: m.account_kind_credit() },
 	]);
 
-	const newAccount = (): SetupAccount => ({
-		name: '', kind: 'DEBIT', openingBalance: 0,
+	const newAccount = (hue = 220): SetupAccount => ({
+		name: '', kind: 'DEBIT', hue, openingBalance: 0,
 		creditLimit: '', statementClosingDay: '', paymentDueDay: '', openingStatements: [], openingMsiPlans: [],
 	});
 	const newStatement = (): OpeningStatement => ({
@@ -58,6 +60,7 @@
 	const payload = $derived(accounts.map((account) => ({
 		name: account.name,
 		kind: account.kind,
+		hue: account.hue,
 		openingBalance: Number(account.openingBalance || 0),
 		creditSettings: account.kind === 'CREDIT' && Number(account.creditLimit) > 0
 			? { creditLimit: Number(account.creditLimit), statementClosingDay: Number(account.statementClosingDay), paymentDueDay: Number(account.paymentDueDay) }
@@ -95,6 +98,10 @@
 							<Label for={`setup-balance-${accountIndex}`}>{m.account_opening_balance()}</Label>
 							<CurrencyInput id={`setup-balance-${accountIndex}`} bind:value={account.openingBalance} {locale} required />
 						</div>
+					</div>
+					<div class="grid gap-1.5">
+						<span class="text-sm font-medium">{m.common_colour()}</span>
+						<ColorPicker name={account.name || m.common_sample()} hue={account.hue} onchange={(hue) => (account.hue = hue)} />
 					</div>
 					{#if account.kind === 'CREDIT'}
 						<Collapsible.Root>
@@ -146,7 +153,7 @@
 				</div>
 			{/each}
 			<div class="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-				<div class="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onclick={() => (accounts = [...accounts, newAccount()])}><Plus />{m.accounts_add()}</Button><span class="text-sm text-muted-foreground">{m.accounts_entered({ amount: fmt.format(total) })}</span></div>
+				<div class="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onclick={() => (accounts = [...accounts, newAccount((220 + accounts.length * 137) % 360)])}><Plus />{m.accounts_add()}</Button><span class="text-sm text-muted-foreground">{m.accounts_entered({ amount: fmt.format(total) })}</span></div>
 				<Button type="submit">{m.accounts_activate()}</Button>
 			</div>
 		</form>
