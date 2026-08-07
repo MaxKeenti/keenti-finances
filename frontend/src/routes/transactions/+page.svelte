@@ -422,7 +422,7 @@
 	</div>
 
 	{#if data.transactionPage.totalItems > 0}
-		<div class="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+		<div class="hidden flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
 			<p class="text-sm text-muted-foreground">
 				{m.transactions_showing({
 					start: pageRangeStart,
@@ -458,7 +458,7 @@
 	{/if}
 
 	{#if activityItems.length > 0}
-		<section aria-label="All records" class="rounded-lg border">
+		<section aria-label="Transactions and transfers" class="rounded-lg border">
 			<div class="overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
@@ -466,7 +466,6 @@
 							<Table.Head>{m.common_date()}</Table.Head>
 							<Table.Head>Type</Table.Head>
 							<Table.Head>{m.common_description()}</Table.Head>
-							<Table.Head>Details</Table.Head>
 							<Table.Head class="text-right">{m.common_amount()}</Table.Head>
 						</Table.Row>
 					</Table.Header>
@@ -478,7 +477,6 @@
 									<span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {item.kind === 'Transfer' ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'}">{item.kind}</span>
 								</Table.Cell>
 								<Table.Cell><a href={item.href} class="font-medium hover:underline">{item.title}</a></Table.Cell>
-								<Table.Cell class="text-muted-foreground">{item.detail ?? '—'}</Table.Cell>
 								<Table.Cell class="text-right font-mono font-medium tabular-nums {item.kind === 'Transfer' ? 'text-violet-700 dark:text-violet-300' : item.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}">
 									{#if item.kind === 'Transfer'}↔ {fmt.format(item.amount)}{:else}{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}{/if}
 								</Table.Cell>
@@ -490,12 +488,13 @@
 		</section>
 	{/if}
 
-	{#if data.transactionPage.totalItems === 0}
+	{#if activityItems.length === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.transactions_empty_title()}</Empty.Title>
 			<Empty.Description>{m.transactions_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
+		<div class="hidden">
 		<!-- Mobile card grid (< md) -->
 		<!-- grid-cols-1 (minmax(0,1fr)) keeps the single column from growing to the
 		     cards' max-content width; without it the truncated (nowrap) descriptions
@@ -741,6 +740,7 @@
 					<ChevronRightIcon data-icon="inline-end" />
 				</Button>
 			</div>
+		</div>
 		</div>
 	{/if}
 </div>
