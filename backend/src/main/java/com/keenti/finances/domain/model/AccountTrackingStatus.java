@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 public record AccountTrackingStatus(
     boolean active,
+    boolean setupRequired,
     LocalDate activatedAt,
     BigDecimal transactionNetBalance,
     BigDecimal accountNetBalance

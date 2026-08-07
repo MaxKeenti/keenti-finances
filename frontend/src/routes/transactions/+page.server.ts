@@ -18,7 +18,7 @@ const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 type Category = { id: number; name: string; type: string; color?: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
 type FinancialAccount = { id: number; name: string; kind: string; balance: number; archived: boolean };
-type AccountTracking = { active: boolean; activatedAt: string | null };
+type AccountTracking = { active: boolean; setupRequired: boolean; activatedAt: string | null };
 type Transaction = {
 	id: number;
 	amount: number;
@@ -126,12 +126,14 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	let contacts: Contact[] = [];
 	let boxes: BoxDto[] = [];
 	let accounts: FinancialAccount[] = [];
-	let accountTracking: AccountTracking = { active: false, activatedAt: null };
+	let accountTracking: AccountTracking = { active: false, setupRequired: false, activatedAt: null };
 	let transfers: Transfer[] = [];
+	let activityTransactions: Transaction[] = [];
 
 	try {
-		const [txRes, catRes, conRes, boxRes, accountRes, accountStatusRes, transferRes] = await Promise.all([
+		const [txRes, activityTxRes, catRes, conRes, boxRes, accountRes, accountStatusRes, transferRes] = await Promise.all([
 			fetch(`${BACKEND}/api/transactions?${txParams}`, { headers: authHeaders }),
+			fetch(`${BACKEND}/api/transactions`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
 			fetch(`${BACKEND}/api/boxes?archived=false`, { headers: authHeaders }),
@@ -157,6 +159,10 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 			}
 		} else {
 			console.error(`[transactions] load: backend returned ${txRes.status} for transactions`);
+		}
+		if (activityTxRes.ok) {
+			const body = await activityTxRes.json();
+			if (Array.isArray(body)) activityTransactions = body.map(normalizeTransactionBoxFields);
 		}
 
 		if (catRes.ok) categories = await catRes.json();
@@ -198,7 +204,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 
 	return {
 		transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes,
-		accounts, accountTracking, transfers, form,
+		accounts, accountTracking, transfers, activityTransactions, form,
 	};
 };
 

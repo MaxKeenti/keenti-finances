@@ -214,6 +214,26 @@
 		),
 	);
 	const transfers = $derived(data.transfers);
+	const activityItems = $derived([
+		...data.activityTransactions.map((transaction) => ({
+			key: `transaction-${transaction.id}`,
+			date: transaction.transactionDate,
+			kind: 'Transaction',
+			title: transaction.description ?? transaction.categoryName ?? 'Transaction',
+			detail: transaction.accountName ?? transaction.categoryName ?? null,
+			amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
+			href: `/transactions/${transaction.id}`,
+		})),
+		...transfers.map((transfer) => ({
+			key: `transfer-${transfer.id}`,
+			date: transfer.transferDate,
+			kind: 'Transfer',
+			title: `${transfer.sourceAccountName ?? 'Archived account'} → ${transfer.destinationAccountName ?? 'Archived account'}`,
+			detail: transfer.notes,
+			amount: 0,
+			href: '/accounts',
+		})),
+	].sort((left, right) => right.date.localeCompare(left.date)));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
@@ -437,10 +457,10 @@
 		</div>
 	{/if}
 
-	{#if transfers.length > 0}
+	{#if activityItems.length > 0}
 		<Card.Root>
-			<Card.Header><Card.Title>Transferencias entre cuentas</Card.Title><Card.Description>Movimientos neutrales: no cambian el saldo neto ni las Cajas.</Card.Description></Card.Header>
-			<Card.Content><div class="divide-y rounded-md border">{#each transfers as transfer (transfer.id)}<a href="/accounts" class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{transfer.sourceAccountName ?? 'Cuenta archivada'} → {transfer.destinationAccountName ?? 'Cuenta archivada'}</p><p class="text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div><span class="font-mono font-medium tabular-nums">{fmt.format(transfer.amount)}</span></a>{/each}</div></Card.Content>
+			<Card.Header><Card.Title>Activity history</Card.Title><Card.Description>Transactions and neutral Transfers in one chronological list.</Card.Description></Card.Header>
+			<Card.Content><div class="divide-y rounded-md border">{#each activityItems as item (item.key)}<a href={item.href} class="flex flex-wrap items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40"><div><p class="font-medium">{item.title}</p><p class="text-muted-foreground">{item.kind} · {formatDateOnly(item.date, data.preferences.locale)}{item.detail ? ` · ${item.detail}` : ''}</p></div>{#if item.kind === 'Transfer'}<span class="font-mono text-muted-foreground">Neutral</span>{:else}<span class:text-destructive={item.amount < 0} class="font-mono font-medium tabular-nums">{item.amount >= 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span>{/if}</a>{/each}</div></Card.Content>
 		</Card.Root>
 	{/if}
 
@@ -715,6 +735,13 @@
 			</Alert.Root>
 		{/if}
 
+		{#if !editMode && data.accountTracking.setupRequired}
+			<Alert.Root>
+				<Alert.Title>Set up Account tracking first</Alert.Title>
+				<Alert.Description>New Users need at least one Financial Account before recording activity. <a class="underline" href="/accounts">Set up Accounts</a>.</Alert.Description>
+			</Alert.Root>
+		{/if}
+
 		{#if editMode && editingTransaction && editingTransaction.boxDistributions.length > 0}
 			<Alert.Root>
 				<Alert.Title>{m.transactions_distribution_independent_title()}</Alert.Title>
@@ -906,7 +933,7 @@
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={$submitting || allocationInvalid}>
+				<Button type="submit" disabled={$submitting || allocationInvalid || (!editMode && data.accountTracking.setupRequired)}>
 					{$submitting ? m.common_saving() : editMode ? m.common_update() : m.common_create()}
 				</Button>
 			</Dialog.Footer>

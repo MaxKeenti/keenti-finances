@@ -105,6 +105,12 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
+    public boolean isTrackingSetupRequired() {
+        UserEntity user = em.find(UserEntity.class, userContext.getUserId());
+        return user != null && user.accountTrackingRequired && user.accountTrackingActivatedAt == null;
+    }
+
+    @Override
     public Optional<LocalDate> getTrackingActivationDate() {
         UserEntity user = em.find(UserEntity.class, userContext.getUserId());
         return user == null ? Optional.empty() : Optional.ofNullable(user.accountTrackingActivatedAt);
@@ -119,6 +125,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     public void activateTracking(LocalDate activationDate) {
         UserEntity user = em.find(UserEntity.class, userContext.getUserId(), LockModeType.PESSIMISTIC_WRITE);
         user.accountTrackingActivatedAt = activationDate;
+        user.accountTrackingRequired = false;
         em.flush();
     }
 
@@ -131,6 +138,18 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                     WHERE tx.account_id = account.id
                       AND tx.user_id = :userId
                       AND tx.deleted_at IS NULL
+                ), 0) + COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.destination_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
+                ), 0) - COALESCE((
+                    SELECT SUM(transfer.amount)
+                    FROM financial_account_transfer transfer
+                    WHERE transfer.source_account_id = account.id
+                      AND transfer.user_id = :userId
+                      AND transfer.deleted_at IS NULL
                 ), 0)), 0)
                 FROM financial_account account
                 WHERE account.user_id = :userId

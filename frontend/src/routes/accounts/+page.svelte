@@ -18,7 +18,13 @@
 	const archivedAccounts = $derived(data.archivedAccounts as Account[]);
 	const transfers = $derived(data.transfers as Transfer[]);
 	const creditDetails = $derived(data.creditDetails as Record<number, CreditDetail>);
-	let setupAccounts = $state([{ name: '', kind: 'DEBIT', openingBalance: 0 }]);
+	const newSetupAccount = () => ({
+		name: '', kind: 'DEBIT', openingBalance: 0,
+		creditLimit: '', statementClosingDay: '', paymentDueDay: '',
+		openingStatements: [] as Array<{ periodStart: string; periodEnd: string; dueDate: string; officialBalance: string; officialMinimumPayment: string; officialAvoidInterest: string; officialNote: string }>,
+		openingMsiPlans: [] as Array<{ remainingAmount: string; remainingInstallmentCount: string; firstInstallmentDate: string }>,
+	});
+	let setupAccounts = $state([newSetupAccount()]);
 	let addAccountOpen = $state(false);
 	let addAccountError = $state('');
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
@@ -31,6 +37,16 @@
 	];
 	const kindLabel = (kind: string) => kinds.find((item) => item.value === kind)?.label ?? kind;
 	const setupTotal = $derived(setupAccounts.reduce((sum, account) => sum + Number(account.openingBalance || 0), 0));
+	const activationAccounts = $derived(setupAccounts.map((account) => ({
+		name: account.name,
+		kind: account.kind,
+		openingBalance: Number(account.openingBalance || 0),
+		creditSettings: account.kind === 'CREDIT' && Number(account.creditLimit) > 0
+			? { creditLimit: Number(account.creditLimit), statementClosingDay: Number(account.statementClosingDay), paymentDueDay: Number(account.paymentDueDay) }
+			: null,
+		openingCreditStatements: account.openingStatements.filter((statement) => statement.periodStart && statement.periodEnd && statement.dueDate && statement.officialBalance !== '' && statement.officialMinimumPayment !== '' && statement.officialAvoidInterest !== '').map((statement) => ({ ...statement, officialBalance: Number(statement.officialBalance), officialMinimumPayment: Number(statement.officialMinimumPayment), officialAvoidInterest: Number(statement.officialAvoidInterest), officialNote: statement.officialNote || null })),
+		openingMsiPlans: account.openingMsiPlans.filter((plan) => plan.remainingAmount !== '' && plan.remainingInstallmentCount !== '' && plan.firstInstallmentDate).map((plan) => ({ remainingAmount: Number(plan.remainingAmount), remainingInstallmentCount: Number(plan.remainingInstallmentCount), firstInstallmentDate: plan.firstInstallmentDate })),
+	})));
 
 	function openAddAccount() {
 		addAccountError = '';
@@ -68,15 +84,25 @@
 			<Card.Content>
 				<form method="POST" action="?/activate" use:enhance class="space-y-4">
 					<input type="hidden" name="activationDate" value={today} />
-					<input type="hidden" name="accounts" value={JSON.stringify(setupAccounts)} />
+						<input type="hidden" name="accounts" value={JSON.stringify(activationAccounts)} />
 					{#each setupAccounts as account, index}
-						<div class="grid gap-3 sm:grid-cols-3">
+							<div class="grid gap-3 sm:grid-cols-3">
 							<Input bind:value={account.name} placeholder="Account name, e.g. BBVA" />
 							<select class="border-input bg-background h-9 rounded-md border px-3 text-sm" bind:value={account.kind}>{#each kinds as kind}<option value={kind.value}>{kind.label}</option>{/each}</select>
 							<Input type="number" step="0.01" bind:value={account.openingBalance} placeholder="Opening balance" />
-						</div>
-					{/each}
-					<div class="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onclick={() => setupAccounts = [...setupAccounts, { name: '', kind: 'DEBIT', openingBalance: 0 }]}><Plus /> Add account</Button><span class="text-sm text-muted-foreground">Entered: {fmt.format(setupTotal)}</span><Button type="submit">Activate tracking</Button></div>
+							</div>
+							{#if account.kind === 'CREDIT'}
+								<details class="rounded-md border p-3 text-sm">
+									<summary class="cursor-pointer font-medium">Opening Credit Statement and MSI schedule (optional)</summary>
+									<div class="mt-3 space-y-4">
+										<div class="grid gap-2 sm:grid-cols-3"><Input type="number" step="0.01" min="0.01" bind:value={account.creditLimit} placeholder="Credit limit" /><Input type="number" min="1" max="31" bind:value={account.statementClosingDay} placeholder="Closing day" /><Input type="number" min="1" max="31" bind:value={account.paymentDueDay} placeholder="Due day" /></div>
+										<div class="space-y-2"><div class="flex items-center justify-between"><p class="font-medium">Opening statements</p><Button type="button" size="sm" variant="outline" onclick={() => account.openingStatements = [...account.openingStatements, { periodStart: '', periodEnd: '', dueDate: '', officialBalance: '', officialMinimumPayment: '', officialAvoidInterest: '', officialNote: '' }]}>Add statement</Button></div>{#each account.openingStatements as statement}<div class="grid gap-2 sm:grid-cols-4"><Input type="date" bind:value={statement.periodStart} aria-label="Statement start" /><Input type="date" bind:value={statement.periodEnd} aria-label="Statement close" /><Input type="date" bind:value={statement.dueDate} aria-label="Statement due" /><Input type="number" step="0.01" min="0" bind:value={statement.officialBalance} placeholder="Statement balance" /><Input type="number" step="0.01" min="0" bind:value={statement.officialMinimumPayment} placeholder="Minimum payment" /><Input type="number" step="0.01" min="0" bind:value={statement.officialAvoidInterest} placeholder="Avoid interest" /><Input bind:value={statement.officialNote} placeholder="Note" /></div>{/each}</div>
+										<div class="space-y-2"><div class="flex items-center justify-between"><p class="font-medium">Remaining MSI schedules</p><Button type="button" size="sm" variant="outline" onclick={() => account.openingMsiPlans = [...account.openingMsiPlans, { remainingAmount: '', remainingInstallmentCount: '', firstInstallmentDate: '' }]}>Add MSI</Button></div>{#each account.openingMsiPlans as plan}<div class="grid gap-2 sm:grid-cols-3"><Input type="number" step="0.01" min="0.01" bind:value={plan.remainingAmount} placeholder="Remaining total" /><Input type="number" min="1" max="60" bind:value={plan.remainingInstallmentCount} placeholder="Installments left" /><Input type="date" bind:value={plan.firstInstallmentDate} aria-label="First remaining installment" /></div>{/each}</div>
+									</div>
+								</details>
+							{/if}
+						{/each}
+						<div class="flex flex-wrap items-center gap-3"><Button type="button" variant="outline" onclick={() => setupAccounts = [...setupAccounts, newSetupAccount()]}><Plus /> Add account</Button><span class="text-sm text-muted-foreground">Entered: {fmt.format(setupTotal)}</span><Button type="submit">Activate tracking</Button></div>
 				</form>
 			</Card.Content>
 		</Card.Root>
@@ -201,7 +227,7 @@
 		<Dialog.Content class="sm:max-w-md">
 			<Dialog.Header>
 				<Dialog.Title>Add account</Dialog.Title>
-				<Dialog.Description>New Financial Accounts start at a zero opening balance. Record a Transfer or Transaction to reflect money already in the account.</Dialog.Description>
+				<Dialog.Description>Use zero for a new Account. A non-zero opening balance deliberately introduces money or debt that was not tracked before.</Dialog.Description>
 			</Dialog.Header>
 
 			{#if addAccountError}
@@ -219,7 +245,10 @@
 						{#each kinds as kind}<option value={kind.value}>{kind.label}</option>{/each}
 					</select>
 				</div>
-				<input type="hidden" name="openingBalance" value="0" />
+					<div class="grid gap-2">
+						<label class="text-sm font-medium" for="account-opening-balance">Opening balance</label>
+						<Input id="account-opening-balance" name="openingBalance" type="number" step="0.01" value="0" />
+					</div>
 				<div class="flex justify-end gap-2">
 					<Button type="button" variant="outline" onclick={() => addAccountOpen = false}>Cancel</Button>
 					<Button type="submit">Add account</Button>

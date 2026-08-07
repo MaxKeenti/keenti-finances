@@ -100,8 +100,16 @@ public class FinancialAccountResource {
     @Path("/{id}/credit-statements/estimate")
     public Response estimateCreditStatement(@PathParam("id") Long id,
                                             @QueryParam("periodEnd") LocalDate periodEnd) {
-        return Response.ok(new CreditStatementEstimateResponse(periodEnd,
-            creditStatementUseCase.estimateOutstandingBalance(id, periodEnd))).build();
+        BigDecimal balance = creditStatementUseCase.estimateOutstandingBalance(id, periodEnd);
+        return Response.ok(new CreditStatementEstimateResponse(null, periodEnd, null, balance)).build();
+    }
+
+    @GET
+    @Path("/{id}/credit-statements/current-estimate")
+    public Response currentCreditStatementEstimate(@PathParam("id") Long id) {
+        var estimate = creditStatementUseCase.estimateCurrentStatement(id, LocalDate.now());
+        return Response.ok(new CreditStatementEstimateResponse(estimate.periodStart(), estimate.periodEnd(),
+            estimate.dueDate(), estimate.estimatedBalance())).build();
     }
 
     @POST
@@ -144,22 +152,48 @@ public class FinancialAccountResource {
         if (request.firstInstallmentDate().isBefore(transaction.getTransactionDate())) throw new jakarta.ws.rs.BadRequestException("The first installment cannot precede the purchase");
         BigDecimal divisor = BigDecimal.valueOf(request.installmentCount());
         try { transaction.getAmount().divide(divisor); } catch (ArithmeticException e) { throw new jakarta.ws.rs.BadRequestException("The purchase amount must divide exactly into MXN-cent installments"); }
-        CreditMsiPlan saved = creditMsiPlanRepository.save(new CreditMsiPlan(null, id, request.transactionId(), transaction.getAmount(), request.installmentCount(), request.firstInstallmentDate(), true));
+        CreditMsiPlan saved = creditMsiPlanRepository.save(new CreditMsiPlan(null, id, request.transactionId(),
+            transaction.getAmount(), request.installmentCount(), request.firstInstallmentDate(),
+            BigDecimal.ZERO, null, null));
         return Response.status(Response.Status.CREATED).entity(toResponse(saved)).build();
     }
 
     @POST
+    @Path("/{id}/msi-plans/{planId}/end")
+    @Transactional
+    public Response endMsiPlan(@PathParam("id") Long id, @PathParam("planId") Long planId,
+                               @Valid CreditMsiPlanEndRequest request) {
+        requireCredit(id);
+        CreditMsiPlan plan = creditMsiPlanRepository.findById(planId).orElseThrow(() ->
+            new jakarta.ws.rs.NotFoundException("MSI plan not found"));
+        if (!plan.accountId().equals(id)) {
+            throw new jakarta.ws.rs.NotFoundException("MSI plan not found");
+        }
+        if (!plan.active()) {
+            throw new jakarta.ws.rs.ClientErrorException("This MSI plan has already ended", Response.Status.CONFLICT);
+        }
+        String reason = request.reason().trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"COMPLETED".equals(reason) && !"CANCELLED".equals(reason)) {
+            throw new jakarta.ws.rs.BadRequestException("MSI plan end reason must be COMPLETED or CANCELLED");
+        }
+        return Response.ok(toResponse(creditMsiPlanRepository.end(planId, java.time.LocalDateTime.now(), reason))).build();
+    }
+
+    @POST
     @Path("/activate")
+    @Transactional
     public Response activate(@Valid FinancialAccountActivationRequest request) {
+        validateOpeningImports(request);
+        var accounts = financialAccountUseCase.activate(
+            request.activationDate(),
+            request.accounts().stream()
+                .map(account -> toDomain(account, request.activationDate()))
+                .toList());
+        for (int index = 0; index < accounts.size(); index++) {
+            importOpeningCreditMetadata(accounts.get(index), request.accounts().get(index));
+        }
         return Response.status(Response.Status.CREATED)
-            .entity(financialAccountUseCase.activate(
-                request.activationDate(),
-                request.accounts().stream()
-                    .map(account -> toDomain(account, request.activationDate()))
-                    .toList()).stream()
-                .map(FinancialAccountResource::toResponse)
-                .toList())
-            .build();
+            .entity(accounts.stream().map(FinancialAccountResource::toResponse).toList()).build();
     }
 
     @POST
@@ -186,6 +220,68 @@ public class FinancialAccountResource {
             request.openingBalance(), openingDate, BigDecimal.ZERO, false, null, null, 0);
     }
 
+    private void validateOpeningImports(FinancialAccountActivationRequest request) {
+        for (FinancialAccountRequest account : request.accounts()) {
+            boolean hasCreditMetadata = account.creditSettings() != null
+                || (account.openingCreditStatements() != null && !account.openingCreditStatements().isEmpty())
+                || (account.openingMsiPlans() != null && !account.openingMsiPlans().isEmpty());
+            if (hasCreditMetadata && !"CREDIT".equalsIgnoreCase(account.kind())) {
+                throw new jakarta.ws.rs.BadRequestException(
+                    "Opening Credit metadata requires a CREDIT Financial Account");
+            }
+            if (account.openingMsiPlans() != null) {
+                for (OpeningCreditMsiPlanRequest plan : account.openingMsiPlans()) {
+                    if (plan.remainingAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new jakarta.ws.rs.BadRequestException("Opening MSI amount must be positive");
+                    }
+                    try {
+                        plan.remainingAmount().divide(BigDecimal.valueOf(plan.remainingInstallmentCount()));
+                    } catch (ArithmeticException e) {
+                        throw new jakarta.ws.rs.BadRequestException(
+                            "Opening MSI amount must divide exactly into MXN-cent installments");
+                    }
+                }
+            }
+        }
+    }
+
+    private void importOpeningCreditMetadata(FinancialAccount account, FinancialAccountRequest request) {
+        if (!account.isCredit()) {
+            return;
+        }
+        if (request.creditSettings() != null) {
+            creditAccountSettingsRepository.save(new CreditAccountSettings(account.getId(),
+                request.creditSettings().creditLimit(), request.creditSettings().statementClosingDay(),
+                request.creditSettings().paymentDueDay()));
+        }
+        if (request.openingCreditStatements() != null) {
+            for (OpeningCreditStatementRequest statement : request.openingCreditStatements()) {
+                if (statement.periodEnd().isBefore(statement.periodStart())
+                        || statement.dueDate().isBefore(statement.periodEnd())
+                        || statement.officialBalance().compareTo(BigDecimal.ZERO) < 0
+                        || statement.officialMinimumPayment().compareTo(BigDecimal.ZERO) < 0
+                        || statement.officialAvoidInterest().compareTo(BigDecimal.ZERO) < 0
+                        || statement.officialMinimumPayment().compareTo(statement.officialBalance()) > 0
+                        || statement.officialAvoidInterest().compareTo(statement.officialBalance()) > 0) {
+                    throw new jakarta.ws.rs.BadRequestException("Invalid opening Credit Statement");
+                }
+                creditStatementRepository.save(new CreditStatement(null, account.getId(),
+                    statement.periodStart(), statement.periodEnd(), statement.dueDate(),
+                    statement.officialBalance(), statement.officialBalance(),
+                    statement.officialMinimumPayment(), statement.officialAvoidInterest(),
+                    statement.officialNote(), java.time.LocalDateTime.now(), BigDecimal.ZERO));
+            }
+        }
+        if (request.openingMsiPlans() != null) {
+            for (OpeningCreditMsiPlanRequest plan : request.openingMsiPlans()) {
+                creditMsiPlanRepository.save(new CreditMsiPlan(null, account.getId(), null,
+                    plan.remainingAmount(), plan.remainingInstallmentCount(), plan.firstInstallmentDate(),
+                    plan.remainingAmount(), null, null));
+            }
+        }
+        creditStatementRepository.reallocatePayments(account.getId());
+    }
+
     private static FinancialAccountResponse toResponse(FinancialAccount account) {
         return new FinancialAccountResponse(
             account.getId(), account.getName(), account.getKind(), account.getOpeningBalance(),
@@ -194,7 +290,7 @@ public class FinancialAccountResource {
     }
 
     private static AccountTrackingStatusResponse toResponse(AccountTrackingStatus status) {
-        return new AccountTrackingStatusResponse(status.active(), status.activatedAt(),
+        return new AccountTrackingStatusResponse(status.active(), status.setupRequired(), status.activatedAt(),
             status.transactionNetBalance(), status.accountNetBalance());
     }
 
@@ -224,6 +320,6 @@ public class FinancialAccountResource {
             creditStatementRepository.revisionCount(statement.id()));
     }
 
-    private static CreditMsiPlanResponse toResponse(CreditMsiPlan plan) { return new CreditMsiPlanResponse(plan.id(), plan.transactionId(), plan.purchaseAmount(), plan.installmentCount(), plan.installmentAmount(), plan.firstInstallmentDate(), plan.active()); }
+    private static CreditMsiPlanResponse toResponse(CreditMsiPlan plan) { return new CreditMsiPlanResponse(plan.id(), plan.transactionId(), plan.purchaseAmount(), plan.installmentCount(), plan.installmentAmount(), plan.firstInstallmentDate(), plan.active(), plan.endedAt(), plan.endReason()); }
     private static boolean idEquals(Long left, Long right) { return left != null && left.equals(right); }
 }

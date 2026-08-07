@@ -45,7 +45,8 @@ public class FinancialAccountService implements FinancialAccountUseCase {
     public AccountTrackingStatus status() {
         Optional<LocalDate> activationDate = financialAccountRepository.getTrackingActivationDate();
         return new AccountTrackingStatus(
-            activationDate.isPresent(), activationDate.orElse(null),
+            activationDate.isPresent(), financialAccountRepository.isTrackingSetupRequired(),
+            activationDate.orElse(null),
             transactionRepository.getNetBalance(), financialAccountRepository.getTotalBalance());
     }
 
@@ -106,10 +107,6 @@ public class FinancialAccountService implements FinancialAccountUseCase {
                 "Activate Financial Account tracking before creating an Account", Response.Status.CONFLICT);
         }
         validate(account, account.getOpeningDate());
-        if (account.getOpeningBalance().compareTo(BigDecimal.ZERO) != 0) {
-            throw new BadRequestException(
-                "New Financial Accounts after activation must start at zero balance");
-        }
         if (financialAccountRepository.existsActiveByName(account.getName())) {
             throw new ClientErrorException("A Financial Account with that name already exists", Response.Status.CONFLICT);
         }

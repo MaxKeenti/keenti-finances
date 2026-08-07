@@ -43,7 +43,7 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         }
         validateTransfer(transfer);
         FinancialAccountTransfer created = transferRepository.save(transfer);
-        allocatePayment(created);
+        reallocatePaymentDestination(created.destinationAccountId());
         return created;
     }
 
@@ -53,35 +53,34 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         FinancialAccountTransfer existing = transferRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Financial Account Transfer not found: " + id));
         validateTransfer(transfer);
-        creditStatementRepository.removeAllocationsForTransfer(existing.id());
         FinancialAccountTransfer updated = transferRepository.update(new FinancialAccountTransfer(id,
             transfer.sourceAccountId(), transfer.destinationAccountId(), transfer.amount(),
             transfer.transferDate(), transfer.notes(), existing.createdAt()));
-        allocatePayment(updated);
+        reallocatePaymentDestination(existing.destinationAccountId());
+        if (!existing.destinationAccountId().equals(updated.destinationAccountId())) {
+            reallocatePaymentDestination(updated.destinationAccountId());
+        }
         return updated;
     }
 
     @Override
     @Transactional
     public void delete(Long id) {
-        transferRepository.findById(id).orElseThrow(() ->
+        FinancialAccountTransfer existing = transferRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Financial Account Transfer not found: " + id));
-        creditStatementRepository.removeAllocationsForTransfer(id);
         transferRepository.softDeleteById(id);
+        reallocatePaymentDestination(existing.destinationAccountId());
     }
 
     @Override
     @Transactional
     public void restore(Long id) {
-        if (transferRepository.findDeletedById(id).isEmpty()) {
-            throw new NotFoundException("Deleted Financial Account Transfer not found: " + id);
-        }
+        FinancialAccountTransfer deleted = transferRepository.findDeletedTransferById(id).orElseThrow(() ->
+            new NotFoundException("Deleted Financial Account Transfer not found: " + id));
+        validateTransfer(deleted);
         transferRepository.restoreById(id);
         FinancialAccountTransfer restored = transferRepository.findById(id).orElseThrow();
-        // An account may have been archived after this transfer was deleted.  Restoring it
-        // must not silently invalidate the account's zero-balance archive invariant.
-        validateTransfer(restored);
-        allocatePayment(restored);
+        reallocatePaymentDestination(restored.destinationAccountId());
     }
 
     @Override
@@ -127,11 +126,10 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         }
     }
 
-    private void allocatePayment(FinancialAccountTransfer transfer) {
-        var destination = financialAccountRepository.findById(transfer.destinationAccountId()).orElseThrow();
+    private void reallocatePaymentDestination(Long accountId) {
+        var destination = financialAccountRepository.findById(accountId).orElseThrow();
         if (destination.isCredit()) {
-            creditStatementRepository.allocateOldestOutstanding(destination.getId(), transfer.id(),
-                transfer.transferDate(), transfer.amount());
+            creditStatementRepository.reallocatePayments(destination.getId());
         }
     }
 }

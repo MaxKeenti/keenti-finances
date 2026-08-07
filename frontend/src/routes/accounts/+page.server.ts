@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		fetch(`${BACKEND}/api/accounts?archived=true`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
 	]);
-	const status = statusRes.ok ? await statusRes.json() : { active: false, transactionNetBalance: 0, accountNetBalance: 0 };
+	const status = statusRes.ok ? await statusRes.json() : { active: false, setupRequired: false, transactionNetBalance: 0, accountNetBalance: 0 };
 	const accounts = accountsRes.ok ? await accountsRes.json() : [];
 	const creditDetails = await Promise.all(
 		accounts.filter((account: { kind: string }) => account.kind === 'CREDIT').map(async (account: { id: number }) => {
@@ -49,15 +49,17 @@ export const actions: Actions = {
 		if (!name) return fail(400, { message: 'Account name is required.' });
 		if (!validKinds.has(kind)) return fail(400, { message: 'Choose a valid account kind.' });
 
+		const openingBalance = Number(data.get('openingBalance') ?? 0);
+		if (!Number.isFinite(openingBalance)) return fail(400, { message: 'Opening balance must be a valid amount.' });
 		const response = await fetch(`${BACKEND}/api/accounts`, {
 			method: 'POST', headers: headers(cookies, true),
-			body: JSON.stringify({ name, kind, openingBalance: 0 }),
+			body: JSON.stringify({ name, kind, openingBalance }),
 		});
 		if (!response.ok) {
 			return fail(response.status === 409 ? 409 : 400, {
 				message: response.status === 409
 					? 'An active account with that name already exists.'
-					: 'The account could not be created. New accounts must start at a zero opening balance.',
+						: 'The account could not be created.',
 			});
 		}
 		return { accountCreated: true };

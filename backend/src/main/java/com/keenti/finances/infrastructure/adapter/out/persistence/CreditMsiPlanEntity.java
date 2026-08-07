@@ -15,5 +15,8 @@ public class CreditMsiPlanEntity extends PanacheEntityBase {
     @Column(name = "purchase_amount") public BigDecimal purchaseAmount;
     @Column(name = "installment_count") public int installmentCount;
     @Column(name = "first_installment_date") public LocalDate firstInstallmentDate;
+    @Column(name = "opening_balance_amount") public BigDecimal openingBalanceAmount;
     @Column(name = "cancelled_at") public LocalDateTime cancelledAt;
+    @Column(name = "ended_at") public LocalDateTime endedAt;
+    @Column(name = "end_reason") public String endReason;
 }

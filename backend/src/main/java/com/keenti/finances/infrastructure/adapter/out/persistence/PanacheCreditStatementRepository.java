@@ -171,6 +171,40 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         em.flush();
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public void reallocatePayments(Long accountId) {
+        em.createNativeQuery("""
+                DELETE FROM credit_statement_payment payment
+                USING credit_statement statement, financial_account account
+                WHERE payment.statement_id = statement.id
+                  AND statement.account_id = :accountId
+                  AND account.id = statement.account_id
+                  AND account.user_id = :userId
+                """)
+            .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
+            .executeUpdate();
+        em.flush();
+
+        List<Object[]> transfers = em.createNativeQuery("""
+                SELECT transfer.id, transfer.transfer_date, transfer.amount
+                FROM financial_account_transfer transfer
+                WHERE transfer.destination_account_id = :accountId
+                  AND transfer.user_id = :userId
+                  AND transfer.deleted_at IS NULL
+                ORDER BY transfer.transfer_date, transfer.created_at, transfer.id
+                """)
+            .setParameter("accountId", accountId).setParameter("userId", userContext.getUserId())
+            .getResultList();
+        for (Object[] transfer : transfers) {
+            LocalDate transferDate = transfer[1] instanceof LocalDate date
+                ? date
+                : ((java.sql.Date) transfer[1]).toLocalDate();
+            allocateOldestOutstanding(accountId, ((Number) transfer[0]).longValue(),
+                transferDate, decimal(transfer[2]));
+        }
+    }
+
     private CreditStatement toDomain(CreditStatementEntity entity) {
         return new CreditStatement(entity.id, entity.account.id, entity.periodStart, entity.periodEnd,
             entity.dueDate, entity.estimatedBalance, entity.officialBalance,

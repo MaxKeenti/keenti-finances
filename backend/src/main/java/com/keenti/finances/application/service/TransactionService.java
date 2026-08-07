@@ -17,6 +17,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -181,6 +182,7 @@ public class TransactionService implements TransactionUseCase {
     public void restore(Long id) {
         Transaction deleted = transactionRepository.findDeletedTransactionById(id).orElseThrow(() ->
             new NotFoundException("Deleted transaction not found: " + id));
+        validateRestoredAccount(deleted);
         List<BoxFunding> funding = boxFundingRepository.findByTransactionId(id);
         validateFundingTransition(
             List.of(), false, deleted.getTransactionDate(),
@@ -296,6 +298,11 @@ public class TransactionService implements TransactionUseCase {
     }
 
     private void validateAccount(Transaction transaction) {
+        if (!financialAccountRepository.isTrackingActive()
+                && financialAccountRepository.isTrackingSetupRequired()) {
+            throw new ClientErrorException(
+                "Set up a Financial Account before recording activity", Response.Status.CONFLICT);
+        }
         if (financialAccountRepository.isTrackingActive() && transaction.getAccountId() == null) {
             throw new BadRequestException("Financial Account is required after Account tracking is activated");
         }
@@ -306,6 +313,17 @@ public class TransactionService implements TransactionUseCase {
             new NotFoundException("Financial Account not found: " + transaction.getAccountId()));
         if (account.isArchived()) {
             throw conflict("Financial Account must be restored before recording activity: " + account.getId());
+        }
+    }
+
+    private void validateRestoredAccount(Transaction transaction) {
+        if (transaction.getAccountId() == null) {
+            return; // Legacy Transactions predate Financial Account tracking.
+        }
+        var account = financialAccountRepository.findById(transaction.getAccountId()).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + transaction.getAccountId()));
+        if (account.isArchived()) {
+            throw conflict("Financial Account must be restored before restoring activity: " + account.getId());
         }
     }
 

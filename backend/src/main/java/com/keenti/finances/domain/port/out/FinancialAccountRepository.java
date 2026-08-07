@@ -14,6 +14,7 @@ public interface FinancialAccountRepository {
     FinancialAccount setArchived(Long id, boolean archived);
     boolean existsActiveByName(String name);
     boolean isTrackingActive();
+    boolean isTrackingSetupRequired();
     Optional<LocalDate> getTrackingActivationDate();
     void lockTrackingScope();
     void activateTracking(LocalDate activationDate);

@@ -79,6 +79,9 @@ public class UserEntity extends PanacheEntityBase {
     @Column(name = "account_tracking_activated_at")
     public LocalDate accountTrackingActivatedAt;
 
+    @Column(name = "account_tracking_required", nullable = false)
+    public boolean accountTrackingRequired;
+
     public static Optional<UserEntity> findByWorkosId(String workosId) {
         return find("workosId", workosId).firstResultOptional();
     }

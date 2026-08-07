@@ -8,6 +8,7 @@ import java.util.Optional;
 public interface FinancialAccountTransferRepository {
     List<FinancialAccountTransfer> findAll();
     Optional<FinancialAccountTransfer> findById(Long id);
+    Optional<FinancialAccountTransfer> findDeletedTransferById(Long id);
     FinancialAccountTransfer save(FinancialAccountTransfer transfer);
     FinancialAccountTransfer update(FinancialAccountTransfer transfer);
     void softDeleteById(Long id);

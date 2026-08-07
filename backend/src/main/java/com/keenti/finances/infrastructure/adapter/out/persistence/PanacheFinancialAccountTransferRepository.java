@@ -39,6 +39,13 @@ public class PanacheFinancialAccountTransferRepository implements FinancialAccou
     }
 
     @Override
+    public Optional<FinancialAccountTransfer> findDeletedTransferById(Long id) {
+        return FinancialAccountTransferEntity.<FinancialAccountTransferEntity>find(
+                "id = ?1 AND deletedAt IS NOT NULL", id)
+            .firstResultOptional().map(this::toDomain);
+    }
+
+    @Override
     public FinancialAccountTransfer save(FinancialAccountTransfer transfer) {
         FinancialAccountTransferEntity entity = new FinancialAccountTransferEntity();
         entity.user = em.getReference(UserEntity.class, userContext.getUserId());
