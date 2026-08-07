@@ -11,6 +11,7 @@ public interface FinancialAccountRepository {
     Optional<FinancialAccount> findById(Long id);
     Optional<FinancialAccount> lockById(Long id);
     FinancialAccount save(FinancialAccount account);
+    FinancialAccount setHue(Long id, int hue);
     FinancialAccount setArchived(Long id, boolean archived);
     boolean existsActiveByName(String name);
     boolean isTrackingActive();

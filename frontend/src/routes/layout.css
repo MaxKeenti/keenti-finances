@@ -140,3 +140,28 @@
 		@apply font-sans;
 	}
 }
+
+@layer components {
+	.hue-slider [data-slot='slider-track'] {
+		background: linear-gradient(
+			to right,
+			oklch(0.7 0.18 0),
+			oklch(0.7 0.18 30),
+			oklch(0.7 0.18 60),
+			oklch(0.7 0.18 90),
+			oklch(0.7 0.18 120),
+			oklch(0.7 0.18 150),
+			oklch(0.7 0.18 180),
+			oklch(0.7 0.18 210),
+			oklch(0.7 0.18 240),
+			oklch(0.7 0.18 270),
+			oklch(0.7 0.18 300),
+			oklch(0.7 0.18 330),
+			oklch(0.7 0.18 360)
+		);
+	}
+
+	.hue-slider [data-slot='slider-range'] {
+		background: transparent;
+	}
+}

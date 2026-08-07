@@ -255,16 +255,15 @@
 		</Alert.Root>
 	{/if}
 
-	<Card.Root
-		class="bg-gradient-to-br from-[oklch(0.97_0.025_var(--box-hue))] to-card dark:from-[oklch(0.27_0.035_var(--box-hue))]"
-		style={`--box-hue: ${data.box.hue}`}
+		<Card.Root
+			class="bg-gradient-to-br from-[oklch(0.97_0.025_var(--box-hue))] to-card dark:from-[oklch(0.27_0.035_var(--box-hue))]"
+			style={`--box-hue: ${data.box.hue}`}
 	>
 		<Card.Header>
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<div class="flex min-w-0 items-start gap-3">
 					<div
-						class="flex size-12 shrink-0 items-center justify-center rounded-xl text-2xl shadow-sm ring-1 ring-black/5"
-						style={`background: oklch(0.88 0.12 ${data.box.hue}); color: oklch(0.32 0.08 ${data.box.hue})`}
+						class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-2xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-black/5"
 						aria-hidden="true"
 					>
 						{data.box.icon || '□'}

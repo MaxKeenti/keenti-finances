@@ -12,6 +12,7 @@ public interface FinancialAccountUseCase {
     Optional<FinancialAccount> getById(Long id);
     List<FinancialAccount> activate(LocalDate activationDate, List<FinancialAccount> accounts);
     FinancialAccount create(FinancialAccount account);
+    FinancialAccount updateHue(Long id, int hue);
     FinancialAccount archive(Long id);
     FinancialAccount restore(Long id);
 }

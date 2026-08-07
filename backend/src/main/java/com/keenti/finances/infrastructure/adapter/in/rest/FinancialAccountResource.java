@@ -206,6 +206,13 @@ public class FinancialAccountResource {
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
+    @PUT
+    @Path("/{id}/appearance")
+    public Response updateAppearance(@PathParam("id") Long id,
+                                     @Valid FinancialAccountAppearanceRequest request) {
+        return Response.ok(toResponse(financialAccountUseCase.updateHue(id, request.hue()))).build();
+    }
+
     @POST
     @Path("/{id}/archive")
     @Consumes(MediaType.WILDCARD)
@@ -222,7 +229,7 @@ public class FinancialAccountResource {
 
     private static FinancialAccount toDomain(FinancialAccountRequest request, LocalDate openingDate) {
         return new FinancialAccount(
-            null, request.name().trim(), request.kind().trim().toUpperCase(java.util.Locale.ROOT),
+            null, request.name().trim(), request.kind().trim().toUpperCase(java.util.Locale.ROOT), request.hue(),
             request.openingBalance(), openingDate, BigDecimal.ZERO, false, null, null, 0);
     }
 
@@ -290,7 +297,7 @@ public class FinancialAccountResource {
 
     private static FinancialAccountResponse toResponse(FinancialAccount account) {
         return new FinancialAccountResponse(
-            account.getId(), account.getName(), account.getKind(), account.getOpeningBalance(),
+            account.getId(), account.getName(), account.getKind(), account.getHue(), account.getOpeningBalance(),
             account.getOpeningDate(), account.getBalance(), account.isArchived(),
             account.getCreatedAt(), account.getUpdatedAt(), account.getVersion());
     }

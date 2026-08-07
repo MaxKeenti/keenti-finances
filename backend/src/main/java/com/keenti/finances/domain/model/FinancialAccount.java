@@ -10,6 +10,7 @@ public class FinancialAccount {
     private final Long id;
     private final String name;
     private final String kind;
+    private final int hue;
     private final BigDecimal openingBalance;
     private final LocalDate openingDate;
     private final BigDecimal balance;
@@ -18,12 +19,13 @@ public class FinancialAccount {
     private final LocalDateTime updatedAt;
     private final long version;
 
-    public FinancialAccount(Long id, String name, String kind, BigDecimal openingBalance,
+    public FinancialAccount(Long id, String name, String kind, int hue, BigDecimal openingBalance,
                             LocalDate openingDate, BigDecimal balance, boolean archived,
                             LocalDateTime createdAt, LocalDateTime updatedAt, long version) {
         this.id = id;
         this.name = name;
         this.kind = kind;
+        this.hue = hue;
         this.openingBalance = openingBalance;
         this.openingDate = openingDate;
         this.balance = balance;
@@ -36,6 +38,7 @@ public class FinancialAccount {
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getKind() { return kind; }
+    public int getHue() { return hue; }
     public BigDecimal getOpeningBalance() { return openingBalance; }
     public LocalDate getOpeningDate() { return openingDate; }
     public BigDecimal getBalance() { return balance; }

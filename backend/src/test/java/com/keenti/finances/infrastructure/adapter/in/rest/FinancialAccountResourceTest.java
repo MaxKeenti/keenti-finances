@@ -34,6 +34,7 @@ class FinancialAccountResourceTest {
             account("Nu", "SAVINGS", "0.00")))
             .statusCode(201)
             .body("size()", equalTo(2))
+            .body("[0].hue", equalTo(220))
             .body("[0].balance", equalTo(0.0f))
             .body("[1].balance", equalTo(0.0f));
 
@@ -51,6 +52,25 @@ class FinancialAccountResourceTest {
             .then().statusCode(201)
             .body("id", notNullValue())
             .body("openingBalance", equalTo(0.0f));
+    }
+
+    @Test
+    void accountHueCanBePersonalized() {
+        String user = "account-hue-" + UUID.randomUUID();
+        long accountId = activate(user, List.of(account("Cash", "CASH", "0.00")))
+            .statusCode(201).extract().jsonPath().getLong("[0].id");
+
+        given().header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(Map.of("hue", 42))
+            .when().put("/api/accounts/{id}/appearance", accountId)
+            .then().statusCode(200).body("hue", equalTo(42));
+
+        given().header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(Map.of("hue", 360))
+            .when().put("/api/accounts/{id}/appearance", accountId)
+            .then().statusCode(400);
     }
 
     @Test
@@ -352,7 +372,7 @@ class FinancialAccountResourceTest {
     }
 
     private static io.restassured.response.ValidatableResponse activate(
-            String user, List<Map<String, String>> accounts) {
+            String user, List<? extends Map<String, ?>> accounts) {
         return given().header("X-WorkOS-User-Id", user)
             .contentType(ContentType.JSON)
             .body(Map.of("activationDate", LocalDate.now().toString(), "accounts", accounts))
@@ -360,8 +380,8 @@ class FinancialAccountResourceTest {
             .then();
     }
 
-    private static Map<String, String> account(String name, String kind, String openingBalance) {
-        return Map.of("name", name, "kind", kind, "openingBalance", openingBalance);
+    private static Map<String, Object> account(String name, String kind, String openingBalance) {
+        return Map.of("name", name, "kind", kind, "hue", 220, "openingBalance", openingBalance);
     }
 
     private static long createAccount(String user, String name, String kind, String openingBalance) {

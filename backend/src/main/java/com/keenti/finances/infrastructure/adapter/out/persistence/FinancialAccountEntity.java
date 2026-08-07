@@ -38,6 +38,9 @@ public class FinancialAccountEntity extends PanacheEntityBase {
     @Column(nullable = false, length = 16)
     public String kind;
 
+    @Column(nullable = false)
+    public int hue;
+
     @Column(name = "opening_balance", nullable = false, precision = 12, scale = 2)
     public BigDecimal openingBalance;
 
