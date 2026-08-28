@@ -539,8 +539,8 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
-								<Form.Label>Receiving Account</Form.Label>
-								<NativeSelect name={fieldName} value={$bulkForm.accountId ? String($bulkForm.accountId) : ''} onValueChange={(v) => { $bulkForm.accountId = v ? Number(v) : ''; }} placeholder="Select an account" items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
+								<Form.Label>{m.debts_receiving_account()}</Form.Label>
+								<NativeSelect name={fieldName} value={$bulkForm.accountId ? String($bulkForm.accountId) : ''} onValueChange={(v) => { $bulkForm.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />
