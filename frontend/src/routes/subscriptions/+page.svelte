@@ -17,7 +17,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -65,7 +65,7 @@
 	let memberTargetSub = $state<Subscription | null>(null);
 	let selectedContactId = $state('');
 
-	const today = new Date().toISOString().split('T')[0];
+	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
 	const sf = superForm(data.form, {
 		dataType: 'json',

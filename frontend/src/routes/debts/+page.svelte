@@ -18,7 +18,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { mxnFormatter, shortDateFormatter } from '$lib/formatting';
+	import { dateInTimeZone, mxnFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -128,7 +128,7 @@
 	function openCreate() {
 		editMode = false;
 		sf.reset({
-			data: { contactId: 0, description: '', totalAmount: 0, createdAt: new Date().toISOString().split('T')[0] },
+			data: { contactId: 0, description: '', totalAmount: 0, createdAt: dateInTimeZone(data.preferences.timeZone) },
 		});
 		dialogOpen = true;
 	}
@@ -139,7 +139,7 @@
 			data: {
 				contactId: 0,
 				totalAmount: 0,
-				paymentDate: new Date().toISOString().split('T')[0],
+				paymentDate: dateInTimeZone(data.preferences.timeZone),
 				categoryId: 0,
 				notes: '',
 			},
@@ -149,7 +149,7 @@
 
 	function openEdit(debt: Debt) {
 		editMode = true;
-		const existing = debt.createdAt ? debt.createdAt.split('T')[0] : new Date().toISOString().split('T')[0];
+		const existing = debt.createdAt ? debt.createdAt.split('T')[0] : dateInTimeZone(data.preferences.timeZone);
 		form.set({
 			id: debt.id,
 			contactId: debt.contactId ?? 0,
