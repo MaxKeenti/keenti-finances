@@ -38,13 +38,13 @@
 	const assetAccounts = $derived(accounts.filter((a) => ASSET_KINDS.includes(a.kind)));
 	const creditAccounts = $derived(accounts.filter((a) => a.kind === 'CREDIT'));
 	const heldTotal = $derived(assetAccounts.reduce((sum, a) => sum + a.balance, 0));
-	// Only negative Credit balances are debt; a positive one is money in hand.
-	const owedTotal = $derived(
-		creditAccounts.reduce((sum, a) => sum + (a.balance < 0 ? -a.balance : 0), 0),
-	);
-	const netTotal = $derived(
-		heldTotal + creditAccounts.reduce((sum, a) => sum + a.balance, 0),
-	);
+	// The signed Credit position: negative is debt, positive is a credit in the
+	// User's favour. Reporting only the debt half left the summary looking like
+	// it did not add up — held $2,817.75, owed $0.00, net $2,889.75 — whenever a
+	// Credit Financial Account carried a positive balance.
+	const creditTotal = $derived(creditAccounts.reduce((sum, a) => sum + a.balance, 0));
+	const creditInFavour = $derived(creditTotal > 0);
+	const netTotal = $derived(heldTotal + creditTotal);
 
 	let transferOpen = $state(false);
 	let addAccountOpen = $state(false);
@@ -117,9 +117,11 @@
 					<p class="text-2xl font-semibold tabular-nums">{fmt.format(heldTotal)}</p>
 				</div>
 				<div>
-					<p class="text-xs text-muted-foreground">{m.accounts_summary_owed()}</p>
-					<p class="text-2xl font-semibold tabular-nums {owedTotal > 0 ? 'text-money-negative' : ''}">
-						{fmt.format(owedTotal)}
+					<p class="text-xs text-muted-foreground">
+						{creditInFavour ? m.account_credit_positive() : m.accounts_summary_owed()}
+					</p>
+					<p class="text-2xl font-semibold tabular-nums {creditTotal < 0 ? 'text-money-negative' : ''}">
+						{fmt.format(Math.abs(creditTotal))}
 					</p>
 				</div>
 				<div class="sm:border-l sm:pl-4">

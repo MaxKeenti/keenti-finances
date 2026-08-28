@@ -110,7 +110,7 @@
 					size="sm"
 					href="?year={prevYear}"
 					aria-label={m.dashboard_previous_year({ year: prevYear })}
-					class="size-7 p-0"
+					class="size-8 p-0"
 				>
 					<ChevronLeft class="size-4" aria-hidden="true" />
 				</Button>
@@ -121,7 +121,7 @@
 					href={nextYear > currentYear ? undefined : `?year=${nextYear}`}
 					aria-label={m.dashboard_next_year({ year: nextYear })}
 					disabled={nextYear > currentYear}
-					class="size-7 p-0 {nextYear > currentYear ? 'pointer-events-none opacity-40' : ''}"
+					class="size-8 p-0 {nextYear > currentYear ? 'pointer-events-none opacity-40' : ''}"
 				>
 					<ChevronRight class="size-4" aria-hidden="true" />
 				</Button>
