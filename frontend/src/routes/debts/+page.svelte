@@ -19,6 +19,8 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { dateInTimeZone, mxnFormatter, shortDateFormatter } from '$lib/formatting';
+	import { DataTableWrapper } from '$lib/components/ui/data-table';
+	import type { ColumnDef, Row } from '@tanstack/table-core';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -194,6 +196,37 @@
 		return [...summaries.values()].sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
 	});
 
+	// Desktop columns. `accessorFn` keeps the searchable text in the row model so
+	// the wrapper's global filter matches debtor and description, and sorting on
+	// the money columns compares numbers rather than formatted strings.
+	const debtColumns: ColumnDef<Debt>[] = [
+		{
+			id: 'debtor',
+			header: m.debts_column_debtor(),
+			accessorFn: (d) => d.contactName ?? m.contact_number({ id: d.contactId ?? d.id }),
+		},
+		{ id: 'description', header: m.common_description(), accessorFn: (d) => d.description },
+		{ id: 'total', header: m.common_total(), accessorFn: (d) => d.totalAmount },
+		{ id: 'paid', header: m.common_paid(), accessorFn: (d) => d.totalPaid },
+		{ id: 'remaining', header: m.common_remaining(), accessorFn: (d) => d.remaining },
+		{ id: 'status', header: m.debts_filter_status(), accessorFn: (d) => debtStatusLabel(d.status) },
+		{ id: 'actions', header: '', enableSorting: false },
+	];
+
+	// Status is a separate control rather than part of the search box: it is a
+	// closed set, and typing "activa" should not be the way to narrow to it.
+	let statusFilter = $state<'ALL' | 'ACTIVE' | 'PAID'>('ALL');
+	const visibleDebts = $derived(
+		statusFilter === 'ALL'
+			? data.debts
+			: data.debts.filter((d) => (statusFilter === 'PAID' ? d.status === 'PAID' : d.status !== 'PAID')),
+	);
+	const statusFilters = $derived([
+		{ value: 'ALL' as const, label: m.debts_filter_all() },
+		{ value: 'ACTIVE' as const, label: m.debts_filter_active() },
+		{ value: 'PAID' as const, label: m.debts_filter_paid() },
+	]);
+
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
 		ACTIVE: 'warning',
 		PAID: 'success',
@@ -247,68 +280,132 @@
 			<Empty.Description>{m.debts_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
-		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-			{#each data.debts as debt (debt.id)}
-				<Card.Root class="flex flex-col relative">
-					<a
-						href="/debts/{debt.id}"
-						class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-						aria-label={m.debts_view_aria({ name: debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }) })}
-					></a>
-					<Card.Content class="flex flex-1 flex-col space-y-3">
-						<div class="flex items-start justify-between gap-2">
-							<div class="min-w-0">
-								<p class="font-semibold text-base truncate">
-									{debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id })}
-								</p>
-								<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
-							</div>
-							<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
-						</div>
-
-						<div class="space-y-1 text-sm">
-							{#if debt.createdAt}
-								<div class="flex justify-between">
-									<span class="text-muted-foreground">{m.common_date()}</span>
-									<span class="font-medium tabular-nums">
-										{shortDate.format(new Date(debt.createdAt))}
-									</span>
-								</div>
-							{/if}
-							<div class="flex justify-between">
-								<span class="text-muted-foreground">{m.common_total()}</span>
-								<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
-							</div>
-							<div class="flex justify-between">
-								<span class="text-muted-foreground">{m.common_paid()}</span>
-								<span class="font-medium text-money-positive">
-									{fmt.format(debt.totalPaid)}
-								</span>
-							</div>
-							<div class="flex justify-between border-t pt-1">
-								<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
-								<span
-									class="font-bold {debt.status === 'PAID'
-										? 'text-money-positive'
-										: 'text-amber-600 dark:text-amber-400'}"
-								>
-									{fmt.format(debt.remaining)}
-								</span>
-							</div>
-						</div>
-
-						<div class="flex gap-2 mt-auto pt-1 relative z-1">
-							<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
-								{m.debts_payments()}
-							</Button>
-							<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>{m.common_edit()}</Button>
-							<Button variant="ghost" size="sm" class="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(debt)}>{m.common_delete()}</Button>
-						</div>
-					</Card.Content>
-				</Card.Root>
-			{/each}
-		</div>
+		<DataTableWrapper
+			columns={debtColumns}
+			data={visibleDebts}
+			pageSize={12}
+			filterPlaceholder={m.debts_search_placeholder()}
+			emptyMessage={m.debts_empty_title()}
+			mobileCard={debtCard}
+			{toolbar}
+			cellRenders={{ debtor: debtorCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
+			actionCell={rowActions}
+		/>
 	{/if}
+
+{#snippet toolbar()}
+	<div class="flex items-center gap-1 rounded-lg border p-0.5" role="group" aria-label={m.debts_filter_status()}>
+		{#each statusFilters as option (option.value)}
+			<Button
+				variant={statusFilter === option.value ? 'secondary' : 'ghost'}
+				size="sm"
+				onclick={() => (statusFilter = option.value)}
+				aria-pressed={statusFilter === option.value}
+			>
+				{option.label}
+			</Button>
+		{/each}
+	</div>
+{/snippet}
+
+{#snippet debtorCell(row: Row<Debt>)}
+	<a href="/debts/{row.original.id}" class="font-medium hover:underline">
+		{row.original.contactName ?? m.contact_number({ id: row.original.contactId ?? row.original.id })}
+	</a>
+{/snippet}
+
+{#snippet totalCell(row: Row<Debt>)}<span class="tabular-nums">{fmt.format(row.original.totalAmount)}</span>{/snippet}
+
+{#snippet paidCell(row: Row<Debt>)}
+	<span class="tabular-nums text-money-positive">{fmt.format(row.original.totalPaid)}</span>
+{/snippet}
+
+{#snippet remainingCell(row: Row<Debt>)}
+	<span class="font-medium tabular-nums {row.original.status === 'PAID' ? 'text-money-positive' : 'text-amber-600 dark:text-amber-400'}">
+		{fmt.format(row.original.remaining)}
+	</span>
+{/snippet}
+
+{#snippet statusCell(row: Row<Debt>)}
+	<Badge variant={statusBadgeVariant[row.original.status]}>{debtStatusLabel(row.original.status)}</Badge>
+{/snippet}
+
+{#snippet rowActions(row: Row<Debt>)}
+	<!-- Same hover-reveal treatment the Movimientos table uses. -->
+	<div class="flex justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100">
+		<Button variant="outline" size="sm" href="/debts/{row.original.id}">{m.debts_payments()}</Button>
+		<Button variant="ghost" size="sm" onclick={() => openEdit(row.original)}>{m.common_edit()}</Button>
+		<Button
+			variant="ghost"
+			size="sm"
+			class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+			onclick={() => openDelete(row.original)}
+		>
+			{m.common_delete()}
+		</Button>
+	</div>
+{/snippet}
+
+{#snippet debtCard(row: Row<Debt>)}
+	{@const debt = row.original}
+			<Card.Root class="flex flex-col relative">
+				<a
+					href="/debts/{debt.id}"
+					class="absolute inset-0 rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+					aria-label={m.debts_view_aria({ name: debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }) })}
+				></a>
+				<Card.Content class="flex flex-1 flex-col space-y-3">
+					<div class="flex items-start justify-between gap-2">
+						<div class="min-w-0">
+							<p class="font-semibold text-base truncate">
+								{debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id })}
+							</p>
+							<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
+						</div>
+						<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
+					</div>
+
+					<div class="space-y-1 text-sm">
+						{#if debt.createdAt}
+							<div class="flex justify-between">
+								<span class="text-muted-foreground">{m.common_date()}</span>
+								<span class="font-medium tabular-nums">
+									{shortDate.format(new Date(debt.createdAt))}
+								</span>
+							</div>
+						{/if}
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">{m.common_total()}</span>
+							<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
+						</div>
+						<div class="flex justify-between">
+							<span class="text-muted-foreground">{m.common_paid()}</span>
+							<span class="font-medium text-money-positive">
+								{fmt.format(debt.totalPaid)}
+							</span>
+						</div>
+						<div class="flex justify-between border-t pt-1">
+							<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
+							<span
+								class="font-bold {debt.status === 'PAID'
+									? 'text-money-positive'
+									: 'text-amber-600 dark:text-amber-400'}"
+							>
+								{fmt.format(debt.remaining)}
+							</span>
+						</div>
+					</div>
+
+					<div class="flex gap-2 mt-auto pt-1 relative z-1">
+						<Button variant="default" size="sm" class="flex-1" href="/debts/{debt.id}">
+							{m.debts_payments()}
+						</Button>
+						<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>{m.common_edit()}</Button>
+						<Button variant="ghost" size="sm" class="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(debt)}>{m.common_delete()}</Button>
+					</div>
+				</Card.Content>
+			</Card.Root>
+{/snippet}
 </div>
 
 <!-- Create / Edit dialog -->

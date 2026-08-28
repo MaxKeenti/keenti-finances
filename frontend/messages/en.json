@@ -922,5 +922,21 @@
 	"error_msi_end": "The MSI Plan could not be ended.",
 	"subscriptions_monthly_total": "Monthly total",
 	"subscriptions_yearly_total": "Yearly total",
-	"subscriptions_monthly_total_description": "Yearly subscriptions counted as a twelfth"
+	"subscriptions_monthly_total_description": "Yearly subscriptions counted as a twelfth",
+	"table_search_placeholder": "Search…",
+	"table_no_results": "No matches",
+	"table_loading": "Loading…",
+	"table_previous": "Previous",
+	"table_next": "Next",
+	"table_page_of": "Page {current} of {total}",
+	"table_sort_by": "Sort by {column}",
+	"table_select_all": "Select all rows",
+	"table_select_row": "Select row",
+	"table_result_count": "{count} of {total}",
+	"debts_filter_status": "Status",
+	"debts_filter_all": "All",
+	"debts_filter_active": "Active",
+	"debts_filter_paid": "Paid",
+	"debts_search_placeholder": "Search debtor or description…",
+	"debts_column_debtor": "Debtor"
 }

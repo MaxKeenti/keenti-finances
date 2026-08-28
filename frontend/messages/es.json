@@ -922,5 +922,21 @@
 	"error_msi_end": "No se pudo terminar el Plan MSI.",
 	"subscriptions_monthly_total": "Total mensual",
 	"subscriptions_yearly_total": "Total anual",
-	"subscriptions_monthly_total_description": "Las suscripciones anuales cuentan como un doceavo"
+	"subscriptions_monthly_total_description": "Las suscripciones anuales cuentan como un doceavo",
+	"table_search_placeholder": "Buscar…",
+	"table_no_results": "Sin resultados",
+	"table_loading": "Cargando…",
+	"table_previous": "Anterior",
+	"table_next": "Siguiente",
+	"table_page_of": "Página {current} de {total}",
+	"table_sort_by": "Ordenar por {column}",
+	"table_select_all": "Seleccionar todas las filas",
+	"table_select_row": "Seleccionar fila",
+	"table_result_count": "{count} de {total}",
+	"debts_filter_status": "Estado",
+	"debts_filter_all": "Todas",
+	"debts_filter_active": "Activas",
+	"debts_filter_paid": "Pagadas",
+	"debts_search_placeholder": "Busca por deudor o descripción…",
+	"debts_column_debtor": "Deudor"
 }
