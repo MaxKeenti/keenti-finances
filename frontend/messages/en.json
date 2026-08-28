@@ -919,5 +919,8 @@
 	"error_statement_confirm": "The statement could not be confirmed.",
 	"error_statement_reconfirm": "The statement could not be reconfirmed.",
 	"error_msi_create": "The MSI Plan could not be created. Use a Credit Financial Account expense whose amount divides evenly into the selected installments.",
-	"error_msi_end": "The MSI Plan could not be ended."
+	"error_msi_end": "The MSI Plan could not be ended.",
+	"subscriptions_monthly_total": "Monthly total",
+	"subscriptions_yearly_total": "Yearly total",
+	"subscriptions_monthly_total_description": "Yearly subscriptions counted as a twelfth"
 }

@@ -919,5 +919,8 @@
 	"error_statement_confirm": "No se pudo confirmar el estado de cuenta.",
 	"error_statement_reconfirm": "No se pudo reconfirmar el estado de cuenta.",
 	"error_msi_create": "No se pudo crear el Plan MSI. Usa un egreso de una Cuenta financiera de crédito cuyo importe se divida exactamente entre las mensualidades elegidas.",
-	"error_msi_end": "No se pudo terminar el Plan MSI."
+	"error_msi_end": "No se pudo terminar el Plan MSI.",
+	"subscriptions_monthly_total": "Total mensual",
+	"subscriptions_yearly_total": "Total anual",
+	"subscriptions_monthly_total_description": "Las suscripciones anuales cuentan como un doceavo"
 }

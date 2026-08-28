@@ -302,7 +302,7 @@
 								{m.debts_payments()}
 							</Button>
 							<Button variant="outline" size="sm" onclick={() => openEdit(debt)}>{m.common_edit()}</Button>
-							<Button variant="destructive" size="sm" onclick={() => openDelete(debt)}>{m.common_delete()}</Button>
+							<Button variant="ghost" size="sm" class="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(debt)}>{m.common_delete()}</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>
