@@ -116,7 +116,7 @@
 				</div>
 				<div>
 					<p class="text-muted-foreground">{m.common_paid()}</p>
-					<p class="text-lg font-semibold text-green-600 dark:text-green-400">
+					<p class="text-lg font-semibold text-money-positive">
 						{fmt.format(data.debt.totalPaid)}
 					</p>
 				</div>

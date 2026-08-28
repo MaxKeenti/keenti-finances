@@ -436,7 +436,7 @@
 					{@const transactionDescription = movement.relatedTransactionDescription || (movement.relatedTransactionId ? m.boxes_transaction_number({ id: movement.relatedTransactionId }) : '')}
 					<div class="grid gap-3 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
 						<div
-							class="flex size-9 items-center justify-center rounded-full {ingress ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}"
+							class="flex size-9 items-center justify-center rounded-full {ingress ? 'bg-green-500/10 text-money-positive' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}"
 						>
 							{#if movement.type === 'SPENDING'}
 								<ReceiptText class="size-4" aria-hidden="true" />
@@ -487,7 +487,7 @@
 							</p>
 						</div>
 						<div class="text-left sm:text-right">
-							<p class="font-semibold tabular-nums {ingress ? 'text-green-700 dark:text-green-400' : ''}">
+							<p class="font-semibold tabular-nums {ingress ? 'text-money-positive' : ''}">
 								{ingress ? '+' : '−'}{fmt.format(movement.amount)}
 							</p>
 							<p class="text-xs text-muted-foreground tabular-nums">

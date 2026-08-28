@@ -38,6 +38,19 @@
 	--chart-3: oklch(0.681 0.162 75.834);
 	--chart-4: oklch(0.554 0.135 66.442);
 	--chart-5: oklch(0.476 0.114 61.907);
+	/* Money direction, as *text*. Stepped per mode to clear 4.5:1 on that mode's
+	 * card surface — the old raw `text-green-600` / `text-red-600` pair was a
+	 * single value for both modes and failed the contrast floor in each. */
+	--money-positive: oklch(0.527 0.137 150.1);
+	--money-negative: oklch(0.543 0.174 29.7);
+	/* Money direction, as chart *marks*. Marks sit on a filled area rather than
+	 * being read as glyphs, so they take a lighter, more saturated step than the
+	 * text tokens above. Validated as a set against this mode's card surface:
+	 * CVD ΔE 7.2 (floor band — legal because the charts also carry a legend,
+	 * fixed bar order, and per-mark tooltips), contrast >= 3:1. */
+	--chart-income: oklch(0.529 0.180 142.5);
+	--chart-expense: oklch(0.623 0.191 24.9);
+	--chart-net: oklch(0.575 0.163 255.5);
 	/* Primitive radius root: every --radius-* step (and thus every rounded-*
 	 * utility on the shadcn primitives + the dock) scales from this single
 	 * value. Was 0rem (fully square); now matches the rounded dock language. */
@@ -68,7 +81,9 @@
 	--accent: oklch(0.795 0.184 var(--primary-hue));
 	--accent-foreground: oklch(0.421 0.095 var(--primary-hue));
 	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
+	/* Lifted from 10% — at 10% the card edge was invisible against the near-black
+	 * page, so every surface read as one flat plane. */
+	--border: oklch(1 0 0 / 14%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.553 0.013 58.071);
 	--chart-1: oklch(0.905 0.182 98.111);
@@ -76,6 +91,12 @@
 	--chart-3: oklch(0.681 0.162 75.834);
 	--chart-4: oklch(0.554 0.135 66.442);
 	--chart-5: oklch(0.476 0.114 61.907);
+	/* Dark steps are selected against the dark card, not flipped from light. */
+	--money-positive: oklch(0.773 0.153 163.2);
+	--money-negative: oklch(0.711 0.166 22.2);
+	--chart-income: oklch(0.529 0.180 142.5);
+	--chart-expense: oklch(0.669 0.159 22.3);
+	--chart-net: oklch(0.622 0.161 255.1);
 	--sidebar: oklch(0.216 0.006 56.043);
 	--sidebar-foreground: oklch(0.985 0.001 106.423);
 	--sidebar-primary: oklch(0.795 0.184 86.047);
@@ -102,6 +123,11 @@
 	--color-chart-3: var(--chart-3);
 	--color-chart-2: var(--chart-2);
 	--color-chart-1: var(--chart-1);
+	--color-money-positive: var(--money-positive);
+	--color-money-negative: var(--money-negative);
+	--color-chart-income: var(--chart-income);
+	--color-chart-expense: var(--chart-expense);
+	--color-chart-net: var(--chart-net);
 	--color-ring: var(--ring);
 	--color-input: var(--input);
 	--color-border: var(--border);

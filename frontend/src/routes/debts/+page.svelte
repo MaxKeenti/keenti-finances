@@ -281,7 +281,7 @@
 							</div>
 							<div class="flex justify-between">
 								<span class="text-muted-foreground">{m.common_paid()}</span>
-								<span class="font-medium text-green-600 dark:text-green-400">
+								<span class="font-medium text-money-positive">
 									{fmt.format(debt.totalPaid)}
 								</span>
 							</div>
@@ -289,7 +289,7 @@
 								<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
 								<span
 									class="font-bold {debt.status === 'PAID'
-										? 'text-green-600 dark:text-green-400'
+										? 'text-money-positive'
 										: 'text-amber-600 dark:text-amber-400'}"
 								>
 									{fmt.format(debt.remaining)}
@@ -424,7 +424,7 @@
 					</div>
 					<div>
 						<p class="text-muted-foreground">{m.common_applied()}</p>
-						<p class="font-semibold text-green-600 dark:text-green-400">{fmt.format(bulkResult.totalApplied)}</p>
+						<p class="font-semibold text-money-positive">{fmt.format(bulkResult.totalApplied)}</p>
 					</div>
 					<div>
 						<p class="text-muted-foreground">{m.common_unused()}</p>
@@ -446,7 +446,7 @@
 							{#each bulkResult.payments as item (item.debtId)}
 								<Table.Row>
 									<Table.Cell class="text-sm max-w-45 truncate">{item.description}</Table.Cell>
-									<Table.Cell class="text-right tabular-nums text-green-600 dark:text-green-400 font-medium">
+									<Table.Cell class="text-right tabular-nums text-money-positive font-medium">
 										{fmt.format(item.applied)}
 									</Table.Cell>
 									<Table.Cell class="text-right tabular-nums">

@@ -12,6 +12,20 @@ export function mxnFormatter(locale: string | undefined): Intl.NumberFormat {
 	return new Intl.NumberFormat(formatLocale(locale), { style: 'currency', currency: 'MXN' });
 }
 
+/**
+ * Axis-tick formatter: `1.2 k` rather than `$1,200.00`. Full precision on an
+ * axis is noise — the tick only has to locate the gridline, and the exact
+ * figure belongs in the tooltip. Deliberately *not* currency-styled: es-MX
+ * renders compact currency as `10 k$`, and the symbol earns nothing on an axis
+ * whose card title and tooltip already say what the amounts are.
+ */
+export function compactAmountFormatter(locale: string | undefined): Intl.NumberFormat {
+	return new Intl.NumberFormat(formatLocale(locale), {
+		notation: 'compact',
+		maximumFractionDigits: 1,
+	});
+}
+
 export function shortDateFormatter(locale: string | undefined): Intl.DateTimeFormat {
 	return new Intl.DateTimeFormat(formatLocale(locale), {
 		day: '2-digit',

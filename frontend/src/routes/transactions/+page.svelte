@@ -505,7 +505,7 @@
 							<Card.Content class="pt-4 pl-10">
 								<div class="flex items-start justify-between gap-2">
 									<a href="/transactions/{tx.id}" class="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><p class="truncate text-sm text-muted-foreground">{tx.description ?? '—'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></a>
-									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
+									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
 								</div>
 								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
 								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
@@ -612,7 +612,7 @@
 								{m.common_contact()} {@render sortIcon('contactName')}
 							</Button>
 						</Table.Head>
-						<Table.Head>Account</Table.Head>
+						<Table.Head>{m.common_account()}</Table.Head>
 						<Table.Head class="w-30 text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -620,15 +620,18 @@
 					{#each ledgerPageItems as item (item.key)}
 						{#if item.kind === 'Transaction'}
 							{@const tx = item.transaction}
-							<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
+							<Table.Row class="group/row" data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
 								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
 								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}</div></Table.Cell>
-								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
+								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
 								<Table.Cell>{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{:else}—{/if}</Table.Cell>
 								<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
 								<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
-								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div></Table.Cell>
+								<Table.Cell class="text-right"><!-- Row actions stay in the DOM and in tab order, but only paint on
+									     hover/focus: 20 rows x a permanent red Delete button made
+									     destruction the loudest thing on the page. -->
+									<div class="flex justify-end gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div></Table.Cell>
 							</Table.Row>
 						{:else}
 							{@const transfer = item.transfer}

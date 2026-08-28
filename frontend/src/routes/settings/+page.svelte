@@ -2,7 +2,6 @@
 	import {
 		Check,
 		ChevronRight,
-		DatabaseBackup,
 		Layers,
 		Loader2,
 		Trash2,
@@ -223,11 +222,6 @@
 		dockMagnification = !dockMagnification;
 		void persist();
 	}
-
-	function clearRecents() {
-		localStorage.removeItem('keenti.nav.recents');
-		window.dispatchEvent(new CustomEvent('keenti:nav-recents-cleared'));
-	}
 </script>
 
 <div class="max-w-4xl space-y-6">
@@ -438,12 +432,7 @@
 					<label class="flex items-center gap-2 text-sm font-medium">
 						<Checkbox checked={dockMagnification} onclick={toggleDockMagnification} />
 						<span>{m.settings_dock_magnification()}</span>
-					</label>
-					<Button variant="outline" onclick={clearRecents}>
-						<DatabaseBackup data-icon="inline-start" />
-						{m.settings_clear_recents()}
-					</Button>
-				</div>
+					</label>				</div>
 			</div>
 		</Card.Content>
 	</Card.Root>

@@ -258,7 +258,7 @@
 								{#if tx.categoryName}
 									<Badge variant="secondary">{tx.categoryName}</Badge>
 								{/if}
-								<span class="text-sm font-medium {tx.direction === 'EGRESS' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}">{transactionAmount(tx)}</span>
+								<span class="text-sm font-medium {tx.direction === 'EGRESS' ? 'text-money-negative' : 'text-money-positive'}">{transactionAmount(tx)}</span>
 							</div>
 						</li>
 					{/each}
@@ -455,7 +455,7 @@
 									{#if tx.categoryName}
 										<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 									{/if}
-									<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
+									<span class="text-sm font-medium text-money-positive">{transactionAmount(tx)}</span>
 								</span>
 							</button>
 						</li>
@@ -567,7 +567,7 @@
 										{#if tx.categoryName}
 											<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 										{/if}
-										<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
+										<span class="text-sm font-medium text-money-positive">{transactionAmount(tx)}</span>
 									</span>
 								</button>
 							</div>

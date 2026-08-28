@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { untrack } from 'svelte';
 	import {
 		LayoutDashboard,
 		ArrowLeftRight,
@@ -70,11 +69,7 @@
 	);
 	const dockMagnification = $derived($page.data.preferences?.dockMagnification ?? true);
 
-	const RECENTS_KEY = 'keenti.nav.recents';
-
 	let overflowOpen = $state(false);
-	let recentsLoaded = $state(false);
-	let recentHrefs = $state<string[]>([]);
 
 	function isPathMatch(href: string, pathname: string) {
 		return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
@@ -91,45 +86,6 @@
 		return isItemActiveForPath(item, $page.url.pathname);
 	}
 
-	function matchingNavItem(pathname: string) {
-		return dockNavItems.find((item) => isItemActiveForPath(item, pathname));
-	}
-
-	function readStoredRecents() {
-		try {
-			const value = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
-			return Array.isArray(value)
-				? value.filter((href): href is string => dockNavItems.some((item) => item.href === href)).slice(0, 4)
-				: [];
-		} catch {
-			return [];
-		}
-	}
-
-	$effect(() => {
-		if (!recentsLoaded) {
-			recentHrefs = readStoredRecents();
-			recentsLoaded = true;
-		}
-
-		const current = matchingNavItem($page.url.pathname);
-		if (!current) return;
-
-		const previous = untrack(() => recentHrefs);
-		const next = [current.href, ...previous.filter((href) => href !== current.href)].slice(0, 4);
-		if (next.join('|') === previous.join('|')) return;
-
-		recentHrefs = next;
-		localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-	});
-
-	const recentItems = $derived(
-		recentHrefs
-			.map((href) => dockNavItems.find((item) => item.href === href))
-			.filter((item): item is NavItem => Boolean(item))
-			.filter((item) => !isActive(item))
-			.slice(0, 3),
-	);
 
 	// macOS-style dock magnification: each icon's width follows a cosine bell
 	// centered on the cursor, so neighbours swell too and push each other apart
@@ -168,17 +124,7 @@
 		if (!dockMagnification) resetDockMagnify();
 	});
 
-	$effect(() => {
-		function handleRecentsCleared() {
-			recentHrefs = [];
-		}
-
-		window.addEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
-		return () => {
-			window.removeEventListener('keenti:nav-recents-cleared', handleRecentsCleared);
-			cancelAnimationFrame(magnifyRaf);
-		};
-	});
+	$effect(() => () => cancelAnimationFrame(magnifyRaf));
 </script>
 
 <nav
@@ -228,13 +174,6 @@
 		{#each dockNavItems as item}
 			{@render dockIcon(item.href, item.label, item.icon, isActive(item))}
 		{/each}
-
-		{#if recentItems.length > 0}
-			<Separator orientation="vertical" class="mx-0.5 h-7 self-center bg-sidebar-border" />
-			{#each recentItems as item}
-				{@render dockIcon(item.href, item.label, item.icon, false, true)}
-			{/each}
-		{/if}
 
 		<Separator orientation="vertical" class="mx-0.5 h-7 self-center bg-sidebar-border" />
 

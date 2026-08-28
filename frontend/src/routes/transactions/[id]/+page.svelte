@@ -157,8 +157,8 @@
 	const tx = $derived(data.transaction);
 	const amountClass = $derived(
 		tx.direction === 'INGRESS'
-			? 'text-green-600 dark:text-green-400'
-			: 'text-red-600 dark:text-red-400',
+			? 'text-money-positive'
+			: 'text-money-negative',
 	);
 
 	const directionLabel = $derived(
@@ -189,8 +189,8 @@
 				</div>
 				<span
 					class="text-xs font-medium rounded-full px-2.5 py-0.5 border {tx.direction === 'INGRESS'
-						? 'border-green-500 text-green-700 dark:text-green-400'
-						: 'border-red-500 text-red-700 dark:text-red-400'}"
+						? 'border-green-500 text-money-positive'
+						: 'border-red-500 text-money-negative'}"
 				>
 					{directionLabel}
 				</span>
