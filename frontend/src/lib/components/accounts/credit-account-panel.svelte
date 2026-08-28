@@ -10,7 +10,7 @@
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Account, CreditDetail } from './types';
 
@@ -86,7 +86,7 @@
 				{#each detail.statements as statement}
 					<div class="space-y-3 rounded-lg border bg-background p-4">
 						<div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-							<span>{m.account_statement_due_remaining({ date: statement.dueDate, amount: fmt.format(statement.outstandingBalance) })}</span>
+							<span>{m.account_statement_due_remaining({ date: formatDateOnly(statement.dueDate, locale), amount: fmt.format(statement.outstandingBalance) })}</span>
 							<span class="text-muted-foreground">{fmt.format(statement.officialAvoidInterest)} · {m.account_avoid_interest()}</span>
 						</div>
 						{#if statement.reconciliationMismatch}<Alert.Root><Alert.Description>{m.credit_mismatch({ amount: fmt.format(Math.abs(statement.mismatchAmount)) })}</Alert.Description></Alert.Root>{/if}

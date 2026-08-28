@@ -14,7 +14,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -160,7 +160,7 @@
 						<Table.Body>
 							{#each data.payments as payment (payment.id)}
 								<Table.Row>
-									<Table.Cell class="tabular-nums">{(payment as DebtPayment).paymentDate}</Table.Cell>
+									<Table.Cell class="tabular-nums">{formatDateOnly((payment as DebtPayment).paymentDate, data.preferences.locale)}</Table.Cell>
 									<Table.Cell class="text-right font-medium tabular-nums">
 										{fmt.format((payment as DebtPayment).amount)}
 									</Table.Cell>
