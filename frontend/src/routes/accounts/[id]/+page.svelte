@@ -15,7 +15,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { dateInTimeZone, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -30,7 +30,15 @@
 		CASH: m.account_kind_cash(), DEBIT: m.account_kind_debit(), CHECKING: m.account_kind_checking(), SAVINGS: m.account_kind_savings(), CREDIT: m.account_kind_credit(),
 	} as Record<string, string>)[data.account.kind] ?? data.account.kind);
 	const balanceLabel = $derived(data.account.kind === 'CREDIT' && data.account.balance < 0 ? fmt.format(Math.abs(data.account.balance)) : fmt.format(data.account.balance));
-	const availableCredit = $derived(data.credit?.settings ? Math.max(data.credit.settings.creditLimit + data.account.balance, 0) : 0);
+	// Without credit settings there is no limit to subtract from, so available
+	// credit is unknown rather than zero — rendering $0.00 claimed the User
+	// had none left. `null` makes the card show the same "set this up" hint
+	// the credit-limit card beside it already uses.
+	const availableCredit = $derived(
+		data.credit?.settings
+			? Math.max(data.credit.settings.creditLimit + data.account.balance, 0)
+			: null,
+	);
 	const purchaseItems = $derived(data.credit?.creditTransactions.map((transaction) => ({
 		value: String(transaction.id),
 		label: `${transaction.transactionDate} · ${transaction.description ?? m.account_expense()} · ${fmt.format(transaction.amount)}`,
@@ -78,8 +86,8 @@
 
 	<section class="grid gap-4 sm:grid-cols-3">
 		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? (data.account.balance > 0 ? m.account_credit_positive() : m.account_debt_current()) : m.account_current_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums"><span class:text-destructive={data.account.kind === 'CREDIT' && data.account.balance < 0}>{balanceLabel}</span></Card.Title></Card.Header></Card.Root>
-		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? m.account_available_credit() : m.account_opening_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? fmt.format(availableCredit) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
-		<Card.Root><Card.Header><Card.Description>{m.account_tracking_started()}</Card.Description><Card.Title class="text-2xl">{data.account.openingDate}</Card.Title></Card.Header></Card.Root>
+		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? m.account_available_credit() : m.account_opening_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? (availableCredit === null ? m.account_credit_limit_unset() : fmt.format(availableCredit)) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
+		<Card.Root><Card.Header><Card.Description>{m.account_tracking_started()}</Card.Description><Card.Title class="text-2xl">{formatDateOnly(data.account.openingDate, data.preferences.locale)}</Card.Title></Card.Header></Card.Root>
 	</section>
 
 	{#if data.credit}

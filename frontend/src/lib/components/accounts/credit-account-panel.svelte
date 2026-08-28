@@ -51,7 +51,7 @@
 
 		<section class="space-y-4" aria-labelledby={`confirm-statement-${account.id}`}>
 			<div>
-				<h3 id={`confirm-statement-${account.id}`} class="font-medium">{m.credit_confirm_title()}</h3>
+				<h2 id={`confirm-statement-${account.id}`} class="font-medium">{m.credit_confirm_title()}</h2>
 				<p class="text-sm text-muted-foreground">{m.credit_confirm_description()}</p>
 			</div>
 			<form method="POST" action="?/confirmCreditStatement" use:enhance class="space-y-4">
@@ -82,7 +82,7 @@
 
 		{#if detail?.statements?.length}
 			<section class="space-y-3 border-t pt-6" aria-labelledby={`confirmed-statements-${account.id}`}>
-				<h3 id={`confirmed-statements-${account.id}`} class="font-medium">{m.credit_confirmed_title()}</h3>
+				<h2 id={`confirmed-statements-${account.id}`} class="font-medium">{m.credit_confirmed_title()}</h2>
 				{#each detail.statements as statement}
 					<div class="space-y-3 rounded-lg border bg-background p-4">
 						<div class="flex flex-wrap items-center justify-between gap-2 text-sm">
