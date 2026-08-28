@@ -15,7 +15,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -24,7 +24,7 @@
 	let appearanceOpen = $state(false);
 	let accountHue = $state(untrack(() => data.account.hue));
 	let selectedPurchaseId = $state('');
-	let firstInstallmentDate = $state(new Date().toISOString().slice(0, 10));
+	let firstInstallmentDate = $state(untrack(() => dateInTimeZone(data.preferences.timeZone)));
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const accountKindLabel = $derived(({
 		CASH: m.account_kind_cash(), DEBIT: m.account_kind_debit(), CHECKING: m.account_kind_checking(), SAVINGS: m.account_kind_savings(), CREDIT: m.account_kind_credit(),

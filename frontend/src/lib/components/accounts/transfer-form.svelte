@@ -8,6 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { dateInTimeZone } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Account, Transfer } from './types';
 
@@ -17,12 +18,18 @@
 		locale,
 		initial,
 		primary = false,
+		timeZone,
+		onSuccess,
 	}: {
 		accounts: Account[];
 		action: string;
 		locale: string;
 		initial?: Transfer;
 		primary?: boolean;
+		/** IANA zone the User's "today" is resolved in. */
+		timeZone: string;
+		/** Called after a successful submit — lets a hosting dialog close itself. */
+		onSuccess?: () => void;
 	} = $props();
 
 	const initialTransfer = untrack(() => initial);
@@ -31,11 +38,29 @@
 	let sourceAccountId = $state(initialTransfer ? String(initialTransfer.sourceAccountId) : '');
 	let destinationAccountId = $state(initialTransfer ? String(initialTransfer.destinationAccountId) : '');
 	let amount = $state<string | number>(initialTransfer?.amount ?? '');
-	let transferDate = $state(initialTransfer?.transferDate ?? new Date().toISOString().slice(0, 10));
+	// `toISOString()` yields the UTC date. For a User at UTC-6 that is already
+	// tomorrow after 18:00 local, and the backend rejects future-dated
+	// Transfers — so every evening Transfer failed with a generic error.
+	let transferDate = $state(initialTransfer?.transferDate ?? untrack(() => dateInTimeZone(timeZone)));
 	let notes = $state(initialTransfer?.notes ?? '');
 </script>
 
-<form method="POST" {action} use:enhance class="grid gap-4 md:grid-cols-2">
+<form
+	method="POST"
+	{action}
+	use:enhance={() => async ({ result, update }) => {
+		if (result.type === 'success' && !initialTransfer) {
+			// Only the create form resets; the inline edit forms keep their values.
+			sourceAccountId = '';
+			destinationAccountId = '';
+			amount = '';
+			notes = '';
+			onSuccess?.();
+		}
+		await update();
+	}}
+	class="grid gap-4 md:grid-cols-2"
+>
 	{#if initialTransfer}<input type="hidden" name="id" value={initialTransfer.id} />{/if}
 	<div class="grid gap-2">
 		<Label for={`${fieldPrefix}-source`}>{m.transfer_source()}</Label>
