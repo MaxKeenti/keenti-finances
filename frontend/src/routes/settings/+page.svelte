@@ -15,6 +15,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { applyThemeMode, type ThemeMode } from '$lib/theme.svelte';
 	import type { PageData } from './$types';
 	import { invalidateAll } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
@@ -40,6 +41,11 @@
 	const localeItems = [
 		{ value: 'es', label: m.settings_language_spanish() },
 		{ value: 'en', label: m.settings_language_english() },
+	];
+	const themeModeItems: { value: ThemeMode; label: string }[] = [
+		{ value: 'system', label: m.settings_theme_system() },
+		{ value: 'light', label: m.settings_theme_light() },
+		{ value: 'dark', label: m.settings_theme_dark() },
 	];
 	const timeZoneItems = $derived(
 		data.timeZones.map((value) => ({
@@ -105,6 +111,7 @@
 	let mobilePinnedNavItems = $state(normalizePinnedNavItems(initialPreferences.mobilePinnedNavItems));
 	let dockMagnification = $state(initialPreferences.dockMagnification);
 	let timeZone = $state(initialPreferences.timeZone);
+	let themeMode = $state<ThemeMode>(initialPreferences.themeMode);
 	let saveState = $state<SaveState>('idle');
 	let savedTimer: ReturnType<typeof setTimeout> | null = null;
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -144,6 +151,7 @@
 					mobilePinnedNavItems: mobilePinnedNavItems.join(','),
 					dockMagnification,
 					timeZone,
+					themeMode,
 				}),
 			});
 			if (!res.ok) {
@@ -186,6 +194,14 @@
 	function onLocaleChange(next: string) {
 		locale = next;
 		void persist({ reloadLocale: true });
+	}
+
+	function onThemeModeChange(next: ThemeMode) {
+		themeMode = next;
+		// Same shape as applyLocally above: repaint now, persist after. The layout
+		// effect re-asserts the identical result once invalidateAll lands.
+		applyThemeMode(next);
+		void persist();
 	}
 
 	function onTimeZoneChange(next: string) {
@@ -327,6 +343,25 @@
 							/>
 							<p class="mt-1 text-sm">{m.settings_font_preview_long()}</p>
 						</div>
+					</div>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>{m.settings_theme()}</Card.Title>
+					<Card.Description>{m.settings_theme_description()}</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<div class="grid gap-1.5">
+						<Label for="theme-mode">{m.settings_theme_mode()}</Label>
+						<NativeSelect
+							id="theme-mode"
+							name="theme-mode"
+							value={themeMode}
+							onValueChange={(value) => onThemeModeChange(value as ThemeMode)}
+							items={themeModeItems}
+						/>
 					</div>
 				</Card.Content>
 			</Card.Root>

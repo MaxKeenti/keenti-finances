@@ -39,7 +39,8 @@ class UserPreferencesResourceTest {
             .body("transactionSortDirection", equalTo(UserEntity.DEFAULT_TRANSACTION_SORT_DIRECTION))
             .body("mobilePinnedNavItems", equalTo(UserEntity.DEFAULT_MOBILE_PINNED_NAV_ITEMS))
             .body("dockMagnification", equalTo(UserEntity.DEFAULT_DOCK_MAGNIFICATION))
-            .body("timeZone", equalTo(UserEntity.DEFAULT_TIME_ZONE));
+            .body("timeZone", equalTo(UserEntity.DEFAULT_TIME_ZONE))
+            .body("themeMode", equalTo(UserEntity.DEFAULT_THEME_MODE));
     }
 
     @Test
@@ -249,6 +250,54 @@ class UserPreferencesResourceTest {
             .statusCode(400);
     }
 
+    @Test
+    void get_userWhoNeverSetThemeMode_returnsSystemDefault() {
+        given()
+            .header("X-WorkOS-User-Id", "test-prefs-theme-untouched")
+            .when().get("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("themeMode", equalTo("system"));
+    }
+
+    @Test
+    void put_themeMode_persistsAndRoundTrips() {
+        String workosId = "test-prefs-theme-persists";
+        String body = preferencesJson(100, "Fraunces", "Geist", "es", 25, "transactionDate", "desc",
+            "/transactions,/subscriptions,/debts", true, "dark");
+
+        given()
+            .header("X-WorkOS-User-Id", workosId)
+            .contentType(ContentType.JSON)
+            .body(body)
+            .when().put("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("themeMode", equalTo("dark"));
+
+        // A subsequent GET sees the persisted mode.
+        given()
+            .header("X-WorkOS-User-Id", workosId)
+            .when().get("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("themeMode", equalTo("dark"));
+    }
+
+    @Test
+    void put_disallowedThemeMode_returns400() {
+        String body = preferencesJson(100, "Fraunces", "Geist", "es", 25, "transactionDate", "desc",
+            "/transactions,/subscriptions,/debts", true, "neon");
+
+        given()
+            .header("X-WorkOS-User-Id", "test-prefs-bad-theme")
+            .contentType(ContentType.JSON)
+            .body(body)
+            .when().put("/api/user/preferences")
+            .then()
+            .statusCode(400);
+    }
+
     private static String preferencesJson(int primaryHue, String headingFont, String bodyFont) {
         return preferencesJson(primaryHue, headingFont, bodyFont, "es", 25, "transactionDate", "desc",
             "/transactions,/subscriptions,/debts", true);
@@ -265,6 +314,23 @@ class UserPreferencesResourceTest {
         String mobilePinnedNavItems,
         boolean dockMagnification
     ) {
+        return preferencesJson(primaryHue, headingFont, bodyFont, locale, transactionPageSize,
+            transactionSortBy, transactionSortDirection, mobilePinnedNavItems, dockMagnification,
+            UserEntity.DEFAULT_THEME_MODE);
+    }
+
+    private static String preferencesJson(
+        int primaryHue,
+        String headingFont,
+        String bodyFont,
+        String locale,
+        int transactionPageSize,
+        String transactionSortBy,
+        String transactionSortDirection,
+        String mobilePinnedNavItems,
+        boolean dockMagnification,
+        String themeMode
+    ) {
         return """
             {
               "primaryHue": %d,
@@ -275,7 +341,8 @@ class UserPreferencesResourceTest {
               "transactionSortBy": "%s",
               "transactionSortDirection": "%s",
               "mobilePinnedNavItems": "%s",
-              "dockMagnification": %s
+              "dockMagnification": %s,
+              "themeMode": "%s"
             }
             """.formatted(
                 primaryHue,
@@ -286,7 +353,8 @@ class UserPreferencesResourceTest {
                 transactionSortBy,
                 transactionSortDirection,
                 mobilePinnedNavItems,
-                dockMagnification
+                dockMagnification,
+                themeMode
             );
     }
 }

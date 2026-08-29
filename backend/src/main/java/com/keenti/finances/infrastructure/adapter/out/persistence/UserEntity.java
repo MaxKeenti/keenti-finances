@@ -32,6 +32,7 @@ public class UserEntity extends PanacheEntityBase {
     public static final String DEFAULT_MOBILE_PINNED_NAV_ITEMS = "/transactions,/subscriptions,/debts";
     public static final boolean DEFAULT_DOCK_MAGNIFICATION = true;
     public static final String DEFAULT_TIME_ZONE = "America/Mexico_City";
+    public static final String DEFAULT_THEME_MODE = "system";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -75,6 +76,9 @@ public class UserEntity extends PanacheEntityBase {
 
     @Column(name = "time_zone", nullable = false, length = 64)
     public String timeZone = DEFAULT_TIME_ZONE;
+
+    @Column(name = "theme_mode", nullable = false, length = 6)
+    public String themeMode = DEFAULT_THEME_MODE;
 
     @Column(name = "account_tracking_activated_at")
     public LocalDate accountTrackingActivatedAt;

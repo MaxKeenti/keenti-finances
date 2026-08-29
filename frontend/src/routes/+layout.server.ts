@@ -1,6 +1,10 @@
 import type { LayoutServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { EMPTY_BALANCE_SUMMARY, type BalanceSummary } from '$lib/types/boxes';
+// `import type`, not an inline type specifier: under verbatimModuleSyntax the
+// latter would still emit a runtime import and drag the rune module into the
+// server bundle. This keeps the ThemeMode union defined in exactly one place.
+import type { ThemeMode } from '$lib/theme.svelte';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -15,6 +19,7 @@ const DEFAULT_PREFERENCES = {
 	mobilePinnedNavItems: '/transactions,/subscriptions,/debts',
 	dockMagnification: true,
 	timeZone: 'America/Mexico_City',
+	themeMode: 'system',
 } as const;
 
 type Preferences = {
@@ -28,13 +33,21 @@ type Preferences = {
 	mobilePinnedNavItems: string;
 	dockMagnification: boolean;
 	timeZone: string;
+	themeMode: ThemeMode;
 };
+
+// `preferences` is a cast over untyped JSON, so narrow before trusting it.
+function asThemeMode(value: unknown): ThemeMode | null {
+	return value === 'light' || value === 'dark' || value === 'system' ? value : null;
+}
 
 export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) => {
 	const cookieLocale = cookies.get('PARAGLIDE_LOCALE');
+	const cookieThemeMode = asThemeMode(cookies.get('KEENTI_THEME'));
 	let preferences: Preferences = {
 		...DEFAULT_PREFERENCES,
 		locale: cookieLocale === 'en' ? 'en' : DEFAULT_PREFERENCES.locale,
+		themeMode: cookieThemeMode ?? DEFAULT_PREFERENCES.themeMode,
 	};
 	let balanceSummary: BalanceSummary = EMPTY_BALANCE_SUMMARY;
 
@@ -66,6 +79,15 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 					httpOnly: false,
 				});
 			}
+			// Mirrored to a cookie so hooks.server.ts and the inline script in
+			// app.html can resolve the scheme before any JS bundle loads.
+			preferences.themeMode = asThemeMode(preferences.themeMode) ?? DEFAULT_PREFERENCES.themeMode;
+			cookies.set('KEENTI_THEME', preferences.themeMode, {
+				path: '/',
+				sameSite: 'lax',
+				maxAge: 34_560_000,
+				httpOnly: false,
+			});
 		} else {
 			console.error('[layout] failed to load user preferences; using defaults');
 		}

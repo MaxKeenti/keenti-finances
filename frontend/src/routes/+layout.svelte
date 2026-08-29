@@ -15,7 +15,9 @@
 
 	const { children, data }: { children: any; data: LayoutData } = $props();
 
-	initTheme();
+	// Passed as a getter, not a value, so a mode change in settings repaints
+	// <html> as soon as the new preference lands in `data`.
+	initTheme(() => data.preferences.themeMode);
 
 	// Map user-facing font name → CSS font-family string.
 	// Per Q15(a): 3 body fonts × 2 heading fonts.

@@ -108,16 +108,21 @@ export const handle: Handle = ({ event, resolve }) =>
 		event.request = localizedRequest;
 		return authHandle({
 			event,
-			resolve: (event, options) =>
-				resolve(event, {
+			resolve: (event, options) => {
+				// Read once up front rather than on every streamed chunk. `dark` is the
+				// only class worth emitting server-side: light is the absence of it.
+				const themeClass = event.cookies.get('KEENTI_THEME') === 'dark' ? 'dark' : '';
+				return resolve(event, {
 					...options,
 					transformPageChunk: ({ html, done }) => {
 						const transformed = html
 							.replace('%lang%', locale)
-							.replace('%dir%', getTextDirection(locale));
+							.replace('%dir%', getTextDirection(locale))
+							.replace('%theme%', themeClass);
 						return options?.transformPageChunk?.({ html: transformed, done }) ?? transformed;
 					},
-				}),
+				});
+			},
 		});
 	});
 
