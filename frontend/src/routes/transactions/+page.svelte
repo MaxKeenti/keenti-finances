@@ -505,10 +505,14 @@
 						</div>
 						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
 							<Card.Content class="pt-4 pl-10">
-								<div class="flex items-start justify-between gap-2">
-									<a href="/transactions/{tx.id}" class="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><p class="truncate text-sm text-muted-foreground">{tx.description ?? '—'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></a>
-									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
-								</div>
+								<!-- One link across the whole row rather than one on the
+								     description and a second on the amount: two links to the
+								     same record read as two destinations, and the amount on
+								     its own was a 20px-tall target on a phone. -->
+								<a href="/transactions/{tx.id}" class="flex items-start justify-between gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<span class="min-w-0 flex-1"><span class="block truncate text-sm text-muted-foreground">{tx.description ?? '—'}</span><span class="mt-0.5 block text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</span></span>
+									<span class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</span>
+								</a>
 								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
 								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
 							</Card.Content>

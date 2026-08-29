@@ -21,7 +21,10 @@
 				lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
 				icon: "size-8",
 				"icon-xs": "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-				"icon-sm": "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
+				// 28px is a comfortable target for a mouse and a cramped one for a
+				// thumb, so below `md` — where the app already switches to its touch
+				// layouts — these grow to the 44px minimum. Desktop is unchanged.
+				"icon-sm": "size-11 md:size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
 				"icon-lg": "size-9",
 			},
 		},
