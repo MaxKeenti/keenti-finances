@@ -109,12 +109,17 @@ export const handle: Handle = ({ event, resolve }) =>
 		return authHandle({
 			event,
 			resolve: (event, options) => {
-				// Read once up front rather than on every streamed chunk. `dark` is the
-				// only class worth emitting server-side: light is the absence of it.
-				const themeClass = event.cookies.get('KEENTI_THEME') === 'dark' ? 'dark' : '';
+				// Resolved on the first chunk rather than up front, then reused for the
+				// rest of the stream. `+layout.server.ts` mirrors the stored preference
+				// into KEENTI_THEME during load, which runs after this callback is built
+				// but before any HTML exists — reading eagerly would miss it and stamp
+				// light on every user's first request of a session. `dark` is the only
+				// class worth emitting server-side: light is the absence of it.
+				let themeClass: string | null = null;
 				return resolve(event, {
 					...options,
 					transformPageChunk: ({ html, done }) => {
+						themeClass ??= event.cookies.get('KEENTI_THEME') === 'dark' ? 'dark' : '';
 						const transformed = html
 							.replace('%lang%', locale)
 							.replace('%dir%', getTextDirection(locale))
