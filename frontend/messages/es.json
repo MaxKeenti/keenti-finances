@@ -944,5 +944,9 @@
 	"debts_filter_active": "Activas",
 	"debts_filter_paid": "Pagadas",
 	"debts_search_placeholder": "Busca por deudor o descripción…",
+	"debts_filter_date_from": "Desde",
+	"debts_filter_date_to": "Hasta",
+	"debts_filter_date_range": "Filtrar por fecha de alta",
+	"debts_filter_date_clear": "Limpiar fechas",
 	"debts_column_debtor": "Deudor"
 }

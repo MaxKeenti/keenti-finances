@@ -944,5 +944,9 @@
 	"debts_filter_active": "Active",
 	"debts_filter_paid": "Paid",
 	"debts_search_placeholder": "Search debtor or description…",
+	"debts_filter_date_from": "From",
+	"debts_filter_date_to": "To",
+	"debts_filter_date_range": "Filter by date added",
+	"debts_filter_date_clear": "Clear dates",
 	"debts_column_debtor": "Debtor"
 }
