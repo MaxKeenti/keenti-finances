@@ -117,7 +117,7 @@
 										{:else if header.column.getCanSort()}
 											<button
 												type="button"
-												class="inline-flex items-center gap-1 font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+												class="inline-flex h-7 items-center gap-1 font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
 												onclick={header.column.getToggleSortingHandler()}
 												aria-label={m.table_sort_by({ column: header.column.columnDef.header as string })}
 											>

@@ -120,6 +120,8 @@
 	}
 </script>
 
+<svelte:head><title>{m.boxes_title()} · Keenti</title></svelte:head>
+
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>

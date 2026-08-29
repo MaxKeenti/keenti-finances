@@ -425,6 +425,8 @@
 
 </script>
 
+<svelte:head><title>{m.transactions_title()} · Keenti</title></svelte:head>
+
 {#snippet sortIcon(column: TransactionSortBy)}
 	{#if data.transactionPage.sortBy === column}
 		{#if data.transactionPage.sortDirection === 'asc'}

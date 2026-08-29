@@ -224,6 +224,8 @@
 	}
 </script>
 
+<svelte:head><title>{m.settings_title()} · Keenti</title></svelte:head>
+
 <div class="max-w-4xl space-y-6">
 	<div class="flex items-start justify-between gap-4">
 		<div>

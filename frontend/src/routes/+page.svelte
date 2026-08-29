@@ -20,9 +20,17 @@
 	const accountWarnings = $derived(data.accountWarnings);
 </script>
 
+<svelte:head><title>{m.nav_dashboard()} · Keenti</title></svelte:head>
+
 <!-- No page padding here: the app shell already pads its content well. The
      duplicated `p-6` this file used to carry stacked on top of it. -->
 <div class="space-y-8">
+	<!-- Every other route shows its name as a visible h1, but the dashboard is
+	     the one page whose name adds nothing on screen — the dock already marks
+	     it as current, and its first rows are the figures the page exists for.
+	     Kept for the document outline and for screen readers only. -->
+	<h1 class="sr-only">{m.nav_dashboard()}</h1>
+
 	{#if isUnreconciled || accountWarnings.length > 0}
 		<div class="space-y-3">
 			{#if isUnreconciled}

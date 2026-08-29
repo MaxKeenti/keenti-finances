@@ -161,6 +161,8 @@
 	const yearlyTotal = $derived(monthlyTotal * 12);
 </script>
 
+<svelte:head><title>{m.subscriptions_title()} · Keenti</title></svelte:head>
+
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>

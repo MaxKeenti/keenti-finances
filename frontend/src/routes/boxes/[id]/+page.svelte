@@ -208,6 +208,8 @@
 	}
 </script>
 
+<svelte:head><title>{data.box.name} · {m.boxes_title()} · Keenti</title></svelte:head>
+
 <div class="mx-auto max-w-4xl space-y-6">
 	<Button variant="link" href="/boxes" class="h-auto p-0 text-muted-foreground hover:text-foreground">
 		<ArrowLeft data-icon="inline-start" />
