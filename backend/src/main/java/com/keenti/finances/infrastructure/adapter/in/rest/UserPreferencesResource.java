@@ -68,6 +68,7 @@ public class UserPreferencesResource {
         if (request.timeZone() != null && !request.timeZone().isBlank()) {
             user.timeZone = request.timeZone();
         }
+        user.themeMode = request.themeMode();
         return Response.ok(toResponse(user)).build();
     }
 
@@ -82,7 +83,8 @@ public class UserPreferencesResource {
             user.transactionSortDirection,
             user.mobilePinnedNavItems,
             user.dockMagnification,
-            user.timeZone
+            user.timeZone,
+            user.themeMode
         );
     }
 

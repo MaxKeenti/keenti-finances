@@ -17,7 +17,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -65,7 +65,7 @@
 	let memberTargetSub = $state<Subscription | null>(null);
 	let selectedContactId = $state('');
 
-	const today = new Date().toISOString().split('T')[0];
+	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
 	const sf = superForm(data.form, {
 		dataType: 'json',
@@ -149,7 +149,19 @@
 		SHARED: 'warning',
 	};
 
+	// Three subscriptions and no total anywhere — the recurring commitment is
+	// the one number this page exists to convey. Yearly plans are normalised
+	// to a twelfth so the two figures are comparable.
+	const monthlyTotal = $derived(
+		data.subscriptions.reduce(
+			(sum, sub) => sum + (sub.billingCycle === 'YEARLY' ? sub.cost / 12 : sub.cost),
+			0,
+		),
+	);
+	const yearlyTotal = $derived(monthlyTotal * 12);
 </script>
+
+<svelte:head><title>{m.subscriptions_title()} · Keenti</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
@@ -159,6 +171,22 @@
 		</div>
 		<Button onclick={openCreate}>{m.subscriptions_new()}</Button>
 	</div>
+
+	{#if data.subscriptions.length > 0}
+		<Card.Root>
+			<Card.Content class="grid gap-4 sm:grid-cols-2">
+				<div>
+					<p class="text-xs text-muted-foreground">{m.subscriptions_monthly_total()}</p>
+					<p class="text-2xl font-semibold tabular-nums">{fmt.format(monthlyTotal)}</p>
+					<p class="mt-1 text-xs text-muted-foreground">{m.subscriptions_monthly_total_description()}</p>
+				</div>
+				<div class="sm:border-l sm:pl-4">
+					<p class="text-xs text-muted-foreground">{m.subscriptions_yearly_total()}</p>
+					<p class="text-2xl font-semibold tabular-nums">{fmt.format(yearlyTotal)}</p>
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	{#if data.subscriptions.length === 0}
 		<Empty.Root class="border">
@@ -197,13 +225,15 @@
 							{/if}
 						</div>
 
-						<div class="flex gap-2 mt-auto pt-1 relative z-[1]">
+						<!-- Buttons size to their labels; `flex-1` on Edit alone made it
+						     hog the row while its neighbours stayed small. -->
+						<div class="flex flex-wrap items-center gap-2 mt-auto pt-1 relative z-[1]">
 							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">{m.common_view()}</Button>
-							<Button variant="outline" size="sm" class="flex-1" onclick={() => openEdit(sub)}>{m.common_edit()}</Button>
+							<Button variant="outline" size="sm" onclick={() => openEdit(sub)}>{m.common_edit()}</Button>
 							{#if sub.type === 'SHARED'}
-								<Button variant="outline" size="sm" class="flex-1" onclick={() => openMembers(sub)}>{m.subscriptions_members()}</Button>
+								<Button variant="outline" size="sm" onclick={() => openMembers(sub)}>{m.subscriptions_members()}</Button>
 							{/if}
-							<Button variant="destructive" size="sm" onclick={() => openDelete(sub)}>{m.common_delete()}</Button>
+							<Button variant="ghost" size="sm" class="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(sub)}>{m.common_delete()}</Button>
 						</div>
 					</Card.Content>
 				</Card.Root>

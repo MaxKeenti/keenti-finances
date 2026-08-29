@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
+import { m } from '$lib/paraglide/messages.js';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -43,13 +44,13 @@ export const actions: Actions = {
 		const name = String(data.get('name') ?? '').trim();
 		const kind = String(data.get('kind') ?? '').toUpperCase();
 		const validKinds = new Set(['CASH', 'DEBIT', 'CHECKING', 'SAVINGS', 'CREDIT']);
-		if (!name) return fail(400, { message: 'Account name is required.' });
-		if (!validKinds.has(kind)) return fail(400, { message: 'Choose a valid account kind.' });
+		if (!name) return fail(400, { message: m.error_account_name_required() });
+		if (!validKinds.has(kind)) return fail(400, { message: m.error_account_kind_invalid() });
 
 		const openingBalance = Number(data.get('openingBalance') ?? 0);
 		const hue = Number(data.get('hue'));
-		if (!Number.isFinite(openingBalance)) return fail(400, { message: 'Opening balance must be a valid amount.' });
-		if (!Number.isInteger(hue) || hue < 0 || hue > 359) return fail(400, { message: 'Choose a valid account colour.' });
+		if (!Number.isFinite(openingBalance)) return fail(400, { message: m.error_opening_balance_invalid() });
+		if (!Number.isInteger(hue) || hue < 0 || hue > 359) return fail(400, { message: m.error_account_colour_invalid() });
 		const response = await fetch(`${BACKEND}/api/accounts`, {
 			method: 'POST',
 			headers: headers(cookies, true),
@@ -57,7 +58,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok) {
 			return fail(response.status === 409 ? 409 : 400, {
-				message: response.status === 409 ? 'An active account with that name already exists.' : 'The account could not be created.',
+				message: response.status === 409 ? m.error_account_exists() : m.account_create_error(),
 			});
 		}
 		return { accountCreated: true };
@@ -68,7 +69,7 @@ export const actions: Actions = {
 		try {
 			accounts = JSON.parse(String(data.get('accounts') ?? '[]'));
 		} catch {
-			return fail(400, { message: 'Add at least one valid account.' });
+			return fail(400, { message: m.error_activation_needs_account() });
 		}
 		const response = await fetch(`${BACKEND}/api/accounts/activate`, {
 			method: 'POST',
@@ -80,7 +81,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The opening balances must match your current Net Balance exactly.',
+				message: m.error_opening_balances_mismatch(),
 			});
 		return { activated: true };
 	},
@@ -99,7 +100,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The transfer could not be recorded.',
+				message: m.error_transfer_create(),
 			});
 		return { transferred: true };
 	},
@@ -119,7 +120,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The transfer could not be updated.',
+				message: m.error_transfer_update(),
 			});
 		return { transferUpdated: true };
 	},
@@ -129,7 +130,7 @@ export const actions: Actions = {
 			method: 'DELETE',
 			headers: headers(cookies),
 		});
-		if (!response.ok) return fail(400, { message: 'The transfer could not be deleted.' });
+		if (!response.ok) return fail(400, { message: m.error_transfer_delete() });
 		return { transferDeleted: true };
 	},
 };

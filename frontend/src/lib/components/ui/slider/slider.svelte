@@ -43,11 +43,13 @@ get along, so we shut typescript up by casting `value` to `never`.
 			/>
 		</span>
 		{#each thumbItems as thumb (thumb.index)}
+			<!-- The 12px thumb keeps its size; only its hit area grows, to 44px
+			     below `md` where the drag is a thumb rather than a cursor. -->
 			<SliderPrimitive.Thumb
 				data-slot="slider-thumb"
 				index={thumb.index}
 				aria-label={thumbLabel}
-				class="border-ring ring-ring/50 relative size-3 rounded-full border bg-white transition-[color,box-shadow] after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
+				class="border-ring ring-ring/50 relative size-3 rounded-full border bg-white transition-[color,box-shadow] after:absolute after:-inset-4 md:after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
 			/>
 		{/each}
 	{/snippet}

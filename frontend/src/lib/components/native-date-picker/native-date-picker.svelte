@@ -6,7 +6,9 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { useIsMobile } from '$lib/use-mobile.svelte';
 	import { cn } from '$lib/utils';
+	import { formatDateOnly } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { getLocale } from '$lib/paraglide/runtime';
 
 	let {
 		name,
@@ -23,6 +25,12 @@
 	} = $props();
 
 	const isMobile = useIsMobile();
+
+	// The trigger is the only place the chosen date is shown on desktop — the
+	// mobile branch hands display off to the browser's own date input. Format it
+	// the way the rest of the app formats dates; the hidden input below keeps
+	// submitting the ISO value, so nothing downstream sees this.
+	const label = $derived(value ? formatDateOnly(value, getLocale()) : m.common_pick_date());
 
 	const calDate = $derived.by(() => {
 		try {
@@ -53,7 +61,7 @@
 			{...rest}
 		>
 			<CalendarIcon class="size-4 shrink-0 text-muted-foreground" />
-			{value || m.common_pick_date()}
+			{label}
 		</Popover.Trigger>
 		<Popover.Content class="w-auto p-0" align="start">
 			<Calendar

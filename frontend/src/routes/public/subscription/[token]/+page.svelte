@@ -57,6 +57,8 @@
 	const hasPayments = $derived(data.subscription.members.some((m) => m.payments.length > 0));
 </script>
 
+<svelte:head><title>{data.subscription.subscriptionName} · {m.subscriptions_title()} · Keenti</title></svelte:head>
+
 <div class="min-h-screen bg-background py-10 px-4">
 	<div class="mx-auto max-w-3xl space-y-6">
 		<!-- Header card -->

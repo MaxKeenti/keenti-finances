@@ -14,7 +14,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -86,6 +86,8 @@
 	}
 </script>
 
+<svelte:head><title>{data.debt.contactName ?? (data.debt.contactId != null ? m.contact_number({ id: data.debt.contactId }) : m.entity_contact())} · {m.debts_title()} · Keenti</title></svelte:head>
+
 <div class="space-y-6 max-w-3xl">
 	<!-- Back link -->
 	<Button variant="link" href="/debts" class="h-auto p-0 text-muted-foreground hover:text-foreground">
@@ -116,7 +118,7 @@
 				</div>
 				<div>
 					<p class="text-muted-foreground">{m.common_paid()}</p>
-					<p class="text-lg font-semibold text-green-600 dark:text-green-400">
+					<p class="text-lg font-semibold text-money-positive">
 						{fmt.format(data.debt.totalPaid)}
 					</p>
 				</div>
@@ -160,7 +162,7 @@
 						<Table.Body>
 							{#each data.payments as payment (payment.id)}
 								<Table.Row>
-									<Table.Cell class="tabular-nums">{(payment as DebtPayment).paymentDate}</Table.Cell>
+									<Table.Cell class="tabular-nums">{formatDateOnly((payment as DebtPayment).paymentDate, data.preferences.locale)}</Table.Cell>
 									<Table.Cell class="text-right font-medium tabular-nums">
 										{fmt.format((payment as DebtPayment).amount)}
 									</Table.Cell>
@@ -257,8 +259,8 @@
 							<Form.Control>
 								{#snippet children({ props })}
 									{@const { name: fieldName, ...triggerProps } = props}
-									<Form.Label>Receiving Account</Form.Label>
-									<NativeSelect name={fieldName} value={$form.accountId ? String($form.accountId) : ''} onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }} placeholder="Select an account" items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
+									<Form.Label>{m.debts_receiving_account()}</Form.Label>
+									<NativeSelect name={fieldName} value={$form.accountId ? String($form.accountId) : ''} onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
 								{/snippet}
 							</Form.Control>
 							<Form.FieldErrors />

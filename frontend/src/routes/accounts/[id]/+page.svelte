@@ -15,7 +15,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -24,13 +24,21 @@
 	let appearanceOpen = $state(false);
 	let accountHue = $state(untrack(() => data.account.hue));
 	let selectedPurchaseId = $state('');
-	let firstInstallmentDate = $state(new Date().toISOString().slice(0, 10));
+	let firstInstallmentDate = $state(untrack(() => dateInTimeZone(data.preferences.timeZone)));
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	const accountKindLabel = $derived(({
 		CASH: m.account_kind_cash(), DEBIT: m.account_kind_debit(), CHECKING: m.account_kind_checking(), SAVINGS: m.account_kind_savings(), CREDIT: m.account_kind_credit(),
 	} as Record<string, string>)[data.account.kind] ?? data.account.kind);
 	const balanceLabel = $derived(data.account.kind === 'CREDIT' && data.account.balance < 0 ? fmt.format(Math.abs(data.account.balance)) : fmt.format(data.account.balance));
-	const availableCredit = $derived(data.credit?.settings ? Math.max(data.credit.settings.creditLimit + data.account.balance, 0) : 0);
+	// Without credit settings there is no limit to subtract from, so available
+	// credit is unknown rather than zero — rendering $0.00 claimed the User
+	// had none left. `null` makes the card show the same "set this up" hint
+	// the credit-limit card beside it already uses.
+	const availableCredit = $derived(
+		data.credit?.settings
+			? Math.max(data.credit.settings.creditLimit + data.account.balance, 0)
+			: null,
+	);
 	const purchaseItems = $derived(data.credit?.creditTransactions.map((transaction) => ({
 		value: String(transaction.id),
 		label: `${transaction.transactionDate} · ${transaction.description ?? m.account_expense()} · ${fmt.format(transaction.amount)}`,
@@ -78,16 +86,16 @@
 
 	<section class="grid gap-4 sm:grid-cols-3">
 		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? (data.account.balance > 0 ? m.account_credit_positive() : m.account_debt_current()) : m.account_current_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums"><span class:text-destructive={data.account.kind === 'CREDIT' && data.account.balance < 0}>{balanceLabel}</span></Card.Title></Card.Header></Card.Root>
-		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? m.account_available_credit() : m.account_opening_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? fmt.format(availableCredit) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
-		<Card.Root><Card.Header><Card.Description>{m.account_tracking_started()}</Card.Description><Card.Title class="text-2xl">{data.account.openingDate}</Card.Title></Card.Header></Card.Root>
+		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? m.account_available_credit() : m.account_opening_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? (availableCredit === null ? m.account_credit_limit_unset() : fmt.format(availableCredit)) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
+		<Card.Root><Card.Header><Card.Description>{m.account_tracking_started()}</Card.Description><Card.Title class="text-2xl">{formatDateOnly(data.account.openingDate, data.preferences.locale)}</Card.Title></Card.Header></Card.Root>
 	</section>
 
 	{#if data.credit}
 		<section class="grid gap-4 sm:grid-cols-2">
 			<Card.Root><Card.Header><Card.Description>{m.account_credit_limit()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.credit.settings ? fmt.format(data.credit.settings.creditLimit) : m.account_credit_limit_unset()}</Card.Title></Card.Header></Card.Root>
-			<Card.Root><Card.Header><Card.Description>{m.account_next_payment()}</Card.Description><Card.Title class="text-2xl">{data.credit.nextStatement ? data.credit.nextStatement.dueDate : m.account_no_payment_due()}</Card.Title></Card.Header>{#if data.credit.nextStatement}<Card.Content><p class="text-sm text-muted-foreground">{m.account_remaining_to_avoid({ remaining: fmt.format(data.credit.nextStatement.outstandingBalance), avoidInterest: fmt.format(Math.max(data.credit.nextStatement.officialAvoidInterest - data.credit.nextStatement.paidAmount, 0)) })}</p></Card.Content>{/if}</Card.Root>
+			<Card.Root><Card.Header><Card.Description>{m.account_next_payment()}</Card.Description><Card.Title class="text-2xl">{data.credit.nextStatement ? formatDateOnly(data.credit.nextStatement.dueDate, data.preferences.locale) : m.account_no_payment_due()}</Card.Title></Card.Header>{#if data.credit.nextStatement}<Card.Content><p class="text-sm text-muted-foreground">{m.account_remaining_to_avoid({ remaining: fmt.format(data.credit.nextStatement.outstandingBalance), avoidInterest: fmt.format(Math.max(data.credit.nextStatement.officialAvoidInterest - data.credit.nextStatement.paidAmount, 0)) })}</p></Card.Content>{/if}</Card.Root>
 		</section>
-		{#if data.credit.currentEstimate}<Card.Root><Card.Header><Card.Description>{m.account_current_estimate({ date: data.credit.currentEstimate.periodEnd })}</Card.Description><Card.Title class="text-2xl tabular-nums">{fmt.format(data.credit.currentEstimate.estimatedBalance)}</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">{m.account_estimate_description({ date: data.credit.currentEstimate.dueDate })}</p></Card.Content></Card.Root>{/if}
+		{#if data.credit.currentEstimate}<Card.Root><Card.Header><Card.Description>{m.account_current_estimate({ date: formatDateOnly(data.credit.currentEstimate.periodEnd, data.preferences.locale) })}</Card.Description><Card.Title class="text-2xl tabular-nums">{fmt.format(data.credit.currentEstimate.estimatedBalance)}</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">{m.account_estimate_description({ date: formatDateOnly(data.credit.currentEstimate.dueDate, data.preferences.locale) })}</p></Card.Content></Card.Root>{/if}
 
 		<CreditAccountPanel account={data.account} detail={data.credit} locale={data.preferences.locale} />
 

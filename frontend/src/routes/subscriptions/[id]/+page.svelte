@@ -157,6 +157,8 @@
 	}
 </script>
 
+<svelte:head><title>{data.subscription.name} · {m.subscriptions_title()} · Keenti</title></svelte:head>
+
 <div class="space-y-6 max-w-3xl">
 	<!-- Back link -->
 	<Button variant="link" href="/subscriptions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
@@ -258,7 +260,7 @@
 								{#if tx.categoryName}
 									<Badge variant="secondary">{tx.categoryName}</Badge>
 								{/if}
-								<span class="text-sm font-medium {tx.direction === 'EGRESS' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}">{transactionAmount(tx)}</span>
+								<span class="text-sm font-medium {tx.direction === 'EGRESS' ? 'text-money-negative' : 'text-money-positive'}">{transactionAmount(tx)}</span>
 							</div>
 						</li>
 					{/each}
@@ -455,7 +457,7 @@
 									{#if tx.categoryName}
 										<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 									{/if}
-									<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
+									<span class="text-sm font-medium text-money-positive">{transactionAmount(tx)}</span>
 								</span>
 							</button>
 						</li>
@@ -567,7 +569,7 @@
 										{#if tx.categoryName}
 											<Badge variant="secondary" class="hidden sm:inline-flex">{tx.categoryName}</Badge>
 										{/if}
-										<span class="text-sm font-medium text-green-600 dark:text-green-400">{transactionAmount(tx)}</span>
+										<span class="text-sm font-medium text-money-positive">{transactionAmount(tx)}</span>
 									</span>
 								</button>
 							</div>

@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
+import { m } from '$lib/paraglide/messages.js';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -75,13 +76,13 @@ function headers(cookies: Parameters<typeof getSession>[0], json = false): Recor
 
 export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const id = Number(params.id);
-	if (!Number.isInteger(id) || id <= 0) error(404, 'Financial Account not found');
+	if (!Number.isInteger(id) || id <= 0) error(404, m.error_account_not_found());
 
 	const auth = headers(cookies);
 	const accountRes = await fetch(`${BACKEND}/api/accounts/${id}`, {
 		headers: auth,
 	});
-	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, 'Financial Account not found');
+	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, m.error_account_not_found());
 	const account = (await accountRes.json()) as Account;
 
 	const [transactionsRes, transfersRes, settingsRes, statementsRes, msiPlansRes, currentEstimateRes] = await Promise.all([
@@ -109,7 +110,7 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 				id: `transaction-${transaction.id}`,
 				type: 'TRANSACTION' as const,
 				date: transaction.transactionDate,
-				title: transaction.description || transaction.categoryName || 'Transaction',
+				title: transaction.description || transaction.categoryName || m.entity_transaction(),
 				detail: transaction.categoryName,
 				amount: transaction.direction === 'INGRESS' ? transaction.amount : -transaction.amount,
 			})),
@@ -121,7 +122,9 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 					id: `transfer-${transfer.id}`,
 					type: 'TRANSFER' as const,
 					date: transfer.transferDate,
-					title: outgoing ? `Transfer to ${transfer.destinationAccountName ?? 'Archived account'}` : `Transfer from ${transfer.sourceAccountName ?? 'Archived account'}`,
+					title: outgoing
+						? m.account_activity_transfer_to({ name: transfer.destinationAccountName ?? m.transfer_archived_account() })
+						: m.account_activity_transfer_from({ name: transfer.sourceAccountName ?? m.transfer_archived_account() }),
 					detail: transfer.notes,
 					amount: outgoing ? -transfer.amount : transfer.amount,
 				};
@@ -155,7 +158,7 @@ export const actions: Actions = {
 	updateAppearance: async ({ params, request, fetch, cookies }) => {
 		const data = await request.formData();
 		const hue = Number(data.get('hue'));
-		if (!Number.isInteger(hue) || hue < 0 || hue > 359) return fail(400, { message: 'Choose a valid account colour.' });
+		if (!Number.isInteger(hue) || hue < 0 || hue > 359) return fail(400, { message: m.error_account_colour_invalid() });
 		const response = await fetch(`${BACKEND}/api/accounts/${params.id}/appearance`, {
 			method: 'PUT',
 			headers: headers(cookies, true),
@@ -163,7 +166,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 404 ? 404 : 400, {
-				message: 'The account colour could not be saved.',
+				message: m.error_account_colour_save(),
 			});
 		return { appearanceUpdated: true };
 	},
@@ -178,7 +181,7 @@ export const actions: Actions = {
 				paymentDueDay: Number(data.get('paymentDueDay')),
 			}),
 		});
-		if (!response.ok) return fail(400, { message: 'Credit settings could not be saved.' });
+		if (!response.ok) return fail(400, { message: m.error_credit_settings_save() });
 		return { creditSettingsSaved: true };
 	},
 	confirmCreditStatement: async ({ params, request, fetch, cookies }) => {
@@ -198,7 +201,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The statement could not be confirmed.',
+				message: m.error_statement_confirm(),
 			});
 		return { statementConfirmed: true };
 	},
@@ -220,7 +223,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The statement could not be reconfirmed.',
+				message: m.error_statement_reconfirm(),
 			});
 		return { statementReconfirmed: true };
 	},
@@ -231,7 +234,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok) {
 			return fail(response.status === 409 ? 409 : 400, {
-				message: response.status === 409 ? 'Settle all confirmed Credit Statements before archiving this account.' : 'Bring the account balance to zero before archiving it.',
+				message: response.status === 409 ? 'Settle all confirmed Credit Statements before archiving this account.' : m.account_archive_zero_required(),
 			});
 		}
 		return { archived: true };
@@ -243,7 +246,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok) {
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'An active account with this name already exists.',
+				message: m.error_account_exists(),
 			});
 		}
 		return { restored: true };
@@ -261,7 +264,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The MSI plan could not be created. Use a credit-account expense whose amount divides evenly into the selected installments.',
+				message: m.error_msi_create(),
 			});
 		return { msiCreated: true };
 	},
@@ -274,7 +277,7 @@ export const actions: Actions = {
 		});
 		if (!response.ok)
 			return fail(response.status === 409 ? 409 : 400, {
-				message: 'The MSI plan could not be ended.',
+				message: m.error_msi_end(),
 			});
 		return { msiEnded: true };
 	},

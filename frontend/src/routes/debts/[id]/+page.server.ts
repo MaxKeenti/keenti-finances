@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
+import { dateInTimeZone } from '$lib/formatting';
 
 const paymentSchema = z.object({
 	amount: z.coerce.number().positive(m.validation_amount_positive()),
@@ -41,7 +42,7 @@ type DebtPayment = {
 type Category = { id: number; name: string; type: string };
 type FinancialAccount = { id: number; name: string; kind: string; balance: number };
 
-export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
+export const load: PageServerLoad = async ({ params, fetch, cookies, parent }) => {
 	const id = params.id;
 
 	const session = getSession(cookies);
@@ -90,7 +91,10 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 		console.error(`[debts/${id}] load: backend unreachable for payments/categories`);
 	}
 
-	const today = new Date().toISOString().split('T')[0];
+	// `toISOString()` is the UTC date, which is already tomorrow for a
+	// User at UTC-6 after 18:00 local. Resolve their calendar day instead.
+	const { preferences } = await parent();
+	const today = dateInTimeZone(preferences.timeZone);
 	const form = await superValidate(
 		{ amount: debt.remaining, paymentDate: today, categoryId: 0, accountId: '' as '', notes: '' },
 		zod4(paymentSchema),

@@ -10,5 +10,6 @@ public record UserPreferencesResponse(
     String transactionSortDirection,
     String mobilePinnedNavItems,
     boolean dockMagnification,
-    String timeZone
+    String timeZone,
+    String themeMode
 ) {}

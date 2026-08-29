@@ -425,6 +425,8 @@
 
 </script>
 
+<svelte:head><title>{m.transactions_title()} · Keenti</title></svelte:head>
+
 {#snippet sortIcon(column: TransactionSortBy)}
 	{#if data.transactionPage.sortBy === column}
 		{#if data.transactionPage.sortDirection === 'asc'}
@@ -503,10 +505,14 @@
 						</div>
 						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
 							<Card.Content class="pt-4 pl-10">
-								<div class="flex items-start justify-between gap-2">
-									<a href="/transactions/{tx.id}" class="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><p class="truncate text-sm text-muted-foreground">{tx.description ?? '—'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</p></a>
-									<a href="/transactions/{tx.id}" class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</a>
-								</div>
+								<!-- One link across the whole row rather than one on the
+								     description and a second on the amount: two links to the
+								     same record read as two destinations, and the amount on
+								     its own was a 20px-tall target on a phone. -->
+								<a href="/transactions/{tx.id}" class="flex items-start justify-between gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<span class="min-w-0 flex-1"><span class="block truncate text-sm text-muted-foreground">{tx.description ?? '—'}</span><span class="mt-0.5 block text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</span></span>
+									<span class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</span>
+								</a>
 								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
 								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
 							</Card.Content>
@@ -516,8 +522,8 @@
 					{@const transfer = item.transfer}
 					<Card.Root class="border-violet-500/20 bg-violet-500/4">
 						<Card.Content class="pt-4">
-							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>
-							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
+							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>
+							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">{m.transfer_title()}</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
 						</Card.Content>
 					</Card.Root>
 				{/if}
@@ -612,7 +618,7 @@
 								{m.common_contact()} {@render sortIcon('contactName')}
 							</Button>
 						</Table.Head>
-						<Table.Head>Account</Table.Head>
+						<Table.Head>{m.common_account()}</Table.Head>
 						<Table.Head class="w-30 text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -620,24 +626,27 @@
 					{#each ledgerPageItems as item (item.key)}
 						{#if item.kind === 'Transaction'}
 							{@const tx = item.transaction}
-							<Table.Row data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
+							<Table.Row class="group/row" data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
 								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
 								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}</div></Table.Cell>
-								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
+								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
 								<Table.Cell>{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{:else}—{/if}</Table.Cell>
 								<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
 								<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
-								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="destructive" size="sm" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div></Table.Cell>
+								<Table.Cell class="text-right"><!-- Row actions stay in the DOM and in tab order, but only paint on
+									     hover/focus: 20 rows x a permanent red Delete button made
+									     destruction the loudest thing on the page. -->
+									<div class="flex justify-end gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"><Button variant="outline" size="sm" onclick={() => openEdit(tx)}>{m.common_edit()}</Button><Button variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(tx)}>{m.common_delete()}</Button></div></Table.Cell>
 							</Table.Row>
 						{:else}
 							{@const transfer = item.transfer}
 							<Table.Row class="bg-violet-500/4">
 								<Table.Cell></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</Table.Cell>
-								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? 'Archived account'} → {transfer.destinationAccountName ?? 'Archived account'}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
+								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
 								<Table.Cell class="font-mono font-medium text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</Table.Cell>
-								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">Transfer</span></Table.Cell>
+								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">{m.transfer_title()}</span></Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell></Table.Cell>
@@ -697,8 +706,8 @@
 
 		{#if !editMode && data.accountTracking.setupRequired}
 			<Alert.Root>
-				<Alert.Title>Set up Account tracking first</Alert.Title>
-				<Alert.Description>New Users need at least one Financial Account before recording activity. <a class="underline" href="/accounts">Set up Accounts</a>.</Alert.Description>
+				<Alert.Title>{m.transactions_setup_required_title()}</Alert.Title>
+				<Alert.Description>{m.transactions_setup_required_description()} <a class="underline" href="/accounts">{m.transactions_setup_required_action()}</a>.</Alert.Description>
 			</Alert.Root>
 		{/if}
 
@@ -798,12 +807,12 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>Financial Account</Form.Label>
+							<Form.Label>{m.common_financial_account()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$form.accountId ? String($form.accountId) : ''}
 								onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }}
-								placeholder="Select an account"
+								placeholder={m.transfer_select_account()}
 								items={data.accounts.map(account => ({
 									value: String(account.id),
 									label: `${account.name} · ${fmt.format(account.balance)}`,

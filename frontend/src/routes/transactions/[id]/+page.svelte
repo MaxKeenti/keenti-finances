@@ -157,8 +157,8 @@
 	const tx = $derived(data.transaction);
 	const amountClass = $derived(
 		tx.direction === 'INGRESS'
-			? 'text-green-600 dark:text-green-400'
-			: 'text-red-600 dark:text-red-400',
+			? 'text-money-positive'
+			: 'text-money-negative',
 	);
 
 	const directionLabel = $derived(
@@ -170,36 +170,33 @@
 	);
 </script>
 
+<svelte:head><title>{tx.description ?? m.entity_transaction()} · {m.transactions_title()} · Keenti</title></svelte:head>
+
 <div class="space-y-6 max-w-2xl">
 	<!-- Back link -->
 	<Button variant="link" href="/transactions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
 		{m.common_back_to_transactions()}
 	</Button>
 
+	<!-- Page header. The description names the record, so it heads the page
+	     rather than sitting in the card as one more labelled field, and the
+	     direction becomes its eyebrow instead of a badge beside the amount. -->
+	<div class="min-w-0">
+		<p class="text-sm text-muted-foreground">{directionLabel}</p>
+		<h1 class="text-2xl font-semibold tracking-tight">
+			{tx.description ?? m.entity_transaction()}
+		</h1>
+	</div>
+
 	<!-- Detail card -->
 	<Card.Root>
 		<Card.Content class="space-y-5 pt-6">
-			<!-- Amount + direction -->
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<p class="text-sm text-muted-foreground">{m.common_amount()}</p>
-					<p class="text-3xl font-bold tabular-nums {amountClass}">
-						{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
-					</p>
-				</div>
-				<span
-					class="text-xs font-medium rounded-full px-2.5 py-0.5 border {tx.direction === 'INGRESS'
-						? 'border-green-500 text-green-700 dark:text-green-400'
-						: 'border-red-500 text-red-700 dark:text-red-400'}"
-				>
-					{directionLabel}
-				</span>
-			</div>
-
-			<!-- Description -->
+			<!-- Amount -->
 			<div>
-				<p class="text-sm text-muted-foreground">{m.common_description()}</p>
-				<p class="text-base">{tx.description ?? '—'}</p>
+				<p class="text-sm text-muted-foreground">{m.common_amount()}</p>
+				<p class="text-3xl font-bold tabular-nums {amountClass}">
+					{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}
+				</p>
 			</div>
 
 			<!-- Date -->
