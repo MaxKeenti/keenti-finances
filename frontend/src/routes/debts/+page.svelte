@@ -285,7 +285,6 @@
 			data={visibleDebts}
 			pageSize={12}
 			filterPlaceholder={m.debts_search_placeholder()}
-			emptyMessage={m.debts_empty_title()}
 			mobileCard={debtCard}
 			{toolbar}
 			cellRenders={{ debtor: debtorCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
