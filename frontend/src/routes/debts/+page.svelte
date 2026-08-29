@@ -18,7 +18,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { dateInTimeZone, mxnFormatter, shortDateFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { DataTableWrapper } from '$lib/components/ui/data-table';
 	import type { ColumnDef, Row } from '@tanstack/table-core';
 	import { m } from '$lib/paraglide/messages.js';
@@ -174,7 +174,14 @@
 	}
 
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
-	const shortDate = $derived(shortDateFormatter(data.preferences.locale));
+
+	// The backend sends a zoneless `LocalDateTime`; the calendar day is the part
+	// before the `T`, so compare and format that rather than round-tripping
+	// through `Date` and picking up the browser's offset.
+	function debtDate(debt: Debt): string {
+		return debt.createdAt ? debt.createdAt.split('T')[0] : '';
+	}
+
 	const debtorSummaries = $derived.by(() => {
 		const summaries = new Map<string, DebtorSummary>();
 		for (const debt of data.debts as Debt[]) {
@@ -206,6 +213,7 @@
 			accessorFn: (d) => d.contactName ?? m.contact_number({ id: d.contactId ?? d.id }),
 		},
 		{ id: 'description', header: m.common_description(), accessorFn: (d) => d.description },
+		{ id: 'date', header: m.common_date(), accessorFn: (d) => debtDate(d) },
 		{ id: 'total', header: m.common_total(), accessorFn: (d) => d.totalAmount },
 		{ id: 'paid', header: m.common_paid(), accessorFn: (d) => d.totalPaid },
 		{ id: 'remaining', header: m.common_remaining(), accessorFn: (d) => d.remaining },
@@ -216,10 +224,23 @@
 	// Status is a separate control rather than part of the search box: it is a
 	// closed set, and typing "activa" should not be the way to narrow to it.
 	let statusFilter = $state<'ALL' | 'ACTIVE' | 'PAID'>('ALL');
+	// Inclusive ISO date bounds on the debt date; either end may stand alone.
+	let dateFrom = $state('');
+	let dateTo = $state('');
+	const dateFilterActive = $derived(dateFrom !== '' || dateTo !== '');
 	const visibleDebts = $derived(
-		statusFilter === 'ALL'
-			? data.debts
-			: data.debts.filter((d) => (statusFilter === 'PAID' ? d.status === 'PAID' : d.status !== 'PAID')),
+		(data.debts as Debt[]).filter((d) => {
+			if (statusFilter !== 'ALL') {
+				const matches = statusFilter === 'PAID' ? d.status === 'PAID' : d.status !== 'PAID';
+				if (!matches) return false;
+			}
+			if (!dateFilterActive) return true;
+			const date = debtDate(d);
+			if (!date) return false;
+			if (dateFrom && date < dateFrom) return false;
+			if (dateTo && date > dateTo) return false;
+			return true;
+		}),
 	);
 	const statusFilters = $derived([
 		{ value: 'ALL' as const, label: m.debts_filter_all() },
@@ -289,12 +310,40 @@
 			filterPlaceholder={m.debts_search_placeholder()}
 			mobileCard={debtCard}
 			{toolbar}
-			cellRenders={{ debtor: debtorCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
+			cellRenders={{ debtor: debtorCell, date: dateCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
 			actionCell={rowActions}
 		/>
 	{/if}
 
 {#snippet toolbar()}
+	<div class="flex flex-wrap items-center gap-2" role="group" aria-label={m.debts_filter_date_range()}>
+		<div class="flex items-center gap-1.5">
+			<label class="text-sm text-muted-foreground" for="debt-date-from">{m.debts_filter_date_from()}</label>
+			<NativeDatePicker
+				name="debt-date-from"
+				id="debt-date-from"
+				class="w-40"
+				value={dateFrom}
+				onValueChange={(v) => (dateFrom = v)}
+			/>
+		</div>
+		<div class="flex items-center gap-1.5">
+			<label class="text-sm text-muted-foreground" for="debt-date-to">{m.debts_filter_date_to()}</label>
+			<NativeDatePicker
+				name="debt-date-to"
+				id="debt-date-to"
+				class="w-40"
+				value={dateTo}
+				onValueChange={(v) => (dateTo = v)}
+			/>
+		</div>
+		{#if dateFilterActive}
+			<Button variant="ghost" size="sm" onclick={() => { dateFrom = ''; dateTo = ''; }}>
+				{m.debts_filter_date_clear()}
+			</Button>
+		{/if}
+	</div>
+
 	<div class="flex items-center gap-1 rounded-lg border p-0.5" role="group" aria-label={m.debts_filter_status()}>
 		{#each statusFilters as option (option.value)}
 			<Button
@@ -313,6 +362,12 @@
 	<a href="/debts/{row.original.id}" class="font-medium hover:underline">
 		{row.original.contactName ?? m.contact_number({ id: row.original.contactId ?? row.original.id })}
 	</a>
+{/snippet}
+
+{#snippet dateCell(row: Row<Debt>)}
+	<span class="tabular-nums whitespace-nowrap text-muted-foreground">
+		{debtDate(row.original) ? formatDateOnly(debtDate(row.original), data.preferences.locale) : '—'}
+	</span>
 {/snippet}
 
 {#snippet totalCell(row: Row<Debt>)}<span class="tabular-nums">{fmt.format(row.original.totalAmount)}</span>{/snippet}
@@ -371,7 +426,7 @@
 							<div class="flex justify-between">
 								<span class="text-muted-foreground">{m.common_date()}</span>
 								<span class="font-medium tabular-nums">
-									{shortDate.format(new Date(debt.createdAt))}
+									{formatDateOnly(debtDate(debt), data.preferences.locale)}
 								</span>
 							</div>
 						{/if}
