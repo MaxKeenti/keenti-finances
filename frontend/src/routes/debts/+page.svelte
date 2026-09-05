@@ -98,6 +98,9 @@
 	const { form, enhance, submitting, message } = sf;
 
 	const bulkSf = superForm(data.bulkForm, {
+		// `accountId` is a union (empty string or an id), which Superforms can only
+		// carry over the wire as JSON — a urlencoded post fails to parse the field.
+		dataType: 'json',
 		validators: zod4Client(bulkPaymentSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
