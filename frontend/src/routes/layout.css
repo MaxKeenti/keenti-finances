@@ -165,6 +165,14 @@
 	html {
 		@apply font-sans;
 	}
+
+	/* Bits' floating layers (Popover, Select, Dropdown Menu) portal to <body> and
+	   wrap their content in a transformed element, which opens a stacking context
+	   the content's own z-index cannot escape. Lift the wrapper past Dialog and
+	   Sheet so a picker opened from inside a Dialog is not painted behind it. */
+	[data-bits-floating-content-wrapper] {
+		z-index: 70;
+	}
 }
 
 @layer components {
