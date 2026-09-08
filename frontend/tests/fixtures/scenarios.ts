@@ -551,7 +551,7 @@ function debtScenario(values: {
 				totalAmount,
 				totalPaid: values.totalPaid,
 				remaining,
-				status: remaining === 0 ? 'PAID' : 'PENDING',
+				status: remaining === 0 ? 'PAID' : 'ACTIVE',
 				createdAt: '2026-03-01T12:00:00Z',
 			},
 			[`GET /api/debts/${values.debtId}/payments`]:
