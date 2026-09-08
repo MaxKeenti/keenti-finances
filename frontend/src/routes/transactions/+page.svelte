@@ -789,7 +789,9 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label>{m.common_description()}</Form.Label>
-						<Input {...props} bind:value={$form.description} placeholder={m.transactions_placeholder_description()} />
+						<Input {...props} bind:value={$form.description} placeholder={$form.direction === 'EGRESS'
+								? m.transactions_placeholder_description_egress()
+								: m.transactions_placeholder_description_ingress()} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />

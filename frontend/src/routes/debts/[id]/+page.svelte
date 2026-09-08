@@ -136,7 +136,9 @@
 					<span>{m.common_progress()}</span>
 					<span>{paidPercent}%</span>
 				</div>
-				<Progress value={paidPercent} class="h-2 bg-green-500" />
+				<!-- The track stays neutral; only the primitive's indicator fills.
+				     A coloured track reads as 100% at 0%. -->
+				<Progress value={paidPercent} class="h-2" />
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -281,6 +283,8 @@
 						</Form.Control>
 						<Form.FieldErrors />
 					</Form.Field>
+
+					<p class="text-sm text-muted-foreground">{m.debts_payment_creates_income()}</p>
 
 					<Button type="submit" disabled={isPaid || $submitting || data.accountTracking.setupRequired} class="w-full sm:w-auto">
 						{$submitting ? m.common_recording() : m.common_record_payment()}
