@@ -9,8 +9,10 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import * as ScrollArea from '$lib/components/ui/scroll-area';
-	import { formatDateOnly, monthYearFormatter, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, formatMonthYear, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { SectionUnavailable } from '$lib/components/section-status';
+	import { sectionValue } from '$lib/types/section';
 	import type { PageData } from './$types';
 
 	type MemberResponse = {
@@ -50,11 +52,24 @@
 
 	let { data }: { data: PageData } = $props();
 
+	// `null` means the section could not be loaded. It is deliberately not
+	// collapsed to an empty array: "no members yet" and "we could not read the
+	// members" are different statements, and only one of them is a fact.
+	const members = $derived(sectionValue(data.members));
+	const payments = $derived(sectionValue(data.payments));
+	const linkedTransactions = $derived(sectionValue(data.linkedTransactions));
+	const unlinkedTransactions = $derived(sectionValue(data.unlinkedTransactions));
+	// "Partial" means some sections loaded and some did not; when every section
+	// failed each one says so on its own.
+	const sections = $derived([members, payments, linkedTransactions, unlinkedTransactions]);
+	const partialData = $derived(
+		sections.some((section) => section === null) && sections.some((section) => section !== null),
+	);
+
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
-	const monthFmt = $derived(monthYearFormatter(data.preferences.locale));
 
 	function periodLabel(billingDate: string): string {
-		return monthFmt.format(new Date(`${billingDate}T00:00:00`));
+		return formatMonthYear(billingDate, data.preferences.locale);
 	}
 
 	function transactionAmount(tx: TransactionResponse): string {
@@ -78,7 +93,7 @@
 
 	function memberName(memberId: number | null): string {
 		if (memberId === null) return m.common_owner();
-		const member = data.members.find((x: MemberResponse) => x.id === memberId);
+		const member = (members ?? []).find((x: MemberResponse) => x.id === memberId);
 		return member?.contactName ?? m.member_number({ id: memberId });
 	}
 
@@ -91,25 +106,25 @@
 	// Distinct billing periods, newest first — one tab per period.
 	const periods = $derived.by(() => {
 		const seen = new Set<string>();
-		for (const p of data.payments) seen.add(p.billingDate);
+		for (const p of payments ?? []) seen.add(p.billingDate);
 		return Array.from(seen).sort((a, b) => b.localeCompare(a));
 	});
 
 	// Records for one period.
 	function recordsForPeriod(billingDate: string): PaymentRecord[] {
-		return data.payments.filter((p: PaymentRecord) => p.billingDate === billingDate);
+		return (payments ?? []).filter((p: PaymentRecord) => p.billingDate === billingDate);
 	}
 
 	// Find the transaction that settled a PAID record (for the "paid via" hint).
 	function linkedTransaction(transactionId: number | null): TransactionResponse | undefined {
 		if (transactionId === null) return undefined;
-		return data.linkedTransactions.find((t: TransactionResponse) => t.id === transactionId);
+		return (linkedTransactions ?? []).find((t: TransactionResponse) => t.id === transactionId);
 	}
 
 	// Eager init (so SSR has an active tab); the effect re-points it when the set
 	// of periods changes, e.g. after generating billing or linking a payment.
 	let selectedPeriod = $state(
-		[...new Set(data.payments.map((p: PaymentRecord) => p.billingDate))].sort((a, b) =>
+		[...new Set((sectionValue(data.payments) ?? []).map((p: PaymentRecord) => p.billingDate))].sort((a, b) =>
 			b.localeCompare(a),
 		)[0] ?? '',
 	);
@@ -148,6 +163,22 @@
 		selectedTxIds = next;
 	}
 
+	// A retry (or any reload) can happen while a dialog is open, so the ids a
+	// dialog is holding may no longer be linkable. Drop them rather than let a
+	// submit send a stale selection the candidate list no longer backs.
+	$effect(() => {
+		if (unlinkedTransactions === null) {
+			selectedTxIds = new Set();
+			payLinkTxId = '';
+			return;
+		}
+		const available = new Set(unlinkedTransactions.map((tx: TransactionResponse) => tx.id));
+		if ([...selectedTxIds].some((id) => !available.has(id))) {
+			selectedTxIds = new Set([...selectedTxIds].filter((id) => available.has(id)));
+		}
+		if (payLinkTxId && !available.has(Number(payLinkTxId))) payLinkTxId = '';
+	});
+
 	async function copyShareLink() {
 		if (!data.subscription.tokenUuid) return;
 		const url = `${window.location.origin}/public/subscription/${data.subscription.tokenUuid}`;
@@ -164,6 +195,10 @@
 	<Button variant="link" href="/subscriptions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
 		{m.common_back_to_subscriptions()}
 	</Button>
+
+	{#if partialData}
+		<p class="text-sm text-muted-foreground">{m.section_partial_notice()}</p>
+	{/if}
 
 	<!-- Header -->
 	<Card.Root>
@@ -217,11 +252,13 @@
 		<Card.Root>
 			<Card.Content class="space-y-3">
 				<h2 class="font-semibold text-base">{m.subscriptions_members()}</h2>
-				{#if data.members.length === 0}
+				{#if members === null}
+					<SectionUnavailable title={m.section_members_unavailable()} compact />
+				{:else if members.length === 0}
 					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members_assigned()}</p>
 				{:else}
 					<ul class="divide-y">
-						{#each data.members as member (member.id)}
+						{#each members as member (member.id)}
 							<li class="flex items-center justify-between py-2">
 								<span class="text-sm">{member.contactName ?? m.contact_number({ id: member.contactId ?? member.id })}</span>
 								{#if member.shareAmount != null}
@@ -240,17 +277,28 @@
 		<Card.Content class="space-y-3">
 			<div class="flex items-center justify-between">
 				<h2 class="font-semibold text-base">{m.subscriptions_linked_transactions()}</h2>
-				{#if data.unlinkedTransactions.length > 0}
+				{#if unlinkedTransactions !== null && unlinkedTransactions.length > 0}
 					<Button variant="outline" size="sm" onclick={() => { selectedTxIds = new Set(); linkDialogOpen = true; }}>
 						{m.subscriptions_link_transactions()}
 					</Button>
 				{/if}
 			</div>
-			{#if data.linkedTransactions.length === 0}
+			<!-- When the linked list also failed, its own notice already offers a
+			     retry for the same dependency — one control, not two. -->
+			{#if unlinkedTransactions === null && linkedTransactions !== null}
+				<SectionUnavailable
+					title={m.section_linking_unavailable_title()}
+					description={m.section_linking_unavailable()}
+					compact
+				/>
+			{/if}
+			{#if linkedTransactions === null}
+				<SectionUnavailable title={m.section_linked_transactions_unavailable()} compact />
+			{:else if linkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_linked_transactions()}</p>
 			{:else}
 				<ul class="divide-y rounded-md border">
-					{#each data.linkedTransactions as tx (tx.id)}
+					{#each linkedTransactions as tx (tx.id)}
 						<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 							<div class="min-w-0 space-y-0.5">
 								<p class="text-sm font-medium truncate">{tx.description}</p>
@@ -304,7 +352,9 @@
 				</form>
 			</div>
 
-			{#if data.payments.length === 0}
+			{#if payments === null}
+				<SectionUnavailable title={m.section_payments_unavailable()} compact />
+			{:else if payments.length === 0}
 				<p class="text-sm text-muted-foreground">
 					{m.subscriptions_no_payment_records()}
 				</p>
@@ -360,6 +410,8 @@
 													size="sm"
 													variant="outline"
 													class="h-7 text-xs px-3"
+													disabled={unlinkedTransactions === null}
+													title={unlinkedTransactions === null ? m.section_linking_unavailable() : undefined}
 													onclick={() => openPayLink(payment.id)}
 												>
 													{m.subscriptions_link_transaction()}
@@ -431,12 +483,14 @@
 				<input type="hidden" name="transactionId" value={txId} />
 			{/each}
 
-			{#if data.unlinkedTransactions.length === 0}
+			{#if unlinkedTransactions === null}
+				<p class="text-sm text-muted-foreground">{m.section_linking_unavailable()}</p>
+			{:else if unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
 				<ScrollArea.Root class="h-48 rounded-md border sm:h-72">
 					<ul class="divide-y">
-					{#each data.unlinkedTransactions as tx (tx.id)}
+					{#each unlinkedTransactions as tx (tx.id)}
 						<li class="flex items-center gap-2 px-3 py-2 hover:bg-muted/50">
 							<Checkbox
 								checked={selectedTxIds.has(tx.id)}
@@ -547,12 +601,14 @@
 			<input type="hidden" name="paymentId" value={payLinkPaymentId} />
 			<input type="hidden" name="transactionId" value={payLinkTxId} />
 
-			{#if data.unlinkedTransactions.length === 0}
+			{#if unlinkedTransactions === null}
+				<p class="text-sm text-muted-foreground">{m.section_linking_unavailable()}</p>
+			{:else if unlinkedTransactions.length === 0}
 				<p class="text-sm text-muted-foreground">{m.subscriptions_no_unlinked_transactions()}</p>
 			{:else}
 				<ScrollArea.Root class="h-48 rounded-md border sm:h-72">
 					<RadioGroup.Root bind:value={payLinkTxId} class="gap-0">
-						{#each data.unlinkedTransactions as tx (tx.id)}
+						{#each unlinkedTransactions as tx (tx.id)}
 							<div class="flex items-center gap-2 border-b px-3 py-2 last:border-b-0 hover:bg-muted/50">
 								<RadioGroup.Item value={String(tx.id)} aria-label={tx.description} />
 								<button

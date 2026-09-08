@@ -2,56 +2,19 @@ import { error, fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
+import { loadSection } from '$lib/server/section-load';
+import {
+	parseMembers,
+	parsePayments,
+	parseSubscription,
+	parseTransactions,
+	type MemberResponse,
+	type PaymentRecord,
+	type TransactionResponse,
+} from '$lib/server/payloads';
+import { sectionOk, sectionUnavailable, type Section } from '$lib/types/section';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
-
-type MemberResponse = {
-	id: number;
-	subscriptionId: number;
-	contactId: number | null;
-	contactName: string | null;
-	shareAmount: number | null;
-	createdAt: string;
-};
-
-type Subscription = {
-	id: number;
-	name: string;
-	cost: number;
-	billingCycle: string;
-	type: string;
-	categoryId: number | null;
-	nextBillingDate: string;
-	tokenUuid: string | null;
-	ownerParticipates: boolean | null;
-	createdAt: string;
-};
-
-type TransactionResponse = {
-	id: number;
-	amount: number;
-	direction: string;
-	description: string;
-	transactionDate: string;
-	categoryId: number | null;
-	categoryName: string | null;
-	categoryHue: number | null;
-	contactId: number | null;
-	contactName: string | null;
-	subscriptionId: number | null;
-};
-
-type PaymentRecord = {
-	id: number;
-	subscriptionId: number;
-	memberId: number | null;
-	billingDate: string;
-	amount: number;
-	status: string;
-	paidDate: string | null;
-	transactionId: number | null;
-	createdAt: string;
-};
 
 export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	const id = params.id;
@@ -62,53 +25,72 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 		? { Authorization: `Bearer ${accessToken}` }
 		: {};
 
-	let subscription: Subscription;
-	let members: MemberResponse[] = [];
-	let payments: PaymentRecord[] = [];
-	let linkedTransactions: TransactionResponse[] = [];
-	let allTransactions: TransactionResponse[] = [];
-
+	// The subscription itself is the page: without it there is nothing to show,
+	// so it stays a hard failure. Everything else is a secondary section that
+	// reports its own availability.
+	let subRes: Response;
 	try {
-		const subRes = await fetch(`${BACKEND}/api/subscriptions/${id}`, { headers: authHeaders });
-		if (subRes.status === 404) error(404, m.error_subscription_not_found());
-		if (!subRes.ok) {
-			console.error(`[subscriptions/${id}] load: backend returned ${subRes.status}`);
-			error(502, m.error_could_not_load_subscription());
-		}
-		subscription = await subRes.json();
-	} catch (e) {
-		if ((e as { status?: number }).status) throw e;
+		subRes = await fetch(`${BACKEND}/api/subscriptions/${id}`, { headers: authHeaders });
+	} catch {
 		console.error(`[subscriptions/${id}] load: backend unreachable`);
 		error(502, m.error_backend_unreachable());
 	}
-
-	try {
-		const [membersRes, paymentsRes, linkedRes, allTxRes] = await Promise.all([
-			fetch(`${BACKEND}/api/subscriptions/${id}/members`, { headers: authHeaders }),
-			fetch(`${BACKEND}/api/subscriptions/${id}/payments`, { headers: authHeaders }),
-			fetch(`${BACKEND}/api/subscriptions/${id}/linked-transactions`, { headers: authHeaders }),
-			fetch(`${BACKEND}/api/transactions`, { headers: authHeaders }),
-		]);
-
-		if (membersRes.ok) members = await membersRes.json();
-		else console.error(`[subscriptions/${id}] load: members returned ${membersRes.status}`);
-
-		if (paymentsRes.ok) payments = await paymentsRes.json();
-		else console.error(`[subscriptions/${id}] load: payments returned ${paymentsRes.status}`);
-
-		if (linkedRes.ok) linkedTransactions = await linkedRes.json();
-		else console.error(`[subscriptions/${id}] load: linked-transactions returned ${linkedRes.status}`);
-
-		if (allTxRes.ok) allTransactions = await allTxRes.json();
-		else console.error(`[subscriptions/${id}] load: transactions returned ${allTxRes.status}`);
-	} catch {
-		console.error(`[subscriptions/${id}] load: backend unreachable for members/payments/transactions`);
+	if (subRes.status === 404) error(404, m.error_subscription_not_found());
+	if (!subRes.ok) {
+		console.error(`[subscriptions/${id}] load: backend returned ${subRes.status}`);
+		error(502, m.error_could_not_load_subscription());
+	}
+	const subscription = parseSubscription(await subRes.json().catch(() => null));
+	if (!subscription) {
+		console.error(`[subscriptions/${id}] load: subscription payload failed validation`);
+		error(502, m.error_could_not_load_subscription());
 	}
 
-	const linkedIds = new Set(linkedTransactions.map((t) => t.id));
-	const unlinkedTransactions = allTransactions.filter(
-		(t) => t.direction === 'INGRESS' && !t.subscriptionId && !linkedIds.has(t.id),
-	);
+	// Requested together but resolved independently: a failed payments request
+	// must not turn a populated member list into an empty one.
+	const [members, payments, linkedTransactions, allTransactions] = await Promise.all([
+		loadSection<MemberResponse[]>(fetch, `${BACKEND}/api/subscriptions/${id}/members`, {
+			parse: parseMembers,
+			headers: authHeaders,
+			label: `subscriptions/${id}/members`,
+		}),
+		loadSection<PaymentRecord[]>(fetch, `${BACKEND}/api/subscriptions/${id}/payments`, {
+			parse: parsePayments,
+			headers: authHeaders,
+			label: `subscriptions/${id}/payments`,
+		}),
+		loadSection<TransactionResponse[]>(
+			fetch,
+			`${BACKEND}/api/subscriptions/${id}/linked-transactions`,
+			{
+				parse: parseTransactions,
+				headers: authHeaders,
+				label: `subscriptions/${id}/linked-transactions`,
+			},
+		),
+		loadSection<TransactionResponse[]>(fetch, `${BACKEND}/api/transactions`, {
+			parse: parseTransactions,
+			headers: authHeaders,
+			label: `subscriptions/${id}/transactions`,
+		}),
+	]);
+
+	// Candidates for linking need both lists: without the linked set we cannot
+	// tell an unlinked income from one that is already attached here, so the
+	// linking actions are reported unavailable rather than offered a guess.
+	let unlinkedTransactions: Section<TransactionResponse[]>;
+	if (allTransactions.status !== 'ok') {
+		unlinkedTransactions = sectionUnavailable(allTransactions.reason);
+	} else if (linkedTransactions.status !== 'ok') {
+		unlinkedTransactions = sectionUnavailable(linkedTransactions.reason);
+	} else {
+		const linkedIds = new Set(linkedTransactions.data.map((t) => t.id));
+		unlinkedTransactions = sectionOk(
+			allTransactions.data.filter(
+				(t) => t.direction === 'INGRESS' && !t.subscriptionId && !linkedIds.has(t.id),
+			),
+		);
+	}
 
 	return { subscription, members, payments, linkedTransactions, unlinkedTransactions };
 };

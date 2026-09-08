@@ -35,6 +35,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { formatLocale, mxnFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { sectionValue } from '$lib/types/section';
 	import {
 		boxMovementTransactionSourceState,
 		hasClickableBoxMovementTransaction,
@@ -96,7 +97,10 @@
 			timeZone: data.preferences.timeZone,
 		}),
 	);
-	const isUnreconciled = $derived(data.balanceSummary.availableToSpend < 0);
+	// Unavailable balance totals are shown as unavailable, and the actions that
+	// need them (deposits are capped by Available to Spend) are disabled.
+	const balance = $derived(sectionValue(data.balanceSummary));
+	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
 	const hasBalance = $derived(data.box.balance >= 0.005);
 	const orderedHistory = $derived(
 		[...data.history].sort((a, b) =>
@@ -238,13 +242,13 @@
 				</form>
 			</Alert.Action>
 		</Alert.Root>
-	{:else if isUnreconciled}
+	{:else if isUnreconciled && balance}
 		<Alert.Root variant="destructive">
 			<AlertTriangle aria-hidden="true" />
 			<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
 			<Alert.Description>
 				{m.balance_reconciliation_box_detail({
-					amount: fmt.format(Math.abs(data.balanceSummary.availableToSpend)),
+					amount: fmt.format(Math.abs(balance.availableToSpend)),
 				})}
 			</Alert.Description>
 			{#if hasBalance}
@@ -304,18 +308,28 @@
 				<div>
 					<p class="text-xs text-muted-foreground">{m.balance_available_to_spend()}</p>
 					<p class="text-lg font-medium tabular-nums {isUnreconciled ? 'text-destructive' : ''}">
-						{fmt.format(data.balanceSummary.availableToSpend)}
+						{balance === null ? m.section_balance_chip_unavailable() : fmt.format(balance.availableToSpend)}
 					</p>
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">{m.balance_in_boxes()}</p>
-					<p class="text-lg font-medium tabular-nums">{fmt.format(data.balanceSummary.inBoxes)}</p>
+					<p class="text-lg font-medium tabular-nums">
+						{balance === null ? m.section_balance_chip_unavailable() : fmt.format(balance.inBoxes)}
+					</p>
 				</div>
 			</div>
 
 			{#if !data.box.archived}
 				<div class="flex flex-wrap gap-2 border-t pt-4">
-					<Button onclick={() => openMovement('DEPOSIT')} disabled={isUnreconciled} title={isUnreconciled ? m.boxes_deposits_blocked() : undefined}>
+					<Button
+						onclick={() => openMovement('DEPOSIT')}
+						disabled={isUnreconciled || balance === null}
+						title={balance === null
+							? m.section_balance_unavailable()
+							: isUnreconciled
+								? m.boxes_deposits_blocked()
+								: undefined}
+					>
 						<ArrowDownLeft data-icon="inline-start" />{m.boxes_deposit()}
 					</Button>
 					<Button variant="outline" onclick={() => openMovement('WITHDRAWAL')} disabled={!hasBalance}>
@@ -561,7 +575,7 @@
 							type="number"
 							step="0.01"
 							min="0.01"
-							max={$form.kind === 'DEPOSIT' ? Math.max(0, data.balanceSummary.availableToSpend) : data.box.balance}
+							max={$form.kind === 'DEPOSIT' ? Math.max(0, balance?.availableToSpend ?? 0) : data.box.balance}
 							bind:value={$form.amount}
 						/>
 					{/snippet}
@@ -569,7 +583,9 @@
 				<Form.FieldErrors />
 				<p class="text-xs text-muted-foreground">
 					{$form.kind === 'DEPOSIT'
-						? m.boxes_available_hint({ amount: fmt.format(data.balanceSummary.availableToSpend) })
+						? balance === null
+							? m.section_balance_unavailable()
+							: m.boxes_available_hint({ amount: fmt.format(balance.availableToSpend) })
 						: m.boxes_box_balance_hint({ amount: fmt.format(data.box.balance) })}
 				</p>
 			</Form.Field>

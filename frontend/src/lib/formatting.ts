@@ -47,6 +47,22 @@ export function formatDateOnly(value: string, locale: string | undefined): strin
 	return shortDateFormatter(locale).format(new Date(Number(year), Number(month) - 1, Number(day)));
 }
 
+/**
+ * Formats an ISO calendar date as a month and year, without a UTC round-trip.
+ *
+ * Mirrors `formatDateOnly` in returning the raw value when it is not an ISO
+ * calendar date: `Intl` throws on an invalid `Date`, and a date that slipped
+ * through from a malformed backend response should not take the whole page
+ * down with it.
+ */
+export function formatMonthYear(value: string, locale: string | undefined): string {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+	if (!match) return value;
+
+	const [, year, month, day] = match;
+	return monthYearFormatter(locale).format(new Date(Number(year), Number(month) - 1, Number(day)));
+}
+
 /** Returns the calendar date seen in an IANA time zone as an ISO date. */
 export function dateInTimeZone(timeZone: string | undefined, instant = new Date()): string {
 	let formatter: Intl.DateTimeFormat;

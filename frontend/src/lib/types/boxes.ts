@@ -64,8 +64,6 @@ export function hasClickableBoxMovementTransaction(
 	return movement.relatedTransactionId != null && !movement.relatedTransactionRemoved;
 }
 
-export const EMPTY_BALANCE_SUMMARY: BalanceSummary = {
-	netBalance: 0,
-	inBoxes: 0,
-	availableToSpend: 0,
-};
+// There is deliberately no zero-filled BalanceSummary constant: a summary that
+// could not be loaded is reported as an unavailable Section (`$lib/types/section`),
+// never as 0.00.
