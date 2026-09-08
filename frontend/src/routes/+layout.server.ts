@@ -1,6 +1,9 @@
 import type { LayoutServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { EMPTY_BALANCE_SUMMARY, type BalanceSummary } from '$lib/types/boxes';
+import type { BalanceSummary } from '$lib/types/boxes';
+import { sectionUnavailable, type Section } from '$lib/types/section';
+import { parseBalanceSummary } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 // `import type`, not an inline type specifier: under verbatimModuleSyntax the
 // latter would still emit a runtime import and drag the rune module into the
 // server bundle. This keeps the ThemeMode union defined in exactly one place.
@@ -49,12 +52,18 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 		locale: cookieLocale === 'en' ? 'en' : DEFAULT_PREFERENCES.locale,
 		themeMode: cookieThemeMode ?? DEFAULT_PREFERENCES.themeMode,
 	};
-	let balanceSummary: BalanceSummary = EMPTY_BALANCE_SUMMARY;
+	// Unavailable until proven otherwise: the app shell used to render a failed
+	// summary as 0.00 Available to Spend, which is a claim about the User's
+	// money rather than an absence of one.
+	let balanceSummary: Section<BalanceSummary> = sectionUnavailable('unreachable');
 
 	if (locals.session) {
 		const [preferencesResult, balanceResult, accountStatusResult] = await Promise.allSettled([
 			fetch(`${BACKEND}/api/user/preferences`),
-			fetch(`${BACKEND}/api/boxes/summary`),
+			loadSection(fetch, `${BACKEND}/api/boxes/summary`, {
+				parse: parseBalanceSummary,
+				label: 'layout/boxes-summary',
+			}),
 			fetch(`${BACKEND}/api/accounts/status`),
 		]);
 
@@ -92,11 +101,11 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 			console.error('[layout] failed to load user preferences; using defaults');
 		}
 
-		if (balanceResult.status === 'fulfilled' && balanceResult.value.ok) {
-			balanceSummary = (await balanceResult.value.json()) as BalanceSummary;
-		} else {
-			console.error('[layout] failed to load balance summary; using zero fallback');
-		}
+		// `loadSection` resolves with its own failure reason, so a rejection here
+		// would be a bug rather than a backend problem; treat it as unavailable
+		// too instead of falling back to zeros.
+		balanceSummary =
+			balanceResult.status === 'fulfilled' ? balanceResult.value : sectionUnavailable('unreachable');
 	}
 
 	return { session: locals.session, preferences, balanceSummary };

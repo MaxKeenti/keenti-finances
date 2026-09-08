@@ -4,7 +4,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import { MonthlyBarChart, NetTrendChart } from '$lib/components/dashboard';
 	import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight } from '@lucide/svelte';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import { mxnFormatter } from '$lib/formatting';
+	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -16,8 +18,16 @@
 	const prevYear = $derived(data.year - 1);
 	const nextYear = $derived(data.year + 1);
 	const currentYear = new Date().getFullYear();
-	const isUnreconciled = $derived(data.summary.availableToSpend < 0);
-	const accountWarnings = $derived(data.accountWarnings);
+	// `null` means the figures could not be loaded — a different fact from a
+	// zero balance, so nothing below renders a total from a missing summary.
+	const summary = $derived(sectionValue(data.summary));
+	const warnings = $derived(sectionValue(data.accountWarnings));
+	const isUnreconciled = $derived(summary !== null && summary.availableToSpend < 0);
+	const accountWarnings = $derived(warnings?.items ?? []);
+	// "Partial" means some of this page loaded and some did not. When nothing
+	// loaded the sections say so individually, and when only the warning list is
+	// incomplete its own notice is more specific than this one.
+	const partialData = $derived((summary === null) !== (warnings === null));
 </script>
 
 <svelte:head><title>{m.nav_dashboard()} · Keenti</title></svelte:head>
@@ -31,14 +41,24 @@
 	     Kept for the document outline and for screen readers only. -->
 	<h1 class="sr-only">{m.nav_dashboard()}</h1>
 
+	{#if partialData}
+		<p class="text-sm text-muted-foreground">{m.section_partial_notice()}</p>
+	{/if}
+
+	{#if data.accountWarnings.status === 'unavailable'}
+		<SectionUnavailable title={m.section_warnings_unavailable()} />
+	{:else if warnings?.partial}
+		<p class="text-sm text-muted-foreground">{m.section_warnings_partial()}</p>
+	{/if}
+
 	{#if isUnreconciled || accountWarnings.length > 0}
 		<div class="space-y-3">
-			{#if isUnreconciled}
+			{#if isUnreconciled && summary}
 				<Alert.Root variant="destructive">
 					<AlertTriangle aria-hidden="true" />
 					<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
 					<Alert.Description>
-						{m.balance_reconciliation_description({ amount: mxn(Math.abs(data.summary.availableToSpend)) })}
+							{m.balance_reconciliation_description({ amount: mxn(Math.abs(summary.availableToSpend)) })}
 					</Alert.Description>
 					<Alert.Action>
 						<Button href="/boxes" size="sm" variant="outline">{m.balance_reconcile_action()}</Button>
@@ -62,12 +82,15 @@
 	<!-- All-time position. Net Balance is the headline figure, so it gets the
 	     hero treatment and the two derived figures sit beside it as a pair
 	     rather than competing at equal weight in a flat three-up grid. -->
+	{#if summary === null}
+		<SectionUnavailable title={m.section_balance_unavailable()} />
+	{:else}
 	<section class="grid grid-cols-1 gap-4 lg:grid-cols-3">
 		<Card.Root class="lg:col-span-1">
 			<Card.Header class="gap-1">
 				<Card.Description>{m.dashboard_net_balance()}</Card.Description>
 				<Card.Title class="font-heading text-4xl font-bold tabular-nums tracking-tight">
-					{mxn(data.summary.netBalance)}
+					{mxn(summary.netBalance)}
 				</Card.Title>
 			</Card.Header>
 			<Card.Content>
@@ -83,7 +106,7 @@
 				<Card.Root class="h-full transition-colors hover:bg-muted/40">
 					<Card.Header class="gap-1">
 						<Card.Description>{m.balance_in_boxes()}</Card.Description>
-						<Card.Title class="text-2xl font-bold tabular-nums">{mxn(data.summary.inBoxes)}</Card.Title>
+						<Card.Title class="text-2xl font-bold tabular-nums">{mxn(summary.inBoxes)}</Card.Title>
 					</Card.Header>
 					<Card.Content class="flex items-center justify-between gap-2">
 						<p class="text-xs text-muted-foreground">{m.dashboard_in_boxes_description()}</p>
@@ -96,7 +119,7 @@
 				<Card.Header class="gap-1">
 					<Card.Description>{m.balance_available_to_spend()}</Card.Description>
 					<Card.Title class="text-2xl font-bold tabular-nums {isUnreconciled ? 'text-destructive' : ''}">
-						{mxn(data.summary.availableToSpend)}
+						{mxn(summary.availableToSpend)}
 					</Card.Title>
 				</Card.Header>
 				<Card.Content>
@@ -105,6 +128,7 @@
 			</Card.Root>
 		</div>
 	</section>
+	{/if}
 
 	<!-- Everything below is scoped to the selected year, so the year control
 	     heads the section instead of floating between the figures it filters
@@ -136,12 +160,17 @@
 			</div>
 		</div>
 
+		<!-- The year control above stays usable even when the figures it filters
+		     could not be loaded, so the User can move to another year. -->
+		{#if summary === null}
+			<SectionUnavailable title={m.section_year_summary_unavailable()} />
+		{:else}
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 			<Card.Root>
 				<Card.Header class="gap-1">
 					<Card.Description>{m.dashboard_total_income({ year: data.year })}</Card.Description>
 					<Card.Title class="text-2xl font-bold tabular-nums text-money-positive">
-						{mxn(data.summary.totalIngress)}
+						{mxn(summary.totalIngress)}
 					</Card.Title>
 				</Card.Header>
 				<Card.Content>
@@ -152,7 +181,7 @@
 				<Card.Header class="gap-1">
 					<Card.Description>{m.dashboard_total_expenses({ year: data.year })}</Card.Description>
 					<Card.Title class="text-2xl font-bold tabular-nums text-money-negative">
-						{mxn(data.summary.totalEgress)}
+						{mxn(summary.totalEgress)}
 					</Card.Title>
 				</Card.Header>
 				<Card.Content>
@@ -162,8 +191,9 @@
 		</div>
 
 		<div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-			<MonthlyBarChart monthly={data.summary.monthly} year={data.year} locale={data.preferences.locale} />
-			<NetTrendChart monthly={data.summary.monthly} year={data.year} locale={data.preferences.locale} />
+			<MonthlyBarChart monthly={summary.monthly} year={data.year} locale={data.preferences.locale} />
+			<NetTrendChart monthly={summary.monthly} year={data.year} locale={data.preferences.locale} />
 		</div>
+		{/if}
 	</section>
 </div>

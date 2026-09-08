@@ -30,6 +30,8 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { sectionValue } from '$lib/types/section';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import type { BoxDto } from '$lib/types/boxes';
 	import type { PageData } from './$types';
 
@@ -52,7 +54,9 @@
 	let reorderedIds = $state('');
 
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
-	const isUnreconciled = $derived(data.balanceSummary.availableToSpend < 0);
+	// Unavailable balance totals are shown as unavailable, not as 0.00.
+	const balance = $derived(sectionValue(data.balanceSummary));
+	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
 
 	const sf = superForm(untrack(() => data.form), {
 		validators: zod4Client(boxSchema),
@@ -142,13 +146,13 @@
 		</Alert.Root>
 	{/if}
 
-	{#if isUnreconciled}
+	{#if isUnreconciled && balance}
 		<Alert.Root variant="destructive">
 			<AlertTriangle aria-hidden="true" />
 			<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
 			<Alert.Description>
 				{m.balance_reconciliation_boxes_description({
-					amount: fmt.format(Math.abs(data.balanceSummary.availableToSpend)),
+					amount: fmt.format(Math.abs(balance.availableToSpend)),
 				})}
 			</Alert.Description>
 			<Alert.Action>
@@ -157,28 +161,32 @@
 		</Alert.Root>
 	{/if}
 
-	<section aria-label={m.balance_summary()} class="grid gap-3 sm:grid-cols-3">
-		<Card.Root size="sm">
-			<Card.Header>
-				<Card.Description>{m.dashboard_net_balance()}</Card.Description>
-				<Card.Title class="text-xl tabular-nums">{fmt.format(data.balanceSummary.netBalance)}</Card.Title>
-			</Card.Header>
-		</Card.Root>
-		<Card.Root size="sm">
-			<Card.Header>
-				<Card.Description>{m.balance_in_boxes()}</Card.Description>
-				<Card.Title class="text-xl tabular-nums">{fmt.format(data.balanceSummary.inBoxes)}</Card.Title>
-			</Card.Header>
-		</Card.Root>
-		<Card.Root size="sm" class={isUnreconciled ? 'ring-destructive/60' : ''}>
-			<Card.Header>
-				<Card.Description>{m.balance_available_to_spend()}</Card.Description>
-				<Card.Title class="text-xl tabular-nums {isUnreconciled ? 'text-destructive' : ''}">
-					{fmt.format(data.balanceSummary.availableToSpend)}
-				</Card.Title>
-			</Card.Header>
-		</Card.Root>
-	</section>
+	{#if balance === null}
+		<SectionUnavailable title={m.section_balance_unavailable()} />
+	{:else}
+		<section aria-label={m.balance_summary()} class="grid gap-3 sm:grid-cols-3">
+			<Card.Root size="sm">
+				<Card.Header>
+					<Card.Description>{m.dashboard_net_balance()}</Card.Description>
+					<Card.Title class="text-xl tabular-nums">{fmt.format(balance.netBalance)}</Card.Title>
+				</Card.Header>
+			</Card.Root>
+			<Card.Root size="sm">
+				<Card.Header>
+					<Card.Description>{m.balance_in_boxes()}</Card.Description>
+					<Card.Title class="text-xl tabular-nums">{fmt.format(balance.inBoxes)}</Card.Title>
+				</Card.Header>
+			</Card.Root>
+			<Card.Root size="sm" class={isUnreconciled ? 'ring-destructive/60' : ''}>
+				<Card.Header>
+					<Card.Description>{m.balance_available_to_spend()}</Card.Description>
+					<Card.Title class="text-xl tabular-nums {isUnreconciled ? 'text-destructive' : ''}">
+						{fmt.format(balance.availableToSpend)}
+					</Card.Title>
+				</Card.Header>
+			</Card.Root>
+		</section>
+	{/if}
 
 	<div class="flex items-center gap-2 border-b" role="tablist" aria-label={m.boxes_view_filter()}>
 		<button

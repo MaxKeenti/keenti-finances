@@ -2,34 +2,27 @@ import { getSession } from '$lib/server/workos-session';
 import type { PageServerLoad } from './$types';
 import { formatDateOnly, mxnFormatter } from '$lib/formatting';
 import { m } from '$lib/paraglide/messages.js';
+import { loadOptionalSection, loadSection } from '$lib/server/section-load';
+import {
+	parseAccounts,
+	parseCreditSettings,
+	parseCreditStatements,
+	parseDashboardSummary,
+	type AccountSummary,
+	type DashboardSummary,
+} from '$lib/server/payloads';
+import { sectionOk, sectionUnavailable, type Section } from '$lib/types/section';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
-type MonthSummary = {
-	month: number;
-	ingress: number;
-	egress: number;
-};
+export type AccountWarning = { title: string; description: string; href: string };
 
-type DashboardSummary = {
-	year: number;
-	netBalance: number;
-	inBoxes: number;
-	availableToSpend: number;
-	totalIngress: number;
-	totalEgress: number;
-	monthly: MonthSummary[];
-};
-
-const EMPTY_SUMMARY: DashboardSummary = {
-	year: new Date().getFullYear(),
-	netBalance: 0,
-	inBoxes: 0,
-	availableToSpend: 0,
-	totalIngress: 0,
-	totalEgress: 0,
-	monthly: Array.from({ length: 12 }, (_, i) => ({ month: i + 1, ingress: 0, egress: 0 })),
-};
+/**
+ * Account warnings, plus whether some account could not be fully checked.
+ * `partial` is not "no warnings": it means the page cannot promise it has
+ * listed every one.
+ */
+export type AccountWarnings = { items: AccountWarning[]; partial: boolean };
 
 export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 	const yearParam = url.searchParams.get('year');
@@ -47,62 +40,108 @@ export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 	const locale = cookies.get('PARAGLIDE_LOCALE') === 'en' ? 'en' : 'es';
 	const mxn = mxnFormatter(locale);
 
-	let summary: DashboardSummary = { ...EMPTY_SUMMARY, year };
-	let accountWarnings: Array<{ title: string; description: string; href: string }> = [];
-
-	try {
-		const res = await fetch(`${BACKEND}/api/dashboard/summary?year=${year}`, {
+	// The two sections are requested concurrently and resolved independently:
+	// a failed summary must not blank the warnings, and vice versa.
+	const [summary, accountWarnings] = await Promise.all([
+		loadSection<DashboardSummary>(fetch, `${BACKEND}/api/dashboard/summary?year=${year}`, {
+			parse: parseDashboardSummary,
 			headers: authHeaders,
-		});
-		if (res.ok) {
-			summary = { ...EMPTY_SUMMARY, ...((await res.json()) as Partial<DashboardSummary>), year };
-			console.log(
-				`[dashboard] load: year=${year} months=${summary.monthly.length} netBalance=${summary.netBalance}`,
-			);
-		} else {
-			console.error(`[dashboard] load: backend returned ${res.status} for year=${year}`);
-		}
-	} catch {
-		console.error('[dashboard] load: backend unreachable');
-	}
+			label: 'dashboard/summary',
+		}),
+		loadAccountWarnings(fetch, authHeaders, locale, mxn),
+	]);
 
-	try {
-		const accountsRes = await fetch(`${BACKEND}/api/accounts`, { headers: authHeaders });
-		const accounts = accountsRes.ok ? await accountsRes.json() as Array<{ id: number; name: string; kind: string; balance: number }> : [];
-		accountWarnings = accounts
-			.filter((account) => account.kind !== 'CREDIT' && account.balance < 0)
-			.map((account) => ({
-				title: m.warning_account_overdrawn_title({ name: account.name }),
-				description: m.warning_account_overdrawn_description({ amount: mxn.format(account.balance) }),
-				href: `/accounts/${account.id}`,
-			}));
-		const creditWarnings = await Promise.all(accounts.filter((account) => account.kind === 'CREDIT').map(async (account) => {
-			const [settingsRes, statementsRes] = await Promise.all([
-				fetch(`${BACKEND}/api/accounts/${account.id}/credit-settings`, { headers: authHeaders }),
-				fetch(`${BACKEND}/api/accounts/${account.id}/credit-statements`, { headers: authHeaders }),
-			]);
-			const warnings: Array<{ title: string; description: string; href: string }> = [];
-			const settings = settingsRes.ok ? await settingsRes.json() as { creditLimit: number } : null;
-			if (settings && account.balance < -settings.creditLimit)
-				warnings.push({
-					title: m.warning_credit_limit_title({ name: account.name }),
-					description: m.warning_credit_limit_description(),
-					href: `/accounts/${account.id}`,
-				});
-			const statements = statementsRes.ok ? await statementsRes.json() as Array<{ dueDate: string; outstandingBalance: number }> : [];
-			const next = statements.filter((statement) => statement.outstandingBalance > 0).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
-			if (next)
-				warnings.push({
-					title: m.warning_payment_due_title({ name: account.name, date: formatDateOnly(next.dueDate, locale) }),
-					description: m.warning_payment_due_description({ amount: mxn.format(next.outstandingBalance) }),
-					href: `/accounts/${account.id}`,
-				});
-			return warnings;
-		}));
-		accountWarnings.push(...creditWarnings.flat());
-	} catch {
-		// The dashboard remains useful when account-specific data is temporarily unavailable.
+	if (summary.status === 'ok') {
+		console.log(
+			`[dashboard] load: year=${year} months=${summary.data.monthly.length} netBalance=${summary.data.netBalance}`,
+		);
 	}
 
 	return { summary, year, accountWarnings };
 };
+
+async function loadAccountWarnings(
+	fetch: typeof globalThis.fetch,
+	authHeaders: Record<string, string>,
+	locale: string,
+	mxn: Intl.NumberFormat,
+): Promise<Section<AccountWarnings>> {
+	const accounts = await loadSection<AccountSummary[]>(fetch, `${BACKEND}/api/accounts`, {
+		parse: parseAccounts,
+		headers: authHeaders,
+		label: 'dashboard/accounts',
+	});
+	if (accounts.status !== 'ok') return sectionUnavailable(accounts.reason);
+
+	const items: AccountWarning[] = accounts.data
+		.filter((account) => account.kind !== 'CREDIT' && account.balance < 0)
+		.map((account) => ({
+			title: m.warning_account_overdrawn_title({ name: account.name }),
+			description: m.warning_account_overdrawn_description({ amount: mxn.format(account.balance) }),
+			href: `/accounts/${account.id}`,
+		}));
+
+	let partial = false;
+	const creditWarnings = await Promise.all(
+		accounts.data
+			.filter((account) => account.kind === 'CREDIT')
+			.map(async (account) => {
+				const [settings, statements] = await Promise.all([
+					// A Credit Financial Account with no Credit settings saved yet
+					// answers 404. That is the normal not-configured state, not a
+					// service failure: it means there is no credit limit to breach,
+					// so the page must not claim its warnings may be incomplete.
+					loadOptionalSection(fetch, `${BACKEND}/api/accounts/${account.id}/credit-settings`, {
+						parse: parseCreditSettings,
+						headers: authHeaders,
+						label: `dashboard/credit-settings/${account.id}`,
+						absentStatuses: [404],
+					}),
+					loadSection(fetch, `${BACKEND}/api/accounts/${account.id}/credit-statements`, {
+						parse: parseCreditStatements,
+						headers: authHeaders,
+						label: `dashboard/credit-statements/${account.id}`,
+					}),
+				]);
+
+				// One credit card that cannot be checked leaves the other warnings
+				// intact; the page says the list may be incomplete instead of
+				// implying this card is fine.
+				if (settings.status !== 'ok' || statements.status !== 'ok') partial = true;
+
+				const warnings: AccountWarning[] = [];
+				if (
+					settings.status === 'ok' &&
+					settings.data !== null &&
+					account.balance < -settings.data.creditLimit
+				)
+					warnings.push({
+						title: m.warning_credit_limit_title({ name: account.name }),
+						description: m.warning_credit_limit_description(),
+						href: `/accounts/${account.id}`,
+					});
+
+				const next =
+					statements.status === 'ok'
+						? statements.data
+								.filter((statement) => statement.outstandingBalance > 0)
+								.sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]
+						: undefined;
+				if (next)
+					warnings.push({
+						title: m.warning_payment_due_title({
+							name: account.name,
+							date: formatDateOnly(next.dueDate, locale),
+						}),
+						description: m.warning_payment_due_description({
+							amount: mxn.format(next.outstandingBalance),
+						}),
+						href: `/accounts/${account.id}`,
+					});
+				return warnings;
+			}),
+	);
+
+	items.push(...creditWarnings.flat());
+	return sectionOk({ items, partial });
+}
