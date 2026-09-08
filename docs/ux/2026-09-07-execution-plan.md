@@ -107,12 +107,30 @@ Not covered here and still open: 1A-balance's explanatory copy, D1/D2-dependent 
 
 **Acceptance:** Progress correctly renders 0%, 10%, and 100%. No blank form opens in an error state. Linking is clearly about existing received income and does not imply creating an expense. Debt payment copy explicitly says one income Transaction will be recorded.
 
+**Status — implemented, pending the user's browser review.** Scope covered:
+
+- **Debt progress (UX-05).** `frontend/src/routes/debts/[id]/+page.svelte` no longer passes `bg-green-500` to the `Progress` root, so the track is the neutral `bg-muted` and only the primitive's indicator fills. The shared primitive is unchanged, as required.
+- **Initial required-field errors (UX-08/09).** The debt detail loader now calls `superValidate(..., { errors: false })`, so `categoryId: 0` (“not chosen yet”) no longer opens the form on a required-Category error; the action still validates every submission. In the Box allocation editor, a newly added row starts untouched and shows a neutral “how much comes from this Box” hint instead of the destructive “amount must be greater than 0”; the destructive message appears once the User types in or leaves that row, and a row filled by a suggestion counts as touched immediately. Suppression is presentational only — both transaction forms keep deriving their disabled Save from the allocations themselves, so a zero row can never be submitted because its message is hidden.
+- **Subscription linking copy (UX-03).** The action, dialog titles/descriptions, list heading, and empty states now say the User is linking income they already received (member contributions), in both locales, and state that linking records no new Transaction and creates no expense. This describes the existing INGRESS-only contract; no API, filter, or validation behavior changed. Provider-expense association remains out of scope under D3/3D.
+- **Direction-specific description examples.** `transactions_placeholder_description` is replaced by `_ingress`/`_egress` variants, selected from the form's current Direction on both the create dialog and the edit page.
+- **Debt Payment effect near Save.** A line immediately above the submit button states that saving records one income Transaction for that amount, so the balance updates without a second entry.
+
+Verification: `frontend/tests/debt-payment-form.test.js` drives the real `/debts/[id]` loader and `recordPayment` action against the 0A debt fixtures — an untouched form carries no errors and is prefilled with the remaining amount; a missing Category or a non-positive amount still fails on submission without reaching the backend; a complete submission issues exactly one `POST /api/debts/{id}/payments`. The suite required a Bun preload (`frontend/tests/setup.ts`, wired by `frontend/bunfig.toml`) stubbing SvelteKit's `$app/*` virtual modules and the repository's type-only `effect` shims, which superforms' adapter barrel imports at runtime. Full `bun test` (81 pass), `bun run check` (0 errors; the 7 warnings are pre-existing), and `bun run build` pass.
+
+Verification limits: the progress bar's rendered colour at 0/10/100%, the untouched-versus-touched Box row states, and the localized linking copy are visual/interaction outcomes with no DOM test runner in this repository — they need the root's browser pass across both locales, themes, and viewports. Message text is deliberately not asserted in tests.
+
 ### 1C. Responsive alert repair
 
 - Move alert actions into normal responsive layout instead of relying on fixed right padding (UX-12).
 - Test long account names and Spanish action text at 320, 390, 768, and 1280px.
 
 **Acceptance:** Alert content and actions never overlap; every action remains readable, focusable, and reachable with text enlarged.
+
+**Status — implemented, pending the user's browser review.** `Alert.Action` no longer uses `absolute top-2 right-2`, and `Alert.Root` no longer reserves a fixed `pr-18`. The action is a grid child: below `sm` it takes its own row under the title and description, spanning any icon column; from `sm` up the alert gains a real trailing column (`col-start-[-2]`, resolving correctly whether or not an icon added a leading column) that the text columns size around, so a long localized action label can no longer be overlapped by a long account name. The comfortable 32px minimum height for small buttons inside alerts is retained. All three call sites — the dashboard's reconciliation and per-account credit warnings, the Boxes overview, and Box detail's archived/reconciliation alerts — use the shared components and were not changed individually.
+
+Verification: `bun test` (81 pass), `bun run check` (0 errors), and `bun run build` pass. `FX-LONGNAME-01` supplies the long Spanish account name for the dashboard credit alert.
+
+Verification limits: layout is a rendered outcome, so the 320/390/768/1280px checks in both locales and themes, with enlarged text and keyboard focus order, are the root's browser pass; no automated layout assertion exists in this repository, and no test asserts CSS classes as a proxy for it.
 
 ### 1D. Implement the reviewed obligation-status model
 
@@ -260,3 +278,19 @@ The earlier conversation proposed a 30-day view. Treat this as an additional pro
 | 5: planning horizon | D5, 2B integration shape, 0B, 1D, Phase 4; 3D if required by formula | Separate scope |
 
 Sizes are relative, not calendar commitments. Create implementation issues from these slices after review, using the repository's issue-tracker and triage conventions. This audit did not open issues or start implementation.
+
+## First implementation PR verification — 8 September 2026
+
+Implemented independently shippable slices: 0A, 1A-loader, 1B, and 1C. Phase 1 as a whole is **not complete**: 1A-balance and 1D still require D1/D2 review. Application implementation was executed through `claude -p`; Codex reviewed changes and ran verification. Claude completed targeted 1A follow-up reviews. The final whole-branch Claude review was attempted but stopped at its session usage limit, so it is not counted as completed.
+
+Codex browser verification used only a local frontend and loopback synthetic backend:
+
+- Dashboard failure, failed Retry feedback, and recovery to 2,500.75 / 500.00 / 2,000.75; genuine zero balances remain zero.
+- Subscription payment-section failure preserves members and linked income; missing header data renders unavailable.
+- Debt progress at 0/10/100 has indicator transforms −100/−90/0%; the zero track is neutral. Initial category validation is absent and an incomplete submission shows the error. Fully paid debt disables payment entry.
+- Transaction examples change from salary to groceries with direction. New Box rows show neutral guidance, blur reveals the positive-amount error, and entering 100 clears it. The synthetic −760 available balance projects to −860 for a 100 expense and returns to −760 when fully funded from a Box. The draft was cancelled. A temporary read-only adapter supplied empty transaction lists, contacts/transfers, and a BOTH category alongside `FX-BAL-OVERRESERVED-01`; no backend writes were allowed.
+- Long Spanish alerts in dark theme fit at 320, 390, 768, and 1280px; action/text bounds do not overlap and desktop scroll width equals 1280. English/light was checked at 320px, including keyboard focus reaching Review account. Viewport overrides were reset.
+
+Local checks: 81 tests pass; type/component checking has zero errors and the seven pre-existing warnings; production build succeeds. The debt fixture's unfinished status was corrected from PENDING to the actual ACTIVE domain value during verification.
+
+Remaining review checks: full locale/theme cross-product, enlarged-text behavior, final whole-branch Claude review, and post-deployment Railway development journeys. No application deployment, shared-data seeding, or production release occurred. These limitations must accompany the PR; they are not evidence of a completed Phase 1 exit gate.
