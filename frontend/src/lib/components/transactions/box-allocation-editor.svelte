@@ -173,6 +173,30 @@
 			});
 	}
 
+	// A row the User has not typed into yet is incomplete, not wrong: it opens
+	// at 0 because we just added it. Track interaction per row so the
+	// destructive "amount must be positive" message appears only after the
+	// User has had a go at it. Save stays disabled meanwhile — the callers
+	// derive that from the allocations themselves, not from this state — so a
+	// row can never be submitted at 0 just because its message is hidden.
+	let touchedRows = $state(new Set<number>());
+
+	function markTouched(index: number) {
+		if (touchedRows.has(index)) return;
+		const next = new Set(touchedRows);
+		next.add(index);
+		touchedRows = next;
+	}
+
+	function dropTouched(removedIndex: number) {
+		const next = new Set<number>();
+		for (const index of touchedRows) {
+			if (index < removedIndex) next.add(index);
+			else if (index > removedIndex) next.add(index - 1);
+		}
+		touchedRows = next;
+	}
+
 	function addAllocation() {
 		const box = unusedBoxes[0];
 		if (!box) return;
@@ -184,6 +208,9 @@
 			Math.min(amountToCents(unallocated), amountToCents(maxForBox(box.id))),
 		);
 		if (amount <= 0) return;
+		// A suggestion fills the amount for the User, so the new row is complete
+		// and any problem with it should be visible immediately.
+		markTouched(allocations.length);
 		onChange([...allocations, { boxId: box.id, amount }]);
 	}
 
@@ -196,10 +223,12 @@
 	function changeAmount(index: number, event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const amount = Number.isFinite(input.valueAsNumber) ? input.valueAsNumber : 0;
+		markTouched(index);
 		onChange(allocations.map((allocation, current) => (current === index ? { ...allocation, amount } : allocation)));
 	}
 
 	function removeAllocation(index: number) {
+		dropTouched(index);
 		onChange(allocations.filter((_, current) => current !== index));
 	}
 </script>
@@ -252,6 +281,7 @@
 		{#each allocations as allocation, index (`${allocation.boxId}-${index}`)}
 			{@const selectedBox = boxFor(allocation.boxId)}
 			{@const archived = Boolean(selectedBox?.archived)}
+			{@const lineTouched = touchedRows.has(index)}
 			{@const lineAmountInvalid = allocation.amount <= 0}
 			{@const linePrecisionInvalid = !lineAmountInvalid && !hasAtMostTwoDecimalPlaces(allocation.amount)}
 			{@const lineOverBalance = kind === 'funding' && amountToCents(allocation.amount) > amountToCents(maxForBox(allocation.boxId))}
@@ -286,12 +316,19 @@
 						max={kind === 'funding' ? maxForBox(allocation.boxId) : maximumTotal}
 						value={allocation.amount || ''}
 						oninput={(event) => changeAmount(index, event)}
+						onblur={() => markTouched(index)}
 						disabled={disabled || archived}
-						aria-invalid={lineAmountInvalid || linePrecisionInvalid || lineOverBalance || undefined}
+						aria-invalid={(lineTouched && lineAmountInvalid) || linePrecisionInvalid || lineOverBalance || undefined}
 						aria-label={m.transactions_box_amount_aria({ number: index + 1 })}
 						placeholder="0.00"
 					/>
-					{#if lineAmountInvalid}
+					{#if lineAmountInvalid && !lineTouched}
+						<p class="text-xs text-muted-foreground">
+							{kind === 'funding'
+								? m.transactions_box_amount_funding_hint()
+								: m.transactions_box_amount_distribution_hint()}
+						</p>
+					{:else if lineAmountInvalid}
 						<p class="text-xs text-destructive">{m.validation_amount_positive()}</p>
 					{:else if linePrecisionInvalid}
 						<p class="text-xs text-destructive">{m.transactions_box_amount_precision()}</p>

@@ -23,6 +23,7 @@
 	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import { BoxPlanPanel, PlanCreationDialog } from '$lib/components/box-plans';
 	import { FundingTriggerSettings } from '$lib/components/funding-triggers';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -35,6 +36,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { formatLocale, mxnFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { sectionValue } from '$lib/types/section';
 	import {
 		boxMovementTransactionSourceState,
 		hasClickableBoxMovementTransaction,
@@ -96,7 +98,20 @@
 			timeZone: data.preferences.timeZone,
 		}),
 	);
-	const isUnreconciled = $derived(data.balanceSummary.availableToSpend < 0);
+	// Unavailable balance totals are shown as unavailable, and the actions that
+	// need them (deposits are capped by Available to Spend) are disabled.
+	const balance = $derived(sectionValue(data.balanceSummary));
+	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
+	// One reason, used by every path that can start or submit a deposit: the
+	// entry points, the plan top-up, and the dialog itself. Withdrawals and
+	// transfers are limited by the Box balance, so they are unaffected.
+	const depositBlockedReason = $derived(
+		balance === null
+			? m.boxes_deposits_unavailable()
+			: isUnreconciled
+				? m.boxes_deposits_blocked()
+				: null,
+	);
 	const hasBalance = $derived(data.box.balance >= 0.005);
 	const orderedHistory = $derived(
 		[...data.history].sort((a, b) =>
@@ -129,6 +144,7 @@
 	const { form, errors, enhance, submitting, message } = sf;
 
 	function openMovement(kind: MovementKind, amount = 0) {
+		if (kind === 'DEPOSIT' && depositBlockedReason !== null) return;
 		sf.reset({
 			data: {
 				kind,
@@ -238,13 +254,13 @@
 				</form>
 			</Alert.Action>
 		</Alert.Root>
-	{:else if isUnreconciled}
+	{:else if isUnreconciled && balance}
 		<Alert.Root variant="destructive">
 			<AlertTriangle aria-hidden="true" />
 			<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
 			<Alert.Description>
 				{m.balance_reconciliation_box_detail({
-					amount: fmt.format(Math.abs(data.balanceSummary.availableToSpend)),
+					amount: fmt.format(Math.abs(balance.availableToSpend)),
 				})}
 			</Alert.Description>
 			{#if hasBalance}
@@ -304,18 +320,24 @@
 				<div>
 					<p class="text-xs text-muted-foreground">{m.balance_available_to_spend()}</p>
 					<p class="text-lg font-medium tabular-nums {isUnreconciled ? 'text-destructive' : ''}">
-						{fmt.format(data.balanceSummary.availableToSpend)}
+						{balance === null ? m.section_balance_chip_unavailable() : fmt.format(balance.availableToSpend)}
 					</p>
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">{m.balance_in_boxes()}</p>
-					<p class="text-lg font-medium tabular-nums">{fmt.format(data.balanceSummary.inBoxes)}</p>
+					<p class="text-lg font-medium tabular-nums">
+						{balance === null ? m.section_balance_chip_unavailable() : fmt.format(balance.inBoxes)}
+					</p>
 				</div>
 			</div>
 
 			{#if !data.box.archived}
 				<div class="flex flex-wrap gap-2 border-t pt-4">
-					<Button onclick={() => openMovement('DEPOSIT')} disabled={isUnreconciled} title={isUnreconciled ? m.boxes_deposits_blocked() : undefined}>
+					<Button
+						onclick={() => openMovement('DEPOSIT')}
+						disabled={depositBlockedReason !== null}
+						title={depositBlockedReason ?? undefined}
+					>
 						<ArrowDownLeft data-icon="inline-start" />{m.boxes_deposit()}
 					</Button>
 					<Button variant="outline" onclick={() => openMovement('WITHDRAWAL')} disabled={!hasBalance}>
@@ -325,6 +347,13 @@
 						<ArrowRight data-icon="inline-start" />{m.boxes_transfer()}
 					</Button>
 				</div>
+				{#if balance === null}
+					<SectionUnavailable
+						compact
+						title={m.section_balance_unavailable()}
+						description={m.boxes_deposits_unavailable()}
+					/>
+				{/if}
 				{#if activePlanSummary && !hasBalance}
 					<p class="text-xs text-muted-foreground">{m.box_plan_end_before_archive()}</p>
 				{/if}
@@ -368,7 +397,8 @@
 				viewingHistorical={data.viewingHistorical}
 				onChanged={refreshPlan}
 				onTopUp={(amount) => openMovement('DEPOSIT', amount)}
-				topUpDisabled={isUnreconciled}
+				topUpDisabled={depositBlockedReason !== null}
+				topUpDisabledReason={depositBlockedReason}
 			/>
 		{:else if !data.planLoadFailed}
 			<Empty.Root class="border">
@@ -529,6 +559,23 @@
 			<Alert.Root variant="destructive"><Alert.Description>{$message}</Alert.Description></Alert.Root>
 		{/if}
 
+		<!-- The dialog can already be open when the balance becomes unavailable, so
+		     the deposit path is closed here too rather than only at its entry points. -->
+		{#if $form.kind === 'DEPOSIT' && depositBlockedReason}
+			{#if balance === null}
+				<SectionUnavailable
+					compact
+					title={m.section_balance_unavailable()}
+					description={depositBlockedReason}
+				/>
+			{:else}
+				<Alert.Root variant="destructive">
+					<AlertTriangle aria-hidden="true" />
+					<Alert.Description>{depositBlockedReason}</Alert.Description>
+				</Alert.Root>
+			{/if}
+		{/if}
+
 		<form method="POST" action="?/move" use:enhance class="grid gap-4">
 			<input type="hidden" name="kind" value={$form.kind} />
 
@@ -561,7 +608,7 @@
 							type="number"
 							step="0.01"
 							min="0.01"
-							max={$form.kind === 'DEPOSIT' ? Math.max(0, data.balanceSummary.availableToSpend) : data.box.balance}
+							max={$form.kind === 'DEPOSIT' ? Math.max(0, balance?.availableToSpend ?? 0) : data.box.balance}
 							bind:value={$form.amount}
 						/>
 					{/snippet}
@@ -569,7 +616,9 @@
 				<Form.FieldErrors />
 				<p class="text-xs text-muted-foreground">
 					{$form.kind === 'DEPOSIT'
-						? m.boxes_available_hint({ amount: fmt.format(data.balanceSummary.availableToSpend) })
+						? balance === null
+							? m.section_balance_unavailable()
+							: m.boxes_available_hint({ amount: fmt.format(balance.availableToSpend) })
 						: m.boxes_box_balance_hint({ amount: fmt.format(data.box.balance) })}
 				</p>
 			</Form.Field>
@@ -594,7 +643,11 @@
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (movementDialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={$submitting}>
+				<Button
+					type="submit"
+					disabled={$submitting || ($form.kind === 'DEPOSIT' && depositBlockedReason !== null)}
+					title={$form.kind === 'DEPOSIT' ? (depositBlockedReason ?? undefined) : undefined}
+				>
 					{$submitting ? m.common_processing() : movementTitle($form.kind as MovementKind)}
 				</Button>
 			</Dialog.Footer>

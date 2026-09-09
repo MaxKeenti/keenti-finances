@@ -41,6 +41,7 @@
 		onChanged,
 		onTopUp,
 		topUpDisabled = false,
+		topUpDisabledReason = null,
 	}: {
 		plan: BoxPlan;
 		movements: BoxMovementDto[];
@@ -50,6 +51,8 @@
 		onChanged: (plan: BoxPlan) => void | Promise<void>;
 		onTopUp: (amount: number) => void;
 		topUpDisabled?: boolean;
+		/** Why topping up is unavailable, shown next to the disabled button. */
+		topUpDisabledReason?: string | null;
 	} = $props();
 
 	let revisionOpen = $state(false);
@@ -279,7 +282,8 @@
 						<div class="rounded-lg border p-3"><p class="text-xs text-muted-foreground">{m.box_plan_suggested_top_up()}</p><p class="font-semibold tabular-nums">{fmt.format(plan.suggestedTopUp)}</p></div>
 					</div>
 					{#if active && plan.suggestedTopUp > 0}
-						<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3"><p class="max-w-lg text-sm text-muted-foreground">{m.box_plan_top_up_description()}</p><Button onclick={() => onTopUp(plan.suggestedTopUp)} disabled={topUpDisabled} title={topUpDisabled ? m.boxes_deposits_blocked() : undefined}><CircleDollarSign data-icon="inline-start" />{m.box_plan_top_up()}</Button></div>
+						{@const topUpReason = topUpDisabled ? (topUpDisabledReason ?? m.boxes_deposits_blocked()) : null}
+						<div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3"><div class="max-w-lg space-y-1"><p class="text-sm text-muted-foreground">{m.box_plan_top_up_description()}</p>{#if topUpReason}<p class="text-sm text-muted-foreground">{topUpReason}</p>{/if}</div><Button onclick={() => onTopUp(plan.suggestedTopUp)} disabled={topUpDisabled} title={topUpReason ?? undefined}><CircleDollarSign data-icon="inline-start" />{m.box_plan_top_up()}</Button></div>
 					{/if}
 
 					<section class="rounded-lg border p-4" aria-labelledby="budget-current-period">

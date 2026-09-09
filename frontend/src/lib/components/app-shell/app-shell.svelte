@@ -9,6 +9,8 @@
 	import { page } from '$app/stores';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { BalanceSummary } from '$lib/types/boxes';
+	import { sectionValue, type Section } from '$lib/types/section';
+	import { SectionUnavailable } from '$lib/components/section-status';
 
 	const {
 		children,
@@ -16,7 +18,7 @@
 		locale,
 	}: {
 		children: any;
-		balanceSummary: BalanceSummary;
+		balanceSummary: Section<BalanceSummary>;
 		locale: string;
 	} = $props();
 
@@ -24,7 +26,11 @@
 	// the dock is swapped for its action bar.
 	const dockAction = $derived(dockActionStore.current);
 	const fmt = $derived(mxnFormatter(locale));
-	const isUnreconciled = $derived(balanceSummary.availableToSpend < 0);
+	// The header used to render a failed summary as 0.00 Available to Spend on
+	// every page of the app. When it is unavailable the chip says so and offers
+	// a retry instead of stating an amount nobody computed.
+	const balance = $derived(sectionValue(balanceSummary));
+	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
 	// The dashboard already states this twice — a banner that explains it and
 	// offers the action, and the Disponible para gastar card that carries the
 	// figure itself. A third copy in the header was pure repetition, so the
@@ -40,22 +46,29 @@
 		{#if showBalanceChip}
 			<header class="sticky top-0 z-30 border-b bg-background/90 backdrop-blur-xl">
 				<div class="mx-auto flex w-full max-w-7xl items-center justify-end px-4 py-2 sm:px-6 lg:px-8">
-					<a
-					href="/boxes"
-					class="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {isUnreconciled ? 'text-destructive' : ''}"
-					aria-label={`${m.balance_available_to_spend()}: ${fmt.format(balanceSummary.availableToSpend)}`}
-				>
-					{#if isUnreconciled}
-						<AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
+					{#if balance === null}
+						<SectionUnavailable
+							title={`${m.balance_available_to_spend()}: ${m.section_balance_chip_unavailable()}`}
+							compact
+						/>
 					{:else}
-						<WalletCards class="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
+						<a
+							href="/boxes"
+							class="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {isUnreconciled ? 'text-destructive' : ''}"
+							aria-label={`${m.balance_available_to_spend()}: ${fmt.format(balance.availableToSpend)}`}
+						>
+							{#if isUnreconciled}
+								<AlertTriangle class="size-4 shrink-0" aria-hidden="true" />
+							{:else}
+								<WalletCards class="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
+							{/if}
+							<span class="hidden text-muted-foreground sm:inline">{m.balance_available_to_spend()}</span>
+							<strong class="truncate tabular-nums">{fmt.format(balance.availableToSpend)}</strong>
+							{#if isUnreconciled}
+								<span class="hidden text-xs font-medium md:inline">{m.balance_reconcile_short()}</span>
+							{/if}
+						</a>
 					{/if}
-					<span class="hidden text-muted-foreground sm:inline">{m.balance_available_to_spend()}</span>
-					<strong class="truncate tabular-nums">{fmt.format(balanceSummary.availableToSpend)}</strong>
-					{#if isUnreconciled}
-						<span class="hidden text-xs font-medium md:inline">{m.balance_reconcile_short()}</span>
-					{/if}
-					</a>
 				</div>
 			</header>
 		{/if}

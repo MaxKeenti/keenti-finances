@@ -8,6 +8,7 @@
 	import { adaptiveConfirm, submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import {
 		BoxAllocationEditor,
+		PreservedBoxFunding,
 		TransactionBoxBreakdown,
 	} from '$lib/components/transactions';
 	import * as Card from '$lib/components/ui/card';
@@ -21,6 +22,7 @@
 	import { CategoryBadge } from '$lib/components/categories';
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
+	import { sectionValue } from '$lib/types/section';
 	import { transactionSchema } from '$lib/schemas/transaction';
 	import {
 		allocationTotal,
@@ -32,6 +34,11 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Box funding and distribution are limited by Available to Spend. When that
+	// total is unavailable the optional funding UI is withheld and says why;
+	// recording the Transaction itself is unaffected.
+	const availableBalance = $derived(sectionValue(data.balanceSummary));
 
 	let editDialogOpen = $state(false);
 	let deleteForm = $state<HTMLFormElement | null>(null);
@@ -334,7 +341,9 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label>{m.common_description()}</Form.Label>
-						<Input {...props} bind:value={$form.description} placeholder={m.transactions_placeholder_description()} />
+						<Input {...props} bind:value={$form.description} placeholder={$form.direction === 'EGRESS'
+								? m.transactions_placeholder_description_egress()
+								: m.transactions_placeholder_description_ingress()} />
 					{/snippet}
 				</Form.Control>
 				<Form.FieldErrors />
@@ -392,7 +401,14 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
-			{#if $form.direction === 'EGRESS'}
+			{#if availableBalance === null}
+				<PreservedBoxFunding
+					allocations={$form.direction === 'EGRESS' ? $form.boxFunding : []}
+					boxes={data.boxes}
+					transactionAmount={$form.amount}
+					locale={data.preferences.locale}
+				/>
+			{:else if $form.direction === 'EGRESS'}
 				<BoxAllocationEditor
 					kind="funding"
 					boxes={data.boxes}
@@ -401,7 +417,7 @@
 					transactionAmount={$form.amount}
 					transactionDate={$form.transactionDate}
 					{today}
-					availableBefore={data.balanceSummary.availableToSpend}
+					availableBefore={availableBalance.availableToSpend}
 					locale={data.preferences.locale}
 					originalAmount={tx.amount}
 					originalDirection={tx.direction as TransactionDirection}

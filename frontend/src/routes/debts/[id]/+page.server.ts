@@ -95,9 +95,13 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, parent }) =
 	// User at UTC-6 after 18:00 local. Resolve their calendar day instead.
 	const { preferences } = await parent();
 	const today = dateInTimeZone(preferences.timeZone);
+	// `categoryId: 0` is a placeholder for "not chosen yet", not a mistake the
+	// User made. Suppress validation on load so an untouched form does not open
+	// showing a required-Category error; submitting still validates.
 	const form = await superValidate(
 		{ amount: debt.remaining, paymentDate: today, categoryId: 0, accountId: '' as '', notes: '' },
 		zod4(paymentSchema),
+		{ errors: false },
 	);
 
 	return { debt, payments, categories, accounts, accountTracking, form };
