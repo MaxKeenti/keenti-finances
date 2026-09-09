@@ -18,6 +18,7 @@
  * the real wall clock of the machine.
  */
 
+import { HARNESS_ROUTES } from './harness-routes';
 import { loadScenario, scenarioIds } from './scenarios';
 
 const scenarioId = process.argv[2] ?? process.env.FIXTURE_SCENARIO;
@@ -70,32 +71,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 		headers: { 'content-type': 'application/json' },
 	});
 }
-
-/**
- * Routes every authenticated page needs, regardless of scenario.
- *
- * `+layout.server.ts` requests these on each navigation. A scenario that
- * declares one wins; this only keeps the shell from degrading to defaults in
- * scenarios whose subject is something else. `timeZone` matches the fixture
- * clocks' Mexico City zone, so a date rendered in the browser is interpreted in
- * the same zone the scenarios were written against — the instant, however, is
- * the machine's real clock, not a fixture instant.
- */
-const HARNESS_ROUTES: Record<string, unknown> = {
-	'GET /api/user/preferences': {
-		primaryHue: 91,
-		headingFont: 'Fraunces',
-		bodyFont: 'Geist',
-		locale: 'es',
-		transactionPageSize: 25,
-		transactionSortBy: 'transactionDate',
-		transactionSortDirection: 'desc',
-		mobilePinnedNavItems: '/transactions,/subscriptions,/debts',
-		dockMagnification: true,
-		timeZone: 'America/Mexico_City',
-		themeMode: 'system',
-	},
-};
 
 // `@types/bun` is not a dependency of this package; this is the small slice of
 // `Bun.serve` the fixture server actually uses.
