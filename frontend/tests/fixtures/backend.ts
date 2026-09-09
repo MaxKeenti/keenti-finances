@@ -41,8 +41,32 @@ export type FixtureBackend = {
 	fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 	/** Every request the code under test made, in order. */
 	requests: RecordedRequest[];
+	/**
+	 * Requests for routes the scenario does not declare, in order.
+	 *
+	 * The fixture backend answers those by throwing, which a loader cannot tell
+	 * apart from an unreachable backend — so an outage test would still pass if
+	 * the loader called a route that does not exist. This list is how a test
+	 * proves the outage it asserts is the one it injected.
+	 */
+	undeclaredRequests: RecordedRequest[];
+	/**
+	 * Throws when any undeclared route was requested, naming the offenders.
+	 *
+	 * Call it after driving a loader — including in tests whose subject is a
+	 * failure — so "unavailable" is only ever credited to the injected failure.
+	 */
+	assertNoUndeclaredRoutes: () => void;
 	/** Clears recorded requests and injected failures. */
 	reset: () => void;
+	/**
+	 * Declares route bodies for keys the scenario and the test did not cover.
+	 *
+	 * For shell routes every page needs (see `harness-routes`), so a scenario
+	 * about something else does not have to restate them. Existing declarations
+	 * always win, and nothing here suppresses injected failures.
+	 */
+	declareDefaultRoutes: (defaults: Record<string, unknown>) => void;
 	/** Adds or replaces failure injection after construction. */
 	failRoute: (key: string, mode: FailureMode) => void;
 	/** Removes failure injection for one route. */
@@ -89,6 +113,7 @@ export function createFixtureBackend(
 	const initialFailures = { ...(options.failures ?? {}) };
 	let failures: Record<string, FailureMode> = { ...initialFailures };
 	const requests: RecordedRequest[] = [];
+	const undeclaredRequests: RecordedRequest[] = [];
 
 	async function fixtureFetch(
 		input: string | URL | Request,
@@ -97,7 +122,8 @@ export function createFixtureBackend(
 		const url = requestUrl(input);
 		const method = requestMethod(input, init);
 		const key = routeKey(method, url);
-		requests.push({ method, url, key });
+		const request: RecordedRequest = { method, url, key };
+		requests.push(request);
 
 		const failure = failures[key];
 		if (failure?.kind === 'unreachable') {
@@ -108,6 +134,7 @@ export function createFixtureBackend(
 		}
 
 		if (!(key in routes)) {
+			undeclaredRequests.push(request);
 			throw new Error(
 				`Fixture scenario ${scenario.id} does not declare ${key}. ` +
 					`Declared routes: ${Object.keys(routes).sort().join(', ') || '(none)'}`,
@@ -121,9 +148,25 @@ export function createFixtureBackend(
 		scenario,
 		fetch: fixtureFetch,
 		requests,
+		undeclaredRequests,
+		assertNoUndeclaredRoutes() {
+			if (undeclaredRequests.length === 0) return;
+			const keys = [...new Set(undeclaredRequests.map((request) => request.key))].sort();
+			throw new Error(
+				`Fixture scenario ${scenario.id} was asked for undeclared route(s): ${keys.join(', ')}. ` +
+					`A loader that calls an undeclared route sees the same rejection as an unreachable ` +
+					`backend, so this would otherwise pass as an injected outage.`,
+			);
+		},
 		reset() {
 			requests.length = 0;
+			undeclaredRequests.length = 0;
 			failures = { ...initialFailures };
+		},
+		declareDefaultRoutes(defaults) {
+			for (const [key, body] of Object.entries(defaults)) {
+				if (!(key in routes)) routes[key] = body;
+			}
 		},
 		failRoute(key, mode) {
 			failures[key] = mode;

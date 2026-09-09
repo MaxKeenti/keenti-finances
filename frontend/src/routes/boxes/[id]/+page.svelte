@@ -23,6 +23,7 @@
 	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import { BoxPlanPanel, PlanCreationDialog } from '$lib/components/box-plans';
 	import { FundingTriggerSettings } from '$lib/components/funding-triggers';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -101,6 +102,16 @@
 	// need them (deposits are capped by Available to Spend) are disabled.
 	const balance = $derived(sectionValue(data.balanceSummary));
 	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
+	// One reason, used by every path that can start or submit a deposit: the
+	// entry points, the plan top-up, and the dialog itself. Withdrawals and
+	// transfers are limited by the Box balance, so they are unaffected.
+	const depositBlockedReason = $derived(
+		balance === null
+			? m.boxes_deposits_unavailable()
+			: isUnreconciled
+				? m.boxes_deposits_blocked()
+				: null,
+	);
 	const hasBalance = $derived(data.box.balance >= 0.005);
 	const orderedHistory = $derived(
 		[...data.history].sort((a, b) =>
@@ -133,6 +144,7 @@
 	const { form, errors, enhance, submitting, message } = sf;
 
 	function openMovement(kind: MovementKind, amount = 0) {
+		if (kind === 'DEPOSIT' && depositBlockedReason !== null) return;
 		sf.reset({
 			data: {
 				kind,
@@ -323,12 +335,8 @@
 				<div class="flex flex-wrap gap-2 border-t pt-4">
 					<Button
 						onclick={() => openMovement('DEPOSIT')}
-						disabled={isUnreconciled || balance === null}
-						title={balance === null
-							? m.section_balance_unavailable()
-							: isUnreconciled
-								? m.boxes_deposits_blocked()
-								: undefined}
+						disabled={depositBlockedReason !== null}
+						title={depositBlockedReason ?? undefined}
 					>
 						<ArrowDownLeft data-icon="inline-start" />{m.boxes_deposit()}
 					</Button>
@@ -339,6 +347,13 @@
 						<ArrowRight data-icon="inline-start" />{m.boxes_transfer()}
 					</Button>
 				</div>
+				{#if balance === null}
+					<SectionUnavailable
+						compact
+						title={m.section_balance_unavailable()}
+						description={m.boxes_deposits_unavailable()}
+					/>
+				{/if}
 				{#if activePlanSummary && !hasBalance}
 					<p class="text-xs text-muted-foreground">{m.box_plan_end_before_archive()}</p>
 				{/if}
@@ -382,7 +397,8 @@
 				viewingHistorical={data.viewingHistorical}
 				onChanged={refreshPlan}
 				onTopUp={(amount) => openMovement('DEPOSIT', amount)}
-				topUpDisabled={isUnreconciled}
+				topUpDisabled={depositBlockedReason !== null}
+				topUpDisabledReason={depositBlockedReason}
 			/>
 		{:else if !data.planLoadFailed}
 			<Empty.Root class="border">
@@ -543,6 +559,23 @@
 			<Alert.Root variant="destructive"><Alert.Description>{$message}</Alert.Description></Alert.Root>
 		{/if}
 
+		<!-- The dialog can already be open when the balance becomes unavailable, so
+		     the deposit path is closed here too rather than only at its entry points. -->
+		{#if $form.kind === 'DEPOSIT' && depositBlockedReason}
+			{#if balance === null}
+				<SectionUnavailable
+					compact
+					title={m.section_balance_unavailable()}
+					description={depositBlockedReason}
+				/>
+			{:else}
+				<Alert.Root variant="destructive">
+					<AlertTriangle aria-hidden="true" />
+					<Alert.Description>{depositBlockedReason}</Alert.Description>
+				</Alert.Root>
+			{/if}
+		{/if}
+
 		<form method="POST" action="?/move" use:enhance class="grid gap-4">
 			<input type="hidden" name="kind" value={$form.kind} />
 
@@ -610,7 +643,11 @@
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (movementDialogOpen = false)}>{m.common_cancel()}</Button>
-				<Button type="submit" disabled={$submitting}>
+				<Button
+					type="submit"
+					disabled={$submitting || ($form.kind === 'DEPOSIT' && depositBlockedReason !== null)}
+					title={$form.kind === 'DEPOSIT' ? (depositBlockedReason ?? undefined) : undefined}
+				>
 					{$submitting ? m.common_processing() : movementTitle($form.kind as MovementKind)}
 				</Button>
 			</Dialog.Footer>

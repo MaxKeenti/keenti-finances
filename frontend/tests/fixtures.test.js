@@ -192,6 +192,65 @@ describe('fixture backend isolation', () => {
 		);
 	});
 
+	test('undeclared routes are recorded so an outage test can prove none were called', async () => {
+		const backend = createFixtureBackend('FX-BAL-ZERO-01');
+
+		expect(backend.undeclaredRequests).toEqual([]);
+		expect(() => backend.assertNoUndeclaredRoutes()).not.toThrow();
+
+		await expect(backend.fetch('http://backend/api/subscriptions')).rejects.toThrow();
+
+		expect(backend.undeclaredRequests.map((request) => request.key)).toEqual([
+			'GET /api/subscriptions',
+		]);
+		expect(() => backend.assertNoUndeclaredRoutes()).toThrow(
+			/undeclared route\(s\): GET \/api\/subscriptions/,
+		);
+	});
+
+	test('an injected outage is not mistaken for an undeclared route', async () => {
+		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
+			failures: { 'GET /api/boxes/summary': { kind: 'unreachable' } },
+		});
+
+		await expect(backend.fetch('http://backend/api/boxes/summary')).rejects.toBeInstanceOf(
+			TypeError,
+		);
+
+		expect(backend.undeclaredRequests).toEqual([]);
+		expect(() => backend.assertNoUndeclaredRoutes()).not.toThrow();
+	});
+
+	test('a caller that swallows the rejection still leaves the undeclared call recorded', async () => {
+		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
+			failures: { 'GET /api/boxes/summary': { kind: 'unreachable' } },
+		});
+
+		// How a loader behaves: both calls reject, and both look identical to it.
+		for (const path of ['/api/boxes/summary', '/api/boxes/sumary']) {
+			try {
+				await backend.fetch(`http://backend${path}`);
+			} catch {
+				// Treated as "unavailable", exactly as the loader would.
+			}
+		}
+
+		expect(backend.undeclaredRequests.map((request) => request.key)).toEqual([
+			'GET /api/boxes/sumary',
+		]);
+		expect(() => backend.assertNoUndeclaredRoutes()).toThrow(/GET \/api\/boxes\/sumary/);
+	});
+
+	test('reset clears recorded undeclared routes', async () => {
+		const backend = createFixtureBackend('FX-BAL-ZERO-01');
+
+		await expect(backend.fetch('http://backend/api/subscriptions')).rejects.toThrow();
+		backend.reset();
+
+		expect(backend.undeclaredRequests).toEqual([]);
+		expect(() => backend.assertNoUndeclaredRoutes()).not.toThrow();
+	});
+
 	test('requests are recorded and reset without leaking between uses', async () => {
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01');
 

@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createFixtureBackend } from './fixtures/backend';
+import { HARNESS_ROUTES } from './fixtures/harness-routes';
 import { load as dashboardLoad } from '../src/routes/+page.server';
 import { load as layoutLoad } from '../src/routes/+layout.server';
 import { load as subscriptionLoad } from '../src/routes/subscriptions/[id]/+page.server';
@@ -22,29 +23,45 @@ function cookies(values = {}) {
 	};
 }
 
-function runDashboard(backend, year = 2026) {
-	return dashboardLoad({
+/**
+ * Every loader run below goes through these helpers, and each one asserts that
+ * no undeclared route was requested. An undeclared route rejects exactly like an
+ * unreachable backend, so without this a mistyped or unexpected call would be
+ * credited to the outage a test injected on purpose.
+ */
+async function runDashboard(backend, year = 2026) {
+	const data = await dashboardLoad({
 		fetch: backend.fetch,
 		url: new URL(`http://app.test/?year=${year}`),
 		cookies: cookies({ PARAGLIDE_LOCALE: 'es' }),
 	});
+	backend.assertNoUndeclaredRoutes();
+	return data;
 }
 
-function runLayout(backend) {
-	return layoutLoad({
+async function runLayout(backend) {
+	// The shell asks for preferences on every navigation; a scenario about
+	// balances need not restate them, but leaving them undeclared would make the
+	// loader fall back to defaults for a reason no test intended.
+	backend.declareDefaultRoutes(HARNESS_ROUTES);
+	const data = await layoutLoad({
 		locals: { session: { user: { id: 'fixture-user' } } },
 		fetch: backend.fetch,
 		cookies: cookies(),
 		url: new URL('http://app.test/transactions'),
 	});
+	backend.assertNoUndeclaredRoutes();
+	return data;
 }
 
-function runSubscription(backend, id) {
-	return subscriptionLoad({
+async function runSubscription(backend, id) {
+	const data = await subscriptionLoad({
 		params: { id },
 		fetch: backend.fetch,
 		cookies: cookies(),
 	});
+	backend.assertNoUndeclaredRoutes();
+	return data;
 }
 
 /** No page read may create, update, or delete anything. */

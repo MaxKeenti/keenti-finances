@@ -8,6 +8,7 @@
 	import { adaptiveConfirm, submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import {
 		BoxAllocationEditor,
+		PreservedBoxFunding,
 		TransactionBoxBreakdown,
 	} from '$lib/components/transactions';
 	import * as Card from '$lib/components/ui/card';
@@ -401,7 +402,12 @@
 			</Form.Field>
 
 			{#if availableBalance === null}
-				<p class="text-sm text-muted-foreground">{m.section_box_funding_unavailable()}</p>
+				<PreservedBoxFunding
+					allocations={$form.direction === 'EGRESS' ? $form.boxFunding : []}
+					boxes={data.boxes}
+					transactionAmount={$form.amount}
+					locale={data.preferences.locale}
+				/>
 			{:else if $form.direction === 'EGRESS'}
 				<BoxAllocationEditor
 					kind="funding"
