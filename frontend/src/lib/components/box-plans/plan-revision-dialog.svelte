@@ -259,6 +259,10 @@
 					<Label for="revision-cadence">{m.box_plan_cadence()}</Label>
 					<NativeSelect id="revision-cadence" name="revision-cadence" value={cadence} onValueChange={(value) => (cadence = value as PlanCadence)} items={cadenceItems} />
 				</div>
+			</div>
+			<details class="rounded-lg border p-3">
+			<summary class="cursor-pointer text-sm font-medium">{m.box_plan_customize()}</summary>
+			<div class="mt-3 grid gap-4">
 				{#if cadence === 'WEEKLY' || cadence === 'BIWEEKLY'}
 					<div class="grid gap-2">
 						<Label for="revision-weekday">{m.box_plan_weekday()}</Label>
@@ -290,6 +294,7 @@
 				</div>
 			{/if}
 
+			</details>
 			<div class="rounded-lg border bg-muted/30 p-4" aria-live="polite" aria-busy={previewLoading}>
 				<div class="flex items-center gap-2">
 					<Calculator class="size-4" aria-hidden="true" />
@@ -325,7 +330,7 @@
 			{/if}
 		</div>
 
-		<Dialog.Footer>
+		<Dialog.Footer class="static bg-muted">
 			<Button variant="outline" onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button onclick={applyRevision} disabled={submitting || previewLoading || !preview}>
 				{submitting ? m.common_processing() : m.box_plan_apply_changes()}

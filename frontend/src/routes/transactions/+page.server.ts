@@ -1,3 +1,4 @@
+import { readTransactionFilters } from '$lib/transaction-filters';
 import { fail } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
@@ -129,6 +130,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	let accountTracking: AccountTracking = { active: false, setupRequired: false, activatedAt: null };
 	let transfers: Transfer[] = [];
 	let activityTransactions: Transaction[] = [];
+	let activityLoadFailed = true;
 
 	try {
 		const [txRes, activityTxRes, catRes, conRes, boxRes, accountRes, accountStatusRes, transferRes] = await Promise.all([
@@ -162,7 +164,10 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 		}
 		if (activityTxRes.ok) {
 			const body = await activityTxRes.json();
-			if (Array.isArray(body)) activityTransactions = body.map(normalizeTransactionBoxFields);
+			if (Array.isArray(body)) {
+				activityTransactions = body.map(normalizeTransactionBoxFields);
+				activityLoadFailed = false;
+			}
 		}
 
 		if (catRes.ok) categories = await catRes.json();
@@ -205,6 +210,8 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	return {
 		transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes,
 		accounts, accountTracking, transfers, activityTransactions, form,
+		activityLoadFailed, filters: readTransactionFilters(url.searchParams), requestedPageIndex: pageIndex,
+		draftBoxId: boxes.find(box => !box.archived && box.id === Number(url.searchParams.get('expenseFromBox')))?.id ?? null,
 	};
 };
 

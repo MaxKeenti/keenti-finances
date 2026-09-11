@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { FILTER_KEYS, hasTransactionFilters, matchesTransaction } from '$lib/transaction-filters';
 	import { untrack } from 'svelte';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { toast } from 'svelte-sonner';
 	import { enhance as kitEnhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { adaptiveConfirm, submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import { dockActionStore } from '$lib/components/app-shell/dock-action.svelte';
 	import {
@@ -93,24 +94,33 @@
 	});
 	const { form, enhance, submitting, message } = sf;
 
-	function openCreate() {
+	function openCreate(direction: TransactionDirection = 'INGRESS', boxId?: number) {
 		editMode = false;
 		editingTransaction = null;
 		sf.reset({
 			data: {
 				amount: 0,
-				direction: 'INGRESS',
+				direction,
 				description: '',
 				transactionDate: today,
-				categoryId: data.categories[0]?.id ?? 0,
+				categoryId: 0,
 				contactId: '',
 				accountId: '',
-				boxFunding: [],
+				boxFunding: boxId ? [{ boxId, amount: 0 }] : [],
 				boxDistributions: [],
 			},
 		});
 		dialogOpen = true;
 	}
+
+	let consumedDraft = $state<number | null>(null);
+	$effect(() => {
+	 const boxId = data.draftBoxId;
+	 if (boxId && boxId !== consumedDraft) {
+	  consumedDraft = boxId;
+	  untrack(() => openCreate('EGRESS', boxId));
+	 }
+	});
 
 	async function openEdit(tx: Transaction) {
 		if (
@@ -207,14 +217,14 @@
 	);
 	const ledgerItems = $derived.by(() => {
 		const items: LedgerItem[] = [
-			...data.activityTransactions.map((transaction) => ({
+			...data.activityTransactions.filter(tx => matchesTransaction(tx, data.filters)).map((transaction) => ({
 				key: `transaction-${transaction.id}`,
 				kind: 'Transaction' as const,
 				date: transaction.transactionDate,
 				amount: transaction.amount,
 				transaction: transaction as Transaction,
 			})),
-			...data.transfers.map((transfer) => ({
+			...(hasTransactionFilters(data.filters) ? [] : data.transfers).map((transfer) => ({
 				key: `transfer-${transfer.id}`,
 				kind: 'Transfer' as const,
 				date: transfer.transferDate,
@@ -242,7 +252,7 @@
 		});
 	});
 	const ledgerTotalPages = $derived(Math.ceil(ledgerItems.length / data.transactionPage.pageSize));
-	const ledgerPageIndex = $derived(Math.min(data.transactionPage.pageIndex, Math.max(ledgerTotalPages - 1, 0)));
+	const ledgerPageIndex = $derived(Math.min(data.requestedPageIndex, Math.max(ledgerTotalPages - 1, 0)));
 	const ledgerPageItems = $derived(ledgerItems.slice(
 		ledgerPageIndex * data.transactionPage.pageSize,
 		(ledgerPageIndex + 1) * data.transactionPage.pageSize,
@@ -289,6 +299,7 @@
 			sortBy,
 			sortDirection,
 		});
+		for (const key of FILTER_KEYS) if (data.filters[key]) params.set(key, data.filters[key]);
 		return `/transactions?${params.toString()}`;
 	}
 
@@ -450,13 +461,28 @@
 {/snippet}
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
+	<div class="flex flex-wrap items-center justify-between gap-3">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{m.transactions_title()}</h1>
 			<p class="text-sm text-muted-foreground">{m.transactions_description()}</p>
 		</div>
-		<Button onclick={openCreate} disabled={data.categories.length === 0}>{m.transactions_new()}</Button>
+		<Button onclick={() => openCreate()} disabled={data.categories.length === 0}>{m.transactions_new()}</Button>
 	</div>
+
+ <form method="GET" action="/transactions" class="grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
+  <label class="grid gap-1 text-sm sm:col-span-3">{m.transactions_filters()}<Input name="q" value={data.filters.q} /></label>
+  <label class="grid gap-1 text-sm">{m.transactions_filter_from()}<Input type="date" name="from" value={data.filters.from} /></label>
+  <label class="grid gap-1 text-sm">{m.transactions_filter_to()}<Input type="date" name="to" value={data.filters.to} min={data.filters.from || undefined} /></label>
+  <label class="grid gap-1 text-sm">{m.common_direction()}<select class="h-9 rounded-md border bg-background px-2" name="direction" value={data.filters.direction}><option value="">{m.transactions_filter_all()}</option><option value="INGRESS">{m.direction_ingress_income()}</option><option value="EGRESS">{m.direction_egress_expense()}</option></select></label>
+  <label class="grid gap-1 text-sm">{m.nav_accounts()}<select class="h-9 rounded-md border bg-background px-2" name="account" value={data.filters.account}><option value="">{m.transactions_filter_all()}</option>{#each data.accounts as account}<option value={account.id}>{account.name}</option>{/each}</select></label>
+  <label class="grid gap-1 text-sm">{m.nav_categories()}<select class="h-9 rounded-md border bg-background px-2" name="category" value={data.filters.category}><option value="">{m.transactions_filter_all()}</option>{#each data.categories as category}<option value={category.id}>{category.name}</option>{/each}</select></label>
+  <input type="hidden" name="page" value="0" />
+  <input type="hidden" name="sortBy" value={data.transactionPage.sortBy} />
+  <input type="hidden" name="sortDirection" value={data.transactionPage.sortDirection} />
+  <input type="hidden" name="pageSize" value={data.transactionPage.pageSize} />
+  <div class="flex flex-wrap items-end gap-2"><Button type="submit">{m.transactions_filter_apply()}</Button><Button href={`/transactions?${new URLSearchParams({sortBy: data.transactionPage.sortBy, sortDirection: data.transactionPage.sortDirection, pageSize: String(data.transactionPage.pageSize)})}`} variant="outline">{m.transactions_filter_clear()}</Button></div>
+  {#if hasTransactionFilters(data.filters)}<p class="text-xs text-muted-foreground sm:col-span-3">{m.transactions_filter_note()}</p>{/if}
+ </form>
 
 	{#if ledgerItems.length > 0}
 		<div class="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -467,7 +493,7 @@
 					total: ledgerItems.length,
 				})}
 			</p>
-			<div class="grid gap-2 sm:grid-cols-[minmax(11rem,1fr)_minmax(9rem,auto)_minmax(8rem,auto)]">
+			<details><summary class="cursor-pointer text-sm">{m.transactions_view_options()}</summary><div class="mt-2 grid gap-2 sm:grid-cols-[minmax(11rem,1fr)_minmax(9rem,auto)_minmax(8rem,auto)]">
 				<NativeSelect
 					name="sortBy"
 					aria-label={m.transactions_sort_by()}
@@ -490,11 +516,13 @@
 					onValueChange={(v) => navigateTransactions({ pageSize: Number(v), pageIndex: 0 })}
 					items={pageSizeItems}
 				/>
-			</div>
+			</div></details>
 		</div>
 	{/if}
 
-	{#if ledgerItems.length === 0}
+	{#if data.activityLoadFailed}
+		<Alert.Root><Alert.Description>{m.transactions_history_unavailable()}</Alert.Description><Alert.Action><Button onclick={() => invalidateAll()}>{m.funding_trigger_retry()}</Button></Alert.Action></Alert.Root>
+	{:else if ledgerItems.length === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.transactions_empty_title()}</Empty.Title>
 			<Empty.Description>{m.transactions_empty_description()}</Empty.Description>
@@ -769,23 +797,18 @@
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
 							<Form.Label>{m.common_direction()}</Form.Label>
-							<NativeSelect
-								name={fieldName}
-								value={$form.direction}
-								onValueChange={(v) => changeDirection(v as TransactionDirection)}
-								placeholder={m.common_select_direction()}
-								items={[
-									{ value: 'INGRESS', label: m.direction_ingress_income() },
-									{ value: 'EGRESS', label: m.direction_egress_expense() },
-								]}
-								{...triggerProps}
-							/>
+<div class="flex gap-2" role="group" aria-label={m.common_direction()}>
+ <input type="hidden" name={fieldName} value={$form.direction} />
+ <Button type="button" variant={$form.direction === 'INGRESS' ? 'secondary' : 'outline'} aria-pressed={$form.direction === 'INGRESS'} onclick={() => changeDirection('INGRESS')}>{m.direction_ingress_income()}</Button>
+ <Button type="button" variant={$form.direction === 'EGRESS' ? 'secondary' : 'outline'} aria-pressed={$form.direction === 'EGRESS'} onclick={() => changeDirection('EGRESS')}>{m.direction_egress_expense()}</Button>
+</div>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
 				</Form.Field>
 			</div>
 
+			<p class="text-sm text-muted-foreground">{m.transactions_roles_hint()}</p>
 			<Form.Field form={sf} name="description">
 				<Form.Control>
 					{#snippet children({ props })}

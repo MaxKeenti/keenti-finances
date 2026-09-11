@@ -31,6 +31,7 @@
 	import { mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
+	import { boxPlanState } from '$lib/types/box-plans';
 	import { SectionUnavailable } from '$lib/components/section-status';
 	import type { BoxDto } from '$lib/types/boxes';
 	import type { PageData } from './$types';
@@ -231,7 +232,12 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="tabpanel">
 			{#each (showArchived ? data.archivedBoxes : data.boxes) as box, index (box.id)}
-				<BoxCard box={box} formattedBalance={fmt.format(box.balance)} archived={showArchived}>
+				<BoxCard
+					box={box}
+					formattedBalance={fmt.format(box.balance)}
+					archived={showArchived}
+					planState={boxPlanState(data.planSections[box.id])}
+				>
 					{#snippet actions()}
 						{#if showArchived}
 							<form

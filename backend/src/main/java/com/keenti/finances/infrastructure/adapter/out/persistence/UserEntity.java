@@ -29,7 +29,7 @@ public class UserEntity extends PanacheEntityBase {
     public static final int DEFAULT_TRANSACTION_PAGE_SIZE = 25;
     public static final String DEFAULT_TRANSACTION_SORT_BY = "transactionDate";
     public static final String DEFAULT_TRANSACTION_SORT_DIRECTION = "desc";
-    public static final String DEFAULT_MOBILE_PINNED_NAV_ITEMS = "/transactions,/subscriptions,/debts";
+    public static final String DEFAULT_MOBILE_PINNED_NAV_ITEMS = "/,/transactions,/boxes";
     public static final boolean DEFAULT_DOCK_MAGNIFICATION = true;
     public static final String DEFAULT_TIME_ZONE = "America/Mexico_City";
     public static final String DEFAULT_THEME_MODE = "system";
