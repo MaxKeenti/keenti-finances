@@ -18,6 +18,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages.js';
+	import { resolveMobileNavHrefs } from '$lib/navigation';
 	import type { Component } from 'svelte';
 
 	type NavItem = {
@@ -47,24 +48,15 @@
 		{ href: '/trash', label: m.nav_trash(), icon: Trash2 },
 	];
 	const menuItems: NavItem[] = [...dockNavItems, ...managementNavItems];
-	const defaultPinnedHrefs = ['/transactions', '/subscriptions', '/debts'];
 
-	function normalizePinnedHrefs(csv: string | undefined) {
-		const allowed = new Set(dockNavItems.map((item) => item.href));
-		const requested = (csv ?? '')
-			.split(',')
-			.filter((href) => allowed.has(href));
-		return [...requested, ...defaultPinnedHrefs]
-			.filter((href, index, all) => all.indexOf(href) === index)
-			.slice(0, 3);
-	}
-
+	// Dashboard leads; the User's own pins follow unchanged. See `navigation.ts`
+	// for what the preference migration does and does not touch.
 	const pinnedHrefs = $derived(
-		normalizePinnedHrefs($page.data.preferences?.mobilePinnedNavItems as string | undefined),
+		resolveMobileNavHrefs($page.data.preferences?.mobilePinnedNavItems as string | undefined),
 	);
 	const pinnedItems = $derived(
 		pinnedHrefs
-			.map((href) => dockNavItems.find((item) => item.href === href))
+			.map((href) => menuItems.find((item) => item.href === href))
 			.filter((item): item is NavItem => Boolean(item)),
 	);
 	const dockMagnification = $derived($page.data.preferences?.dockMagnification ?? true);
@@ -139,28 +131,29 @@
 		<a
 			data-dock-icon
 			{href}
-			aria-label={label}
 			class="group relative flex shrink-0 flex-col items-center justify-end outline-none transition-[width] duration-150 ease-out will-change-[width]
-				{small ? 'w-[calc(var(--scale,1)*36px)]' : 'w-[calc(var(--scale,1)*44px)]'}"
+				{small
+					? 'w-[max(calc(var(--scale,1)*36px),3.5rem)] md:w-[max(calc(var(--scale,1)*36px),4.5rem)]'
+					: 'w-[max(calc(var(--scale,1)*44px),3.5rem)] md:w-[max(calc(var(--scale,1)*44px),4.5rem)]'}"
 		>
-			<!-- Floating name label above the magnified icon -->
-			<span
-				aria-hidden="true"
-				class="pointer-events-none absolute bottom-full left-1/2 mb-2.5 -translate-x-1/2 scale-90 whitespace-nowrap rounded-lg border border-sidebar-border/60 bg-popover/90 px-2.5 py-1 text-xs font-medium text-popover-foreground opacity-0 shadow-lg backdrop-blur-md transition-all duration-150 group-hover:scale-100 group-hover:opacity-100"
-			>
-				{label}
-				<span
-					class="absolute left-1/2 top-full -mt-1 size-2 -translate-x-1/2 rotate-45 rounded-[2px] border-b border-r border-sidebar-border/60 bg-popover/90"
-				></span>
-			</span>
 			<div
-				class="flex aspect-square w-full items-center justify-center rounded-[28%] border transition-shadow group-hover:shadow-md group-active:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-sidebar-ring
+				class="flex aspect-square items-center justify-center rounded-[28%] border transition-shadow group-hover:shadow-md group-active:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-sidebar-ring
+					{small ? 'w-[calc(var(--scale,1)*36px)]' : 'w-[calc(var(--scale,1)*44px)]'}
 					{active
 					? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-md'
 					: 'border-sidebar-border/50 bg-background/50 text-sidebar-foreground group-hover:text-sidebar-accent-foreground'}"
 			>
 				<Icon class="size-1/2 shrink-0" />
 			</div>
+			<!-- The label is always visible: a name that only appears on hover is
+			     unavailable to touch, to keyboard focus, and to anyone scanning the
+			     bar, so the icon alone had to be recognized. It stays the link's
+			     accessible name rather than being duplicated by an aria-label. -->
+			<!-- Fixed height so a two-line name cannot shift its neighbours' icons. -->
+			<span class="mt-1 line-clamp-2 h-[1.75rem] w-full overflow-hidden text-center text-[10px] font-medium leading-tight break-words
+				{active ? 'text-sidebar-accent-foreground' : 'text-sidebar-foreground/80 group-hover:text-sidebar-accent-foreground'}">
+				{label}
+			</span>
 			{#if active}
 				<!-- Running-app dot -->
 				<span class="absolute -bottom-[5px] left-1/2 size-1 -translate-x-1/2 rounded-full bg-sidebar-foreground/60"></span>

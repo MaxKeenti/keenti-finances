@@ -18,6 +18,7 @@
  * the real wall clock of the machine.
  */
 
+import { routeKeys } from './backend';
 import { HARNESS_ROUTES } from './harness-routes';
 import { loadScenario, scenarioIds } from './scenarios';
 
@@ -88,22 +89,31 @@ const server = Bun.serve({
 	// whatever network the machine happens to be on.
 	hostname: '127.0.0.1',
 	fetch(request: Request): Response {
-		const key = `${request.method.toUpperCase()} ${new URL(request.url).pathname}`;
-		const failure = failures.get(key);
+		// Same precedence as the in-process backend: a scenario key that includes
+		// the query string wins over the bare path.
+		const candidates = routeKeys(request.method, request.url);
+		const key = candidates[0];
 
-		if (failure !== undefined) {
-			console.log(`[fixture-backend] ${key} -> ${failure} (injected)`);
-			return jsonResponse({ error: 'injected fixture failure' }, failure);
+		for (const candidate of candidates) {
+			const failure = failures.get(candidate);
+			if (failure !== undefined) {
+				console.log(`[fixture-backend] ${candidate} -> ${failure} (injected)`);
+				return jsonResponse({ error: 'injected fixture failure' }, failure);
+			}
 		}
 
-		if (key in scenario.routes) {
-			console.log(`[fixture-backend] ${key} -> 200`);
-			return jsonResponse(scenario.routes[key]);
+		for (const candidate of candidates) {
+			if (candidate in scenario.routes) {
+				console.log(`[fixture-backend] ${candidate} -> 200`);
+				return jsonResponse(scenario.routes[candidate]);
+			}
 		}
 
-		if (key in HARNESS_ROUTES) {
-			console.log(`[fixture-backend] ${key} -> 200 (harness default)`);
-			return jsonResponse(HARNESS_ROUTES[key]);
+		for (const candidate of candidates) {
+			if (candidate in HARNESS_ROUTES) {
+				console.log(`[fixture-backend] ${candidate} -> 200 (harness default)`);
+				return jsonResponse(HARNESS_ROUTES[candidate]);
+			}
 		}
 
 		console.log(`[fixture-backend] ${key} -> 404 (not declared by ${scenario.id})`);

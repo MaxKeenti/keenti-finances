@@ -128,7 +128,10 @@ Several triggers may match one Transaction. If their combined suggestions exceed
 - Show Net Balance, In Boxes, and Available to Spend together on the dashboard.
 - Link the In Boxes figure to the Boxes overview.
 - Reconcile the overview total exactly to the dashboard's In Boxes figure.
+- On the Boxes overview, make the Box's name and its **Open Box** action lead to the complete Box page — plan, reserved money, and history — rather than to a history-only destination.
+- State each active Box Plan's type and status on the overview card. A Box with no active plan offers one primary **Create plan** action; a plan list that could not be loaded says so and never borrows the unplanned state's invitation.
 - Show balance, plan progress, history, linked Transactions, and a period calendar on Box detail.
+- Order Box detail around the plan, the reserved money, and the history; keep archival among secondary Box settings at the end of the page.
 - Highlight due, missed, ready, and overdue Saving Goal states in-app.
 - Keep external email or push reminders outside the first release.
 

@@ -357,7 +357,8 @@
 		</Button>
 	{/if}
 
-	<div class="grid gap-2 rounded-md bg-background p-3 text-sm {kind === 'funding' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}">
+	<div class="grid gap-2 rounded-md bg-background p-3 text-sm {kind === 'funding' ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}">
+		{#if kind === 'funding'}<div><p class="text-xs text-muted-foreground">{m.common_amount()}</p><p class="font-mono font-medium">{fmt.format(transactionAmount)}</p></div>{/if}
 		<div>
 			<p class="text-xs text-muted-foreground">{m.transactions_box_allocated()}</p>
 			<p class="font-mono font-medium">{fmt.format(total)}</p>

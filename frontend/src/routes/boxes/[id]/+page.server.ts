@@ -4,6 +4,7 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { dateInTimeZone } from '$lib/formatting';
 import { getSession } from '$lib/server/workos-session';
+import { parseBoxPlanSummaries } from '$lib/server/payloads';
 import { m } from '$lib/paraglide/messages.js';
 import type { BoxDto, BoxMovementDto } from '$lib/types/boxes';
 import {
@@ -123,8 +124,10 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, url, parent
 		else console.error(`[boxes/${id}] load: boxes returned ${boxesResponse.status}`);
 
 		if (plansResponse.ok) {
-			planSummaries = (await plansResponse.json()) as BoxPlanSummary[];
-		} else if (plansResponse.status !== 404) {
+			const parsedPlans = parseBoxPlanSummaries(await plansResponse.json());
+			planLoadFailed = parsedPlans === null;
+			planSummaries = parsedPlans ?? [];
+		} else {
 			planLoadFailed = true;
 			console.error(`[boxes/${id}] load: plans returned ${plansResponse.status}`);
 		}
@@ -170,6 +173,9 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, url, parent
 	return {
 		box,
 		history,
+		// `?plan=new` is how the Boxes overview's single "Add plan" action arrives
+		// here: one primary setup entry point, landing on the Box it belongs to.
+		openPlanCreation: url.searchParams.get('plan') === 'new' && !box.archived,
 		planSummaries: planSummaries.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt)),
 		planDetail,
 		planLoadFailed,

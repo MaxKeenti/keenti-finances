@@ -77,7 +77,7 @@
 		{ value: '/debts', label: m.nav_debts() },
 		{ value: '/settings', label: m.nav_settings() },
 	];
-	const defaultPinnedNavItems = ['/transactions', '/subscriptions', '/debts'];
+	const defaultPinnedNavItems = ['/', '/transactions', '/boxes'];
 	const managementItems = [
 		{
 			href: '/categories',

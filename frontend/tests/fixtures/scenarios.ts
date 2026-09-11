@@ -1,13 +1,13 @@
 /**
- * Deterministic synthetic fixtures for the UX execution plan's Slice 0A.
+ * Deterministic synthetic fixtures for the UX execution plan's Slices 0A and 0B.
  *
  * These scenarios are invented for verification. They never describe a real
  * account, and nothing here reads or writes development or production data:
  * every value is served by the in-process fixture backend in `backend.ts`.
  *
- * The manifest in `docs/ux/fixtures/2026-09-07-manifest.md` documents the
- * stable IDs, expected balances, and setup/reset instructions. When a value
- * changes here, the manifest follows this file rather than restating it.
+ * `README.md` in this directory documents the stable IDs, expected balances,
+ * and setup/reset instructions. When a value changes here, that document
+ * follows this file rather than restating it independently.
  */
 
 import { MEXICO_CITY_EVENING, MEXICO_CITY_MIDDAY, type FixtureClock } from './clock';
@@ -682,6 +682,879 @@ const dateBoundaries: Scenario = {
 	},
 };
 
+/*
+ * ---------------------------------------------------------------------------
+ * Slice 0B — later-journey fixtures
+ *
+ * Prerequisites for 2A/2B/3A/3B and Phase 4. Same rules as 0A: every value is
+ * invented, nothing is read from or written to development data, and the
+ * expected figures below are what the acceptance checks assert.
+ * ---------------------------------------------------------------------------
+ */
+
+function planSummary(values: {
+	id: number;
+	boxId: number;
+	type: BoxPlanType;
+	status: BoxPlanStatus;
+	createdAt?: string;
+	closedAt?: string | null;
+	completionAmount?: number | null;
+}) {
+	return {
+		id: values.id,
+		boxId: values.boxId,
+		type: values.type,
+		status: values.status,
+		createdAt: values.createdAt ?? '2026-03-01T12:00:00Z',
+		closedAt: values.closedAt ?? null,
+		completionAmount: values.completionAmount ?? null,
+	};
+}
+
+type BoxPlanType = 'SAVING_GOAL' | 'SPENDING_BUDGET';
+type BoxPlanStatus =
+	| 'ACTIVE'
+	| 'READY_TO_COMPLETE'
+	| 'OVERDUE'
+	| 'COMPLETED'
+	| 'ABANDONED'
+	| 'ENDED';
+
+function savingGoalPeriod(values: {
+	id: number;
+	startDate: string;
+	endDate: string;
+	openingBalance: number;
+	closingBalance: number;
+	regularCommitment: number;
+	status: 'OPEN' | 'ACHIEVED' | 'MISSED';
+	openingArrears?: number;
+	shortfall?: number;
+}) {
+	const netProgress = values.closingBalance - values.openingBalance;
+	const openingArrears = values.openingArrears ?? 0;
+	return {
+		id: values.id,
+		revisionId: values.id + 100,
+		startDate: values.startDate,
+		endDate: values.endDate,
+		openingBalance: values.openingBalance,
+		closingBalance: values.closingBalance,
+		netProgress,
+		regularCommitment: values.regularCommitment,
+		openingArrears,
+		requiredAmount: values.regularCommitment + openingArrears,
+		arrearsCovered: 0,
+		regularProgress: netProgress,
+		extraProgress: 0,
+		shortfall: values.shortfall ?? 0,
+		status: values.status,
+		evaluatedAt: values.status === 'OPEN' ? null : `${values.endDate}T23:59:00Z`,
+	};
+}
+
+function savingGoalRevision(values: {
+	id: number;
+	targetAmount: number;
+	targetDate: string;
+	regularCommitment: number;
+}) {
+	return {
+		id: values.id,
+		effectiveFrom: '2026-03-01',
+		cadence: 'MONTHLY' as const,
+		anchorWeekday: null,
+		anchorDayOfMonth: 1,
+		targetAmount: values.targetAmount,
+		targetDate: values.targetDate,
+		regularCommitment: values.regularCommitment,
+		createdAt: '2026-03-01T12:00:00Z',
+		supersededAt: null,
+		scheduled: false,
+	};
+}
+
+/**
+ * An active Saving Goal that is on its way: 3,000.00 of a 12,000.00 target.
+ *
+ * Supports 2A's plan type/status on the Boxes overview and 2B's plan detail.
+ */
+const planGoalActive: Scenario = {
+	id: 'FX-PLAN-GOAL-ACTIVE-01',
+	description: 'Box 9210 with an ACTIVE Saving Goal at 25% of a 12,000.00 target.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		boxId: 9210,
+		planId: 9251,
+		planType: 'SAVING_GOAL',
+		planStatus: 'ACTIVE',
+		boxBalance: 3_000,
+		targetAmount: 12_000,
+		remainingAmount: 9_000,
+		progressPercent: 25,
+		currentCommitment: 1_500,
+	},
+	routes: {
+		'GET /api/boxes': [box({ id: 9210, name: 'Meta sintética activa', balance: 3_000, displayOrder: 1 })],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9210': box({
+			id: 9210,
+			name: 'Meta sintética activa',
+			balance: 3_000,
+			displayOrder: 1,
+		}),
+		'GET /api/boxes/9210/history': [],
+		'GET /api/boxes/9210/plans': [
+			planSummary({ id: 9251, boxId: 9210, type: 'SAVING_GOAL', status: 'ACTIVE' }),
+		],
+		'GET /api/boxes/9210/plans/saving-goal/9251': {
+			id: 9251,
+			boxId: 9210,
+			type: 'SAVING_GOAL',
+			status: 'ACTIVE',
+			targetAmount: 12_000,
+			targetDate: '2026-12-31',
+			cadence: 'MONTHLY',
+			anchorWeekday: null,
+			anchorDayOfMonth: 1,
+			regularCommitment: 1_500,
+			boxBalance: 3_000,
+			remainingAmount: 9_000,
+			progressPercent: 25,
+			arrears: 0,
+			currentCommitment: 1_500,
+			projectedCompletionDate: '2026-12-01',
+			suggestedExtensionDate: null,
+			currentPeriod: savingGoalPeriod({
+				id: 9261,
+				startDate: '2026-09-01',
+				endDate: '2026-09-30',
+				openingBalance: 3_000,
+				closingBalance: 3_000,
+				regularCommitment: 1_500,
+				status: 'OPEN',
+			}),
+			periods: [
+				savingGoalPeriod({
+					id: 9260,
+					startDate: '2026-08-01',
+					endDate: '2026-08-31',
+					openingBalance: 1_500,
+					closingBalance: 3_000,
+					regularCommitment: 1_500,
+					status: 'ACHIEVED',
+				}),
+			],
+			revisions: [
+				savingGoalRevision({
+					id: 9271,
+					targetAmount: 12_000,
+					targetDate: '2026-12-31',
+					regularCommitment: 1_500,
+				}),
+			],
+			createdAt: '2026-03-01T12:00:00Z',
+			updatedAt: '2026-09-01T12:00:00Z',
+			closedAt: null,
+			completionAmount: null,
+		},
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 8_000,
+			inBoxes: 3_000,
+			availableToSpend: 5_000,
+		}),
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 8_000,
+			accountNetBalance: 8_000,
+		}),
+	},
+};
+
+/**
+ * A Saving Goal past its target date with money still missing: status OVERDUE.
+ */
+const planGoalOverdue: Scenario = {
+	id: 'FX-PLAN-GOAL-OVERDUE-01',
+	description: 'Box 9211 with an OVERDUE Saving Goal: 1,200.00 of 5,000.00 past its target date.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		boxId: 9211,
+		planId: 9252,
+		planType: 'SAVING_GOAL',
+		planStatus: 'OVERDUE',
+		boxBalance: 1_200,
+		targetAmount: 5_000,
+		remainingAmount: 3_800,
+		progressPercent: 24,
+		targetDate: '2026-08-31',
+		arrears: 800,
+	},
+	routes: {
+		'GET /api/boxes': [box({ id: 9211, name: 'Meta sintética vencida', balance: 1_200, displayOrder: 1 })],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9211': box({
+			id: 9211,
+			name: 'Meta sintética vencida',
+			balance: 1_200,
+			displayOrder: 1,
+		}),
+		'GET /api/boxes/9211/history': [],
+		'GET /api/boxes/9211/plans': [
+			planSummary({ id: 9252, boxId: 9211, type: 'SAVING_GOAL', status: 'OVERDUE' }),
+		],
+		'GET /api/boxes/9211/plans/saving-goal/9252': {
+			id: 9252,
+			boxId: 9211,
+			type: 'SAVING_GOAL',
+			status: 'OVERDUE',
+			targetAmount: 5_000,
+			targetDate: '2026-08-31',
+			cadence: 'MONTHLY',
+			anchorWeekday: null,
+			anchorDayOfMonth: 1,
+			regularCommitment: 800,
+			boxBalance: 1_200,
+			remainingAmount: 3_800,
+			progressPercent: 24,
+			arrears: 800,
+			currentCommitment: 1_600,
+			projectedCompletionDate: null,
+			suggestedExtensionDate: '2027-01-31',
+			currentPeriod: savingGoalPeriod({
+				id: 9263,
+				startDate: '2026-09-01',
+				endDate: '2026-09-30',
+				openingBalance: 1_200,
+				closingBalance: 1_200,
+				regularCommitment: 800,
+				openingArrears: 800,
+				status: 'OPEN',
+			}),
+			periods: [
+				savingGoalPeriod({
+					id: 9262,
+					startDate: '2026-08-01',
+					endDate: '2026-08-31',
+					openingBalance: 1_200,
+					closingBalance: 1_200,
+					regularCommitment: 800,
+					shortfall: 800,
+					status: 'MISSED',
+				}),
+			],
+			revisions: [
+				savingGoalRevision({
+					id: 9272,
+					targetAmount: 5_000,
+					targetDate: '2026-08-31',
+					regularCommitment: 800,
+				}),
+			],
+			createdAt: '2026-03-01T12:00:00Z',
+			updatedAt: '2026-09-01T12:00:00Z',
+			closedAt: null,
+			completionAmount: null,
+		},
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 4_000,
+			inBoxes: 1_200,
+			availableToSpend: 2_800,
+		}),
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 4_000,
+			accountNetBalance: 4_000,
+		}),
+	},
+};
+
+/**
+ * A completed Saving Goal. The Box has plan history but no active plan, so the
+ * overview must offer "Add plan" rather than describing a finished one as
+ * current.
+ */
+const planGoalCompleted: Scenario = {
+	id: 'FX-PLAN-GOAL-COMPLETED-01',
+	description: 'Box 9212 whose Saving Goal is COMPLETED at 4,500.00; no active plan remains.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		boxId: 9212,
+		planId: 9253,
+		planType: 'SAVING_GOAL',
+		planStatus: 'COMPLETED',
+		completionAmount: 4_500,
+		activePlans: 0,
+		boxBalance: 4_500,
+	},
+	routes: {
+		'GET /api/boxes': [box({ id: 9212, name: 'Meta sintética cumplida', balance: 4_500, displayOrder: 1 })],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9212': box({
+			id: 9212,
+			name: 'Meta sintética cumplida',
+			balance: 4_500,
+			displayOrder: 1,
+		}),
+		'GET /api/boxes/9212/history': [],
+		'GET /api/boxes/9212/plans': [
+			planSummary({
+				id: 9253,
+				boxId: 9212,
+				type: 'SAVING_GOAL',
+				status: 'COMPLETED',
+				closedAt: '2026-08-31T18:00:00Z',
+				completionAmount: 4_500,
+			}),
+		],
+		'GET /api/boxes/9212/plans/saving-goal/9253': {
+			id: 9253,
+			boxId: 9212,
+			type: 'SAVING_GOAL',
+			status: 'COMPLETED',
+			targetAmount: 4_500,
+			targetDate: '2026-08-31',
+			cadence: 'MONTHLY',
+			anchorWeekday: null,
+			anchorDayOfMonth: 1,
+			regularCommitment: 900,
+			boxBalance: 4_500,
+			remainingAmount: 0,
+			progressPercent: 100,
+			arrears: 0,
+			currentCommitment: 0,
+			projectedCompletionDate: '2026-08-31',
+			suggestedExtensionDate: null,
+			currentPeriod: null,
+			periods: [
+				savingGoalPeriod({
+					id: 9264,
+					startDate: '2026-08-01',
+					endDate: '2026-08-31',
+					openingBalance: 3_600,
+					closingBalance: 4_500,
+					regularCommitment: 900,
+					status: 'ACHIEVED',
+				}),
+			],
+			revisions: [
+				savingGoalRevision({
+					id: 9273,
+					targetAmount: 4_500,
+					targetDate: '2026-08-31',
+					regularCommitment: 900,
+				}),
+			],
+			createdAt: '2026-03-01T12:00:00Z',
+			updatedAt: '2026-08-31T18:00:00Z',
+			closedAt: '2026-08-31T18:00:00Z',
+			completionAmount: 4_500,
+		},
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 9_000,
+			inBoxes: 4_500,
+			availableToSpend: 4_500,
+		}),
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 9_000,
+			accountNetBalance: 9_000,
+		}),
+	},
+};
+
+/**
+ * An underfunded Spending Budget: the Box holds 450.00 of a 2,000.00 desired
+ * period balance, so the suggested top-up is 1,550.00. The suggestion is
+ * guidance; nothing here moves money.
+ */
+const planBudgetUnderfunded: Scenario = {
+	id: 'FX-PLAN-BUDGET-UNDER-01',
+	description: 'Box 9213 with a Spending Budget of 2,000.00 funded to 450.00 (top-up 1,550.00).',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		boxId: 9213,
+		planId: 9254,
+		planType: 'SPENDING_BUDGET',
+		planStatus: 'ACTIVE',
+		desiredBalance: 2_000,
+		boxBalance: 450,
+		suggestedTopUp: 1_550,
+		fundedSpending: 1_550,
+	},
+	routes: {
+		'GET /api/boxes': [box({ id: 9213, name: 'Despensa sintética 0B', balance: 450, displayOrder: 1 })],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9213': box({
+			id: 9213,
+			name: 'Despensa sintética 0B',
+			balance: 450,
+			displayOrder: 1,
+		}),
+		'GET /api/boxes/9213/history': [],
+		'GET /api/boxes/9213/plans': [
+			planSummary({ id: 9254, boxId: 9213, type: 'SPENDING_BUDGET', status: 'ACTIVE' }),
+		],
+		'GET /api/boxes/9213/plans/spending-budget/9254': {
+			id: 9254,
+			boxId: 9213,
+			type: 'SPENDING_BUDGET',
+			status: 'ACTIVE',
+			desiredBalance: 2_000,
+			cadence: 'MONTHLY',
+			anchorWeekday: null,
+			anchorDayOfMonth: 1,
+			boxBalance: 450,
+			suggestedTopUp: 1_550,
+			currentPeriod: {
+				id: 9265,
+				revisionId: 9274,
+				periodStart: '2026-09-01',
+				periodEnd: '2026-09-30',
+				openingBalance: 2_000,
+				closingBalance: 450,
+				netProgress: -1_550,
+				deposits: 0,
+				withdrawals: 0,
+				transfersIn: 0,
+				transfersOut: 0,
+				fundedSpending: 1_550,
+				suggestedTopUp: 1_550,
+				evaluatedAt: null,
+			},
+			periods: [],
+			revisions: [
+				{
+					id: 9274,
+					effectiveFrom: '2026-03-01',
+					cadence: 'MONTHLY',
+					anchorWeekday: null,
+					anchorDayOfMonth: 1,
+					desiredBalance: 2_000,
+					createdAt: '2026-03-01T12:00:00Z',
+					supersededAt: null,
+					scheduled: false,
+				},
+			],
+			createdAt: '2026-03-01T12:00:00Z',
+			updatedAt: '2026-09-05T12:00:00Z',
+			closedAt: null,
+			completionAmount: null,
+		},
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 3_450,
+			inBoxes: 450,
+			availableToSpend: 3_000,
+		}),
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 3_450,
+			accountNetBalance: 3_450,
+		}),
+	},
+};
+
+/**
+ * A Box that never had a plan, alongside one whose plan list is unavailable.
+ *
+ * 2A must distinguish those two: Box 9214 genuinely has no plan and gets the
+ * single "Add plan" action; Box 9215's plans cannot be loaded and must say so
+ * instead of being described as unplanned.
+ */
+const boxesNoPlan: Scenario = {
+	id: 'FX-BOX-NOPLAN-01',
+	description: 'Box 9214 has no plan (empty list); Box 9215 answers 500 for its plans.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		unplannedBoxId: 9214,
+		unavailablePlanBoxId: 9215,
+		netBalance: 2_400,
+		inBoxes: 900,
+		availableToSpend: 1_500,
+	},
+	routes: {
+		'GET /api/boxes': [
+			box({ id: 9214, name: 'Caja sin plan', balance: 600, displayOrder: 1 }),
+			box({ id: 9215, name: 'Caja con planes no disponibles', balance: 300, displayOrder: 2 }),
+		],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9214': box({ id: 9214, name: 'Caja sin plan', balance: 600, displayOrder: 1 }),
+		'GET /api/boxes/9214/history': [],
+		'GET /api/boxes/9214/plans': [],
+		'GET /api/boxes/9215': box({
+			id: 9215,
+			name: 'Caja con planes no disponibles',
+			balance: 300,
+			displayOrder: 2,
+		}),
+		'GET /api/boxes/9215/history': [],
+		// Declared so a test can inject its failure on a route the scenario owns;
+		// the acceptance case is the 500 injected over it, not this body.
+		'GET /api/boxes/9215/plans': [],
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 2_400,
+			inBoxes: 900,
+			availableToSpend: 1_500,
+		}),
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 2_400,
+			accountNetBalance: 2_400,
+		}),
+	},
+};
+
+/**
+ * A populated Shared Subscription where the Owner participates in the split:
+ * 600.00 over the Owner and two Members, 200.00 each, one Member paid.
+ */
+const subscriptionOwnerParticipating: Scenario = {
+	id: 'FX-SUB-SHARED-OWNER-PARTIAL-01',
+	description:
+		'Shared subscription 9406, owner participating: 600.00 split three ways, one of two Member contributions received.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		subscriptionId: 9406,
+		cost: 600,
+		ownerParticipates: true,
+		splitCount: 3,
+		shareAmount: 200,
+		memberCount: 2,
+		expectedContributions: 400,
+		collectedContributions: 200,
+		outstandingContributions: 200,
+		ownShare: 200,
+	},
+	routes: {
+		'GET /api/subscriptions/9406': {
+			id: 9406,
+			name: 'Streaming compartido sintético',
+			cost: 600,
+			billingCycle: 'MONTHLY',
+			type: 'SHARED',
+			categoryId: null,
+			nextBillingDate: '2026-09-15',
+			tokenUuid: null,
+			ownerParticipates: true,
+			createdAt: '2026-02-01T12:00:00Z',
+		},
+		'GET /api/subscriptions/9406/members': [
+			{
+				id: 9413,
+				subscriptionId: 9406,
+				contactId: 9504,
+				contactName: 'Contacto sintético 4',
+				shareAmount: 200,
+				createdAt: '2026-02-01T12:00:00Z',
+			},
+			{
+				id: 9414,
+				subscriptionId: 9406,
+				contactId: 9505,
+				contactName: 'Contacto sintético 5',
+				shareAmount: 200,
+				createdAt: '2026-02-01T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9406/payments': [
+			{
+				id: 9424,
+				subscriptionId: 9406,
+				memberId: 9413,
+				billingDate: '2026-09-01',
+				amount: 200,
+				status: 'PAID',
+				paidDate: '2026-09-02',
+				transactionId: 9605,
+				createdAt: '2026-09-01T12:00:00Z',
+			},
+			{
+				id: 9425,
+				subscriptionId: 9406,
+				memberId: 9414,
+				billingDate: '2026-09-01',
+				amount: 200,
+				status: 'PENDING',
+				paidDate: null,
+				transactionId: null,
+				createdAt: '2026-09-01T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9406/linked-transactions': [
+			{
+				id: 9605,
+				amount: 200,
+				direction: 'INGRESS',
+				description: 'Aportación sintética recibida',
+				transactionDate: '2026-09-02',
+				categoryId: null,
+				categoryName: null,
+				categoryHue: null,
+				contactId: 9504,
+				contactName: 'Contacto sintético 4',
+				subscriptionId: 9406,
+			},
+		],
+		'GET /api/transactions': [],
+	},
+};
+
+/**
+ * The middleman variant: the Owner does not participate, so the same 600.00
+ * splits between two Members at 300.00 each and the Owner's own share is 0.00.
+ */
+const subscriptionMiddleman: Scenario = {
+	id: 'FX-SUB-SHARED-MIDDLEMAN-PARTIAL-01',
+	description:
+		'Shared subscription 9407, owner not participating: 600.00 split between two Members, one contribution received.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		subscriptionId: 9407,
+		cost: 600,
+		ownerParticipates: false,
+		splitCount: 2,
+		shareAmount: 300,
+		memberCount: 2,
+		expectedContributions: 600,
+		collectedContributions: 300,
+		outstandingContributions: 300,
+		ownShare: 0,
+	},
+	routes: {
+		'GET /api/subscriptions/9407': {
+			id: 9407,
+			name: 'Servicio intermediado sintético',
+			cost: 600,
+			billingCycle: 'MONTHLY',
+			type: 'SHARED',
+			categoryId: null,
+			nextBillingDate: '2026-09-18',
+			tokenUuid: null,
+			ownerParticipates: false,
+			createdAt: '2026-02-05T12:00:00Z',
+		},
+		'GET /api/subscriptions/9407/members': [
+			{
+				id: 9415,
+				subscriptionId: 9407,
+				contactId: 9506,
+				contactName: 'Contacto sintético 6',
+				shareAmount: 300,
+				createdAt: '2026-02-05T12:00:00Z',
+			},
+			{
+				id: 9416,
+				subscriptionId: 9407,
+				contactId: 9507,
+				contactName: 'Contacto sintético 7',
+				shareAmount: 300,
+				createdAt: '2026-02-05T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9407/payments': [
+			{
+				id: 9426,
+				subscriptionId: 9407,
+				memberId: 9415,
+				billingDate: '2026-09-01',
+				amount: 300,
+				status: 'PAID',
+				paidDate: '2026-09-04',
+				transactionId: 9606,
+				createdAt: '2026-09-01T12:00:00Z',
+			},
+			{
+				id: 9427,
+				subscriptionId: 9407,
+				memberId: 9416,
+				billingDate: '2026-09-01',
+				amount: 300,
+				status: 'PENDING',
+				paidDate: null,
+				transactionId: null,
+				createdAt: '2026-09-01T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9407/linked-transactions': [
+			{
+				id: 9606,
+				amount: 300,
+				direction: 'INGRESS',
+				description: 'Aportación sintética intermediada',
+				transactionDate: '2026-09-04',
+				categoryId: null,
+				categoryName: null,
+				categoryHue: null,
+				contactId: 9506,
+				contactName: 'Contacto sintético 6',
+				subscriptionId: 9407,
+			},
+		],
+		'GET /api/transactions': [],
+	},
+};
+
+/**
+ * Credit in the User's favor while a confirmed statement payment is still
+ * unpaid. Both figures are true at once; 3A must explain them rather than
+ * declare either wrong.
+ */
+const creditInFavorUnpaidStatement: Scenario = {
+	id: 'FX-CREDIT-INFAVOR-STMT-01',
+	description: 'Credit Financial Account 9112 at +85.00 with an unpaid confirmed statement of 640.00.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		accountId: 9112,
+		creditInFavor: 85,
+		creditLimit: 12_000,
+		availableCredit: 12_085,
+		statementId: 9303,
+		officialBalance: 640,
+		outstandingBalance: 640,
+		dueDate: '2026-09-20',
+		netBalance: 1_085,
+		inBoxes: 0,
+		availableToSpend: 1_085,
+	},
+	routes: {
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 1_085,
+			accountNetBalance: 1_085,
+		}),
+		'GET /api/accounts': [
+			account({ id: 9113, name: 'Cuenta sintética H', kind: 'DEBIT', balance: 1_000 }),
+			account({ id: 9112, name: 'Tarjeta sintética a favor', kind: 'CREDIT', balance: 85 }),
+		],
+		'GET /api/accounts/9112/credit-settings': {
+			creditLimit: 12_000,
+			statementClosingDay: 5,
+			paymentDueDay: 20,
+		},
+		'GET /api/accounts/9112/credit-statements': [
+			{
+				id: 9303,
+				periodStart: '2026-08-06',
+				periodEnd: '2026-09-05',
+				dueDate: '2026-09-20',
+				officialBalance: 640,
+				officialMinimumPayment: 150,
+				officialAvoidInterest: 640,
+				officialNote: null,
+				paidAmount: 0,
+				outstandingBalance: 640,
+				reconciliationMismatch: false,
+				mismatchAmount: 0,
+			},
+		],
+		'GET /api/boxes': [],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 1_085,
+			inBoxes: 0,
+			availableToSpend: 1_085,
+		}),
+		'GET /api/dashboard/summary': summary({
+			netBalance: 1_085,
+			inBoxes: 0,
+			availableToSpend: 1_085,
+		}),
+	},
+};
+
+/**
+ * Phase 4's dashboard fixture, with the figures the execution plan fixes.
+ *
+ * `4,120.50 + 55.50 = 4,176.00`; `4,176.00 − 5,300.00 = −1,124.00`;
+ * `9,000.00 + 55.50 = 9,055.50`. The 310.25 confirmed statement payment is a
+ * separately identified obligation and is never subtracted from Net Balance;
+ * available credit is limit-derived capacity and enters none of the totals.
+ */
+const dashboardNegativeAvailable: Scenario = {
+	id: 'FX-DASH-NEG-01',
+	description:
+		'Money held 4,120.50 plus credit in favor 55.50 = Net 4,176.00, with 5,300.00 in Boxes (Available −1,124.00).',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		moneyHeld: 4_120.5,
+		creditInFavor: 55.5,
+		netBalance: 4_176,
+		inBoxes: 5_300,
+		availableToSpend: -1_124,
+		outstandingStatementPayment: 310.25,
+		creditLimit: 9_000,
+		availableCredit: 9_055.5,
+	},
+	routes: {
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 4_176,
+			accountNetBalance: 4_176,
+		}),
+		'GET /api/accounts': [
+			account({ id: 9114, name: 'Cuenta sintética P4', kind: 'DEBIT', balance: 4_120.5 }),
+			account({ id: 9115, name: 'Tarjeta sintética P4', kind: 'CREDIT', balance: 55.5 }),
+		],
+		'GET /api/accounts/9115/credit-settings': {
+			creditLimit: 9_000,
+			statementClosingDay: 5,
+			paymentDueDay: 20,
+		},
+		'GET /api/accounts/9115/credit-statements': [
+			{
+				id: 9304,
+				periodStart: '2026-08-06',
+				periodEnd: '2026-09-05',
+				dueDate: '2026-09-20',
+				officialBalance: 310.25,
+				officialMinimumPayment: 80,
+				officialAvoidInterest: 310.25,
+				officialNote: null,
+				paidAmount: 0,
+				outstandingBalance: 310.25,
+				reconciliationMismatch: false,
+				mismatchAmount: 0,
+			},
+		],
+		'GET /api/boxes': [
+			box({ id: 9216, name: 'Renta sintética P4', balance: 3_500, displayOrder: 1 }),
+			box({ id: 9217, name: 'Colegiatura sintética P4', balance: 1_800, displayOrder: 2 }),
+		],
+		'GET /api/boxes?archived=true': [],
+		'GET /api/boxes/9216/plans': [
+			planSummary({ id: 9255, boxId: 9216, type: 'SPENDING_BUDGET', status: 'ACTIVE' }),
+		],
+		'GET /api/boxes/9217/plans': [
+			planSummary({ id: 9256, boxId: 9217, type: 'SAVING_GOAL', status: 'ACTIVE' }),
+		],
+		'GET /api/boxes/summary': boxSummary({
+			netBalance: 4_176,
+			inBoxes: 5_300,
+			availableToSpend: -1_124,
+		}),
+		'GET /api/dashboard/summary': summary({
+			netBalance: 4_176,
+			inBoxes: 5_300,
+			availableToSpend: -1_124,
+		}),
+	},
+};
+
 /** A long synthetic account name for 1C's responsive alert checks. */
 export const LONG_ACCOUNT_NAME =
 	'Cuenta sintética de nómina con nombre extremadamente largo para pruebas responsivas';
@@ -716,7 +1589,30 @@ const longNames: Scenario = {
 	},
 };
 
+const recordingRows = Array.from({ length: 31 }, (_, index) => ({
+ id: 9650 + index, amount: 10, direction: 'EGRESS', description: index === 30 ? 'Needle groceries' : `Synthetic purchase ${index + 1}`,
+ transactionDate: '2026-09-07', categoryId: 9801, categoryName: 'Groceries', categoryHue: 120,
+ contactId: null, contactName: null, accountId: 9101, accountName: 'Synthetic cash', accountKind: 'CASH',
+ boxFunding: [], boxDistributions: [], availableToSpendAmount: 10,
+}));
+const recording: Scenario = {
+ id: 'FX-RECORDING-01', description: 'Full-history search and optional Box funding with negative Available to Spend.',
+ clock: MEXICO_CITY_MIDDAY, expected: { netBalance: 1900, inBoxes: 2600, availableToSpend: -700, transactionCount: 31 },
+ routes: {
+  ...emptyBoxNegativeAvailable.routes,
+  'GET /api/categories': [{id:9801,name:'Groceries',type:'EGRESS',color:120},{id:9802,name:'Income',type:'INGRESS',color:220}],
+  'GET /api/contacts': [], 'GET /api/account-transfers': [],
+  'GET /api/accounts': [account({id:9101,name:'Synthetic cash',kind:'CASH',balance:1900})],
+  'GET /api/transactions': recordingRows,
+  'GET /api/transactions?page=0&pageSize=25&sortBy=transactionDate&sortDirection=desc': {items: recordingRows.slice(0,25),pageIndex:0,pageSize:25,totalItems:31,totalPages:2,sortBy:'transactionDate',sortDirection:'desc'},
+  'GET /api/boxes/9205': box({id:9205,name:'Empty Box',balance:0,displayOrder:0}),
+  'GET /api/boxes/9205/history': [], 'GET /api/boxes/9205/plans': [],
+  'GET /api/funding-triggers/suggestions': [],
+ },
+};
+
 const ALL: readonly Scenario[] = Object.freeze([
+	recording,
 	trackingInactive,
 	trackingActive,
 	legitimateZero,
@@ -731,6 +1627,16 @@ const ALL: readonly Scenario[] = Object.freeze([
 	debtComplete,
 	dateBoundaries,
 	longNames,
+	// Slice 0B
+	planGoalActive,
+	planGoalOverdue,
+	planGoalCompleted,
+	planBudgetUnderfunded,
+	boxesNoPlan,
+	subscriptionOwnerParticipating,
+	subscriptionMiddleman,
+	creditInFavorUnpaidStatement,
+	dashboardNegativeAvailable,
 ]);
 
 export type ScenarioId = (typeof ALL)[number]['id'];
@@ -738,6 +1644,17 @@ export type ScenarioId = (typeof ALL)[number]['id'];
 const BY_ID = new Map(ALL.map((scenario) => [scenario.id, scenario]));
 
 /** Every scenario ID, in manifest order. */
+// Normal plan pages also read suggestion rules and income categories.
+for (const scenario of ALL) {
+ for (const key of Object.keys(scenario.routes)) {
+  const match = key.match(/^GET \/api\/boxes\/(\d+)\/plans$/);
+  if (match) {
+   scenario.routes[`GET /api/boxes/${match[1]}/funding-triggers`] ??= [];
+   scenario.routes['GET /api/categories'] ??= [];
+  }
+ }
+}
+
 export function scenarioIds(): string[] {
 	return ALL.map((scenario) => scenario.id);
 }

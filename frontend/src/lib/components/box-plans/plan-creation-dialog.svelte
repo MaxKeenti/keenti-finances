@@ -214,6 +214,10 @@
 					<Label for="plan-cadence">{m.box_plan_cadence()}</Label>
 					<NativeSelect id="plan-cadence" name="plan-cadence" value={cadence} onValueChange={(value) => (cadence = value as PlanCadence)} items={cadenceItems} />
 				</div>
+			</div>
+			<details class="rounded-lg border p-3">
+				<summary class="cursor-pointer text-sm font-medium">{m.box_plan_customize()}</summary>
+				<div class="mt-3 grid gap-4">
 				{#if cadence === 'WEEKLY' || cadence === 'BIWEEKLY'}
 					<div class="grid gap-2">
 						<Label for="plan-weekday">{m.box_plan_weekday()}</Label>
@@ -235,13 +239,18 @@
 				</div>
 			{/if}
 
+			</details>
+
 			<div class="rounded-lg border bg-muted/30 p-3">
 				<p class="text-sm font-medium">{m.box_plan_guidance_title()}</p>
+				<p class="mt-1 text-sm text-muted-foreground">{m.box_plan_reserved_now({ amount: fmt.format(boxBalance) })}</p>
+				{#if (planType === 'SAVING_GOAL' && validMoney(targetAmount) && estimatedPeriods > 0 && (regularCommitment === undefined || validMoney(regularCommitment, true))) || (planType === 'SPENDING_BUDGET' && validMoney(desiredBalance))}
 				<p class="mt-1 text-sm text-muted-foreground">
 					{planType === 'SAVING_GOAL'
 						? m.box_plan_guidance_goal({ amount: fmt.format(regularCommitment ?? estimatedCommitment), periods: estimatedPeriods })
 						: m.box_plan_guidance_budget({ amount: fmt.format(topUp) })}
 				</p>
+				{:else}<p class="mt-1 text-sm text-muted-foreground">{m.box_plan_preview_inputs()}</p>{/if}
 			</div>
 
 			{#if formError}
@@ -249,7 +258,7 @@
 			{/if}
 		</div>
 
-		<Dialog.Footer>
+		<Dialog.Footer class="static bg-muted">
 			<Button variant="outline" onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button onclick={submit} disabled={submitting}>{submitting ? m.common_processing() : m.box_plan_create()}</Button>
 		</Dialog.Footer>

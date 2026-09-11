@@ -86,6 +86,8 @@
 	let correctionEffectiveDate = $state('');
 	let correctionError = $state<string | null>(null);
 	let correctionSubmitting = $state(false);
+	// Arriving from the overview's "Add plan" action opens setup directly, so the
+	// single primary action does not become "go here, then find the button".
 	let planCreationOpen = $state(false);
 	let archiveForm = $state<HTMLFormElement | null>(null);
 
@@ -119,6 +121,10 @@
 		),
 	);
 	const activePlanSummary = $derived(data.planSummaries.find(isActivePlan));
+
+	$effect(() => {
+		if (data.openPlanCreation && !data.planLoadFailed && !activePlanSummary) planCreationOpen = true;
+	});
 	const closedPlanSummaries = $derived(data.planSummaries.filter((plan) => !isActivePlan(plan)));
 
 	const sf = superForm(untrack(() => data.form), {
@@ -279,7 +285,7 @@
 	>
 		<Card.Header>
 			<div class="flex flex-wrap items-start justify-between gap-4">
-				<div class="flex min-w-0 items-start gap-3">
+				<div class="flex min-w-0 w-full items-start gap-3">
 					<div
 						class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-2xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-black/5"
 						aria-hidden="true"
@@ -288,27 +294,12 @@
 					</div>
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
-							<h1 class="truncate text-2xl font-semibold tracking-tight">{data.box.name}</h1>
+							<h1 class="min-w-0 break-words text-2xl font-semibold tracking-tight">{data.box.name}</h1>
 							{#if data.box.archived}<Badge variant="secondary">{m.boxes_archived()}</Badge>{/if}
 						</div>
 						{#if data.box.description}<p class="mt-1 text-sm text-muted-foreground">{data.box.description}</p>{/if}
 					</div>
 				</div>
-				{#if !data.box.archived}
-					<Button
-						variant="ghost"
-						size="sm"
-						onclick={confirmArchive}
-						disabled={hasBalance || !!activePlanSummary}
-						title={hasBalance
-							? m.boxes_withdraw_before_archive()
-							: activePlanSummary
-								? m.box_plan_end_before_archive()
-								: m.boxes_archive()}
-					>
-						<Archive data-icon="inline-start" />{m.boxes_archive()}
-					</Button>
-				{/if}
 			</div>
 		</Card.Header>
 		<Card.Content class="space-y-5">
@@ -316,6 +307,7 @@
 				<div>
 					<p class="text-xs text-muted-foreground">{m.boxes_balance()}</p>
 					<p class="text-3xl font-semibold tabular-nums">{fmt.format(data.box.balance)}</p>
+					<p class="mt-1 text-xs text-muted-foreground">{m.boxes_reserved_money_hint()}</p>
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">{m.balance_available_to_spend()}</p>
@@ -333,7 +325,8 @@
 
 			{#if !data.box.archived}
 				<div class="flex flex-wrap gap-2 border-t pt-4">
-					<Button
+					<Button href={`/transactions?expenseFromBox=${data.box.id}`} variant="outline">{m.transactions_record_box_expense()}</Button>
+                    <Button
 						onclick={() => openMovement('DEPOSIT')}
 						disabled={depositBlockedReason !== null}
 						title={depositBlockedReason ?? undefined}
@@ -354,9 +347,6 @@
 						description={m.boxes_deposits_unavailable()}
 					/>
 				{/if}
-				{#if activePlanSummary && !hasBalance}
-					<p class="text-xs text-muted-foreground">{m.box_plan_end_before_archive()}</p>
-				{/if}
 			{/if}
 		</Card.Content>
 	</Card.Root>
@@ -367,7 +357,7 @@
 				<h2 id="box-plan-title" class="text-lg font-semibold">{m.box_plan_section_title()}</h2>
 				<p class="max-w-2xl text-sm text-muted-foreground">{m.box_plan_section_description()}</p>
 			</div>
-			{#if !data.box.archived && !activePlanSummary}
+			{#if !data.box.archived && !data.planLoadFailed && !activePlanSummary && data.planDetail}
 				<Button onclick={() => (planCreationOpen = true)}>
 					<Target data-icon="inline-start" />{m.box_plan_create()}
 				</Button>
@@ -546,6 +536,37 @@
 			</div>
 		{/if}
 	</section>
+
+	{#if !data.box.archived}
+		<!-- Archiving is a rare end-of-life action, so it sits after the plan, the
+		     reserved money, and the history rather than beside the Box's name. -->
+		<section class="space-y-3 border-t pt-6" aria-labelledby="box-secondary-title">
+			<div>
+				<h2 id="box-secondary-title" class="text-base font-semibold">{m.boxes_secondary_actions_title()}</h2>
+				<p class="text-sm text-muted-foreground">{m.boxes_secondary_actions_description()}</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-3">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={confirmArchive}
+					disabled={hasBalance || !!activePlanSummary}
+					title={hasBalance
+						? m.boxes_withdraw_before_archive()
+						: activePlanSummary
+							? m.box_plan_end_before_archive()
+							: m.boxes_archive()}
+				>
+					<Archive data-icon="inline-start" />{m.boxes_archive()}
+				</Button>
+				{#if hasBalance}
+					<p class="text-xs text-muted-foreground">{m.boxes_withdraw_before_archive()}</p>
+				{:else if activePlanSummary}
+					<p class="text-xs text-muted-foreground">{m.box_plan_end_before_archive()}</p>
+				{/if}
+			</div>
+		</section>
+	{/if}
 </div>
 
 <Dialog.Root bind:open={movementDialogOpen}>

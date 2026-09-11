@@ -73,9 +73,24 @@ export type FixtureBackend = {
 	healRoute: (key: string) => void;
 };
 
+/**
+ * Route keys for one request, most specific first.
+ *
+ * A path alone cannot distinguish `GET /api/boxes` from
+ * `GET /api/boxes?archived=true`, which are different lists of the User's
+ * Boxes. A scenario may therefore declare either spelling: the query-bearing
+ * key wins when present, and the bare path stays the default so every 0A
+ * scenario keeps matching unchanged.
+ */
+export function routeKeys(method: string, url: string): string[] {
+	const parsed = new URL(url, 'http://fixture.backend');
+	const verb = method.toUpperCase();
+	const bare = `${verb} ${parsed.pathname}`;
+	return parsed.search ? [`${bare}${parsed.search}`, bare] : [bare];
+}
+
 function routeKey(method: string, url: string): string {
-	const path = new URL(url, 'http://fixture.backend').pathname;
-	return `${method.toUpperCase()} ${path}`;
+	return routeKeys(method, url)[0];
 }
 
 function requestUrl(input: string | URL | Request): string {
@@ -121,7 +136,13 @@ export function createFixtureBackend(
 	): Promise<Response> {
 		const url = requestUrl(input);
 		const method = requestMethod(input, init);
-		const key = routeKey(method, url);
+		const candidates = routeKeys(method, url);
+		// The recorded key is the one that answered, so an assertion about which
+		// routes were called names the declaration the loader actually hit.
+		const key =
+			candidates.find((candidate) => candidate in failures) ??
+			candidates.find((candidate) => candidate in routes) ??
+			routeKey(method, url);
 		const request: RecordedRequest = { method, url, key };
 		requests.push(request);
 

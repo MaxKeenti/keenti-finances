@@ -19,7 +19,7 @@ const DEFAULT_PREFERENCES = {
 	transactionPageSize: 25,
 	transactionSortBy: 'transactionDate',
 	transactionSortDirection: 'desc',
-	mobilePinnedNavItems: '/transactions,/subscriptions,/debts',
+	mobilePinnedNavItems: '/,/transactions,/boxes',
 	dockMagnification: true,
 	timeZone: 'America/Mexico_City',
 	themeMode: 'system',

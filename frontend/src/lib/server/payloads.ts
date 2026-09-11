@@ -13,6 +13,7 @@
  */
 
 import type { BalanceSummary } from '$lib/types/boxes';
+import type { BoxPlanStatus, BoxPlanSummary, BoxPlanType } from '$lib/types/box-plans';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -186,6 +187,50 @@ export function parseCreditStatements(value: unknown): CreditStatementSummary[] 
 		const outstandingBalance = num(item.outstandingBalance);
 		if (dueDate === null || outstandingBalance === null) return null;
 		return { dueDate, outstandingBalance };
+	});
+}
+
+const BOX_PLAN_TYPES = new Set<BoxPlanType>(['SAVING_GOAL', 'SPENDING_BUDGET']);
+const BOX_PLAN_STATUSES = new Set<BoxPlanStatus>([
+	'ACTIVE',
+	'READY_TO_COMPLETE',
+	'OVERDUE',
+	'COMPLETED',
+	'ABANDONED',
+	'ENDED',
+]);
+
+/**
+ * Box Plan summaries for the Boxes overview.
+ *
+ * The overview states what a Box is *for*, so an unrecognized Plan Type or
+ * status must fail the section rather than be shown as an unplanned Box: "no
+ * plan" offers to create one, and that is the wrong invitation for a Box that
+ * already has a plan we failed to understand.
+ */
+export function parseBoxPlanSummaries(value: unknown): BoxPlanSummary[] | null {
+	return parseList(value, (item) => {
+		if (!isRecord(item)) return null;
+		const id = num(item.id);
+		const boxId = num(item.boxId);
+		const type = str(item.type);
+		const status = str(item.status);
+		const createdAt = str(item.createdAt);
+		const closedAt = nullableStr(item.closedAt);
+		const completionAmount = nullableNum(item.completionAmount);
+		if (id === null || boxId === null || createdAt === null) return null;
+		if (type === null || !BOX_PLAN_TYPES.has(type as BoxPlanType)) return null;
+		if (status === null || !BOX_PLAN_STATUSES.has(status as BoxPlanStatus)) return null;
+		if (closedAt === undefined || completionAmount === undefined) return null;
+		return {
+			id,
+			boxId,
+			type: type as BoxPlanType,
+			status: status as BoxPlanStatus,
+			createdAt,
+			closedAt,
+			completionAmount,
+		};
 	});
 }
 

@@ -3,8 +3,12 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
+import { parseBoxPlanSummaries } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 import { m } from '$lib/paraglide/messages.js';
 import type { BoxDto } from '$lib/types/boxes';
+import type { BoxPlanSummary } from '$lib/types/box-plans';
+import type { Section } from '$lib/types/section';
 import type { Actions, PageServerLoad } from './$types';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
@@ -48,6 +52,25 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		console.error('[boxes] load: backend unreachable');
 	}
 
+	// Slice 2A: the overview says what each Box is for, so it needs the Box's
+	// Plan summaries. Each Box gets its own section: one Box whose plans cannot
+	// be read must not make the others look unplanned, and "no active plan" —
+	// which offers to create one — is only ever claimed from a list we read.
+	const planSections: Record<number, Section<BoxPlanSummary[]>> = {};
+	await Promise.all(
+		boxes.map(async (box) => {
+			planSections[box.id] = await loadSection<BoxPlanSummary[]>(
+				fetch,
+				`${BACKEND}/api/boxes/${box.id}/plans`,
+				{
+					parse: parseBoxPlanSummaries,
+					headers: headers(cookies),
+					label: `boxes/${box.id}/plans`,
+				},
+			);
+		}),
+	);
+
 	const form = await superValidate(
 		{ name: '', hue: 220, icon: '', description: '' },
 		zod4(boxSchema),
@@ -56,6 +79,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 	return {
 		boxes: boxes.toSorted((a, b) => a.displayOrder - b.displayOrder),
 		archivedBoxes: archivedBoxes.toSorted((a, b) => a.displayOrder - b.displayOrder),
+		planSections,
 		loadFailed,
 		form,
 	};

@@ -1,3 +1,5 @@
+import type { Section } from './section';
+
 export type PlanCadence = 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
 export type BoxPlanType = 'SAVING_GOAL' | 'SPENDING_BUDGET';
 export type SavingGoalStatus =
@@ -166,4 +168,25 @@ export const ACTIVE_PLAN_STATUSES = new Set<BoxPlanStatus>([
 
 export function isActivePlan(plan: Pick<BoxPlanSummary, 'status'>): boolean {
 	return ACTIVE_PLAN_STATUSES.has(plan.status);
+}
+
+/**
+ * What a Box's plan list lets a page state about that Box.
+ *
+ * `none` is a claim that the Box has no active plan, and the overview turns it
+ * into a single "Add plan" invitation — so it is only derived from a list that
+ * actually loaded. A section that failed stays `unavailable`, which reads as
+ * "we could not find out", never as "there is nothing here".
+ */
+export type BoxPlanState =
+	| { kind: 'active'; plan: BoxPlanSummary }
+	| { kind: 'none' }
+	| { kind: 'unavailable' };
+
+export function boxPlanState(
+	section: Section<BoxPlanSummary[] | null> | undefined,
+): BoxPlanState {
+	if (!section || section.status !== 'ok') return { kind: 'unavailable' };
+	const active = (section.data ?? []).find(isActivePlan);
+	return active ? { kind: 'active', plan: active } : { kind: 'none' };
 }
