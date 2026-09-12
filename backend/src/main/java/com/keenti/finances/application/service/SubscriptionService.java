@@ -77,6 +77,10 @@ public class SubscriptionService implements SubscriptionUseCase {
             token = null;
         }
         boolean ownerParticipatesChanged = existing.isOwnerParticipates() != subscription.isOwnerParticipates();
+        // share_amount is stored, not derived, so any change to the inputs of the
+        // split (cost or the owner flag) must re-spread it across members.
+        // Otherwise Billing copies a stale share into the new Payment Records.
+        boolean costChanged = existing.getCost().compareTo(subscription.getCost()) != 0;
         Subscription updated = subscriptionRepository.update(new Subscription(
             id, subscription.getName(), subscription.getCost(),
             subscription.getBillingCycle(), subscription.getType(),
@@ -84,7 +88,7 @@ public class SubscriptionService implements SubscriptionUseCase {
             token, existing.getCreatedAt(), subscription.isOwnerParticipates()
         ));
         LOG.infof("subscription.update id=%d", id);
-        if (ownerParticipatesChanged && "SHARED".equals(updated.getType())) {
+        if ((ownerParticipatesChanged || costChanged) && "SHARED".equals(updated.getType())) {
             recalculateShares(id, updated);
         }
         return updated;
