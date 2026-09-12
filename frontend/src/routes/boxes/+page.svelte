@@ -303,7 +303,7 @@
 </div>
 
 <Dialog.Root bind:open={dialogOpen}>
-	<Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+	<Dialog.Content class="max-h-[90dvh] sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{editMode ? m.boxes_edit_title() : m.boxes_new_title()}</Dialog.Title>
 			<Dialog.Description>
@@ -315,7 +315,8 @@
 			<Alert.Root variant="destructive"><Alert.Description>{$message}</Alert.Description></Alert.Root>
 		{/if}
 
-		<form method="POST" action={editMode ? '?/update' : '?/create'} use:enhance class="grid gap-4">
+		<form method="POST" action={editMode ? '?/update' : '?/create'} use:enhance class="flex min-h-0 flex-1 flex-col gap-4">
+			<Dialog.Body>
 			{#if editMode && $form.id}<input type="hidden" name="id" value={$form.id} />{/if}
 
 			<div class="grid gap-4 sm:grid-cols-[1fr_6rem]">
@@ -355,6 +356,8 @@
 				<input type="hidden" name="hue" value={$form.hue} />
 				<ColorPicker name={$form.name || m.boxes_sample_name()} hue={$form.hue} onchange={(hue) => ($form.hue = hue)} />
 			</div>
+
+			</Dialog.Body>
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>

@@ -8,5 +8,6 @@ public interface PaymentRecordUseCase {
     List<PaymentRecord> listBySubscription(Long subscriptionId);
     PaymentRecord recordPayment(Long subscriptionId, Long paymentId);
     PaymentRecord linkTransaction(Long subscriptionId, Long paymentId, Long transactionId);
+    PaymentRecord unlinkTransaction(Long subscriptionId, Long paymentId);
     int deleteBillingPeriod(Long subscriptionId, LocalDate billingDate);
 }

@@ -267,7 +267,7 @@
 
 <!-- Edit dialog -->
 <Dialog.Root bind:open={editDialogOpen}>
-	<Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+	<Dialog.Content class="max-h-[90dvh] sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>{m.transactions_edit_title()}</Dialog.Title>
 			<Dialog.Description>{m.transactions_edit_description()}</Dialog.Description>
@@ -294,7 +294,8 @@
 			</Alert.Root>
 		{/if}
 
-		<form method="POST" action="?/update" use:enhance class="grid gap-4">
+		<form method="POST" action="?/update" use:enhance class="flex min-h-0 flex-1 flex-col gap-4">
+			<Dialog.Body>
 			<input type="hidden" name="id" value={$form.id} />
 
 			<div class="grid grid-cols-2 gap-4">
@@ -425,6 +426,8 @@
 					categoryName={data.categories.find((category) => category.id === $form.categoryId)?.name ?? null}
 				/>
 			{/if}
+
+			</Dialog.Body>
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (editDialogOpen = false)}>{m.common_cancel()}</Button>

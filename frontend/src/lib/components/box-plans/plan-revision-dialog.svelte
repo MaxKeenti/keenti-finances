@@ -229,13 +229,13 @@
 	{open}
 	onOpenChange={(value) => (open = value)}
 >
-	<Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+	<Dialog.Content class="max-h-[90dvh] sm:max-w-xl">
 		<Dialog.Header>
 			<Dialog.Title>{m.box_plan_revision_title()}</Dialog.Title>
 			<Dialog.Description>{m.box_plan_revision_description()}</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="grid gap-4">
+		<Dialog.Body>
 			{#if plan.type === 'SAVING_GOAL'}
 				<div class="grid gap-4 sm:grid-cols-2">
 					<div class="grid gap-2">
@@ -328,9 +328,9 @@
 			{#if previewError && preview}
 				<Alert.Root variant="destructive"><Alert.Description>{previewError}</Alert.Description></Alert.Root>
 			{/if}
-		</div>
+		</Dialog.Body>
 
-		<Dialog.Footer class="static bg-muted">
+		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button onclick={applyRevision} disabled={submitting || previewLoading || !preview}>
 				{submitting ? m.common_processing() : m.box_plan_apply_changes()}

@@ -728,7 +728,7 @@
 
 <!-- Create / Edit dialog -->
 <Dialog.Root bind:open={dialogOpen}>
-	<Dialog.Content class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+	<Dialog.Content class="max-h-[90dvh] sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>{editMode ? m.transactions_edit_title() : m.transactions_new_title()}</Dialog.Title>
 			<Dialog.Description>
@@ -768,8 +768,9 @@
 			method="POST"
 			action={editMode ? '?/update' : '?/create'}
 			use:enhance
-			class="grid gap-4"
+			class="flex min-h-0 flex-1 flex-col gap-4"
 		>
+			<Dialog.Body>
 			{#if editMode && $form.id}
 				<input type="hidden" name="id" value={$form.id} />
 			{/if}
@@ -941,6 +942,8 @@
 					locale={data.preferences.locale}
 				/>
 			{/if}
+
+			</Dialog.Body>
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => (dialogOpen = false)}>{m.common_cancel()}</Button>
