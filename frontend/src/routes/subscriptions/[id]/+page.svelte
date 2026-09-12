@@ -190,7 +190,7 @@
 
 <svelte:head><title>{data.subscription.name} · {m.subscriptions_title()} · Keenti</title></svelte:head>
 
-<div class="space-y-6 max-w-3xl">
+<div class="mx-auto max-w-3xl space-y-6">
 	<!-- Back link -->
 	<Button variant="link" href="/subscriptions" class="h-auto p-0 text-muted-foreground hover:text-foreground">
 		{m.common_back_to_subscriptions()}
