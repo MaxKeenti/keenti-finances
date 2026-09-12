@@ -994,5 +994,9 @@
 	"transactions_roles_hint": "Account: where money moved. Category: what it was for. Box: reserved money used for this expense.",
 	"transactions_record_box_expense": "Record expense from this Box",
 	"transactions_view_options": "Sort and page size",
-	"transactions_history_unavailable": "Transaction history could not be loaded. Try again."
+	"transactions_history_unavailable": "Transaction history could not be loaded. Try again.",
+	"error_payment_not_linked": "That payment record has no linked income.",
+	"subscriptions_transaction_unlink_failed": "Could not unlink the income. Try again.",
+	"subscriptions_unlink_transaction": "Unlink income",
+	"subscriptions_transaction_unlinked": "Income unlinked. The record is pending again."
 }

@@ -994,5 +994,9 @@
 	"transactions_roles_hint": "Cuenta: dónde se movió el dinero. Categoría: para qué fue. Caja: dinero reservado usado para este gasto.",
 	"transactions_record_box_expense": "Registrar gasto desde esta Caja",
 	"transactions_view_options": "Orden y tamaño de página",
-	"transactions_history_unavailable": "No se pudo cargar el historial de movimientos. Intenta de nuevo."
+	"transactions_history_unavailable": "No se pudo cargar el historial de movimientos. Intenta de nuevo.",
+	"error_payment_not_linked": "Ese registro de pago no tiene ingreso vinculado.",
+	"subscriptions_transaction_unlink_failed": "No se pudo desvincular el ingreso. Inténtalo de nuevo.",
+	"subscriptions_unlink_transaction": "Desvincular ingreso",
+	"subscriptions_transaction_unlinked": "Ingreso desvinculado. El registro vuelve a estar pendiente."
 }

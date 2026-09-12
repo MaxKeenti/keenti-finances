@@ -163,13 +163,13 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+	<Dialog.Content class="max-h-[90dvh] sm:max-w-xl">
 		<Dialog.Header>
 			<Dialog.Title>{m.box_plan_create_title()}</Dialog.Title>
 			<Dialog.Description>{m.box_plan_create_description()}</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="grid gap-4">
+		<Dialog.Body>
 			<div class="grid gap-2 sm:grid-cols-2" role="group" aria-label={m.common_type()}>
 				<Button
 					variant={planType === 'SAVING_GOAL' ? 'secondary' : 'outline'}
@@ -256,9 +256,9 @@
 			{#if formError}
 				<Alert.Root variant="destructive"><Alert.Description>{formError}</Alert.Description></Alert.Root>
 			{/if}
-		</div>
+		</Dialog.Body>
 
-		<Dialog.Footer class="static bg-muted">
+		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button onclick={submit} disabled={submitting}>{submitting ? m.common_processing() : m.box_plan_create()}</Button>
 		</Dialog.Footer>
