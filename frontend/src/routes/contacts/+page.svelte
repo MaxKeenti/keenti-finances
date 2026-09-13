@@ -83,8 +83,10 @@
 <svelte:head><title>{m.contacts_title()} · Keenti</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<div>
+	<!-- Wraps rather than squeezing: a long localized action label next to a long
+	     title must not shrink either below a readable width at 320px. -->
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div class="min-w-0">
 			<h1 class="text-2xl font-semibold tracking-tight">{m.contacts_title()}</h1>
 			<p class="text-sm text-muted-foreground">{m.contacts_description()}</p>
 		</div>
@@ -97,7 +99,31 @@
 			<Empty.Description>{m.contacts_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
-		<div class="rounded-lg border">
+		<!-- Phone: cards with full-width actions. A four-column table at 320px put
+		     Edit and Delete outside the viewport behind a horizontal scroll. -->
+		<ul class="grid gap-3 sm:hidden">
+			{#each data.contacts as contact (contact.id)}
+				<li class="rounded-lg border p-4">
+					<p class="font-medium break-words">{contact.name}</p>
+					<p class="mt-1 text-sm text-muted-foreground break-words">
+						{contact.phone ?? m.contacts_no_phone()}
+					</p>
+					<p class="text-sm text-muted-foreground break-words">
+						{contact.email ?? m.contacts_no_email()}
+					</p>
+					<div class="mt-3 flex flex-wrap gap-2">
+						<Button class="flex-1" variant="outline" size="sm" onclick={() => openEdit(contact)}>
+							{m.common_edit()}
+						</Button>
+						<Button class="flex-1" variant="destructive" size="sm" onclick={() => openDelete(contact)}>
+							{m.common_delete()}
+						</Button>
+					</div>
+				</li>
+			{/each}
+		</ul>
+
+		<div class="hidden rounded-lg border sm:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>

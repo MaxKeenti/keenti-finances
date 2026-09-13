@@ -41,6 +41,7 @@ Amounts are MXN. `Available to Spend = Net Balance − In Boxes` in every balanc
 | `FX-SUB-SHARED-POPULATED-01` | Shared subscription with data | Subscription 9401, cost 299.00, 2 members, 3 payments, 1 linked income | 1A-loader, 1B, 3B |
 | `FX-SUB-EMPTY-01` | Genuinely empty subscription | Subscription 9402, cost 149.00, 0 members, 0 payments, HTTP 200 | 1A-loader |
 | `FX-DEBT-000-01` / `-010-` / `-100-` | Debt progress 0 / 10 / 100% | Debts 9901–9903, total 1,000.00 | 1B |
+| `FX-DEBT-RECEIVABLES-01` | Money owed across debtors | Debts 9904–9908; total outstanding 2,050.00 over 4 active debts and 3 debtors; Contact 9504 owes 1,200.00, Contact 9503 owes 750.00 across two debts, debt 9907 has no Contact and owes 100.00; debt 9906 is settled and excluded | 3C |
 | `FX-DATE-BOUNDARY-01` | User time-zone day boundary | See the clock table below | 1D (with D2), 3A, 3B |
 | `FX-LONGNAME-01` | Very long overdrawn account name | Account 9111, balance −1,234.56 | 1C |
 
@@ -131,3 +132,5 @@ Known limits: the fixture server is read-only, so POST/PUT/DELETE actions answer
 ### Recording fixture
 
 `FX-RECORDING-01` extends the empty-Box/negative-Available scenario with 31 synthetic transactions and account/category reads. Searching `needle` finds the last transaction before pagination. `/transactions?expenseFromBox=9205` opens an expense draft with the empty Box selected, without saving. Remove its zero allocation to record an unfunded expense: 100.00 changes projected Available from −700.00 to −800.00. Request-level tests cover no funding, 60.00 funding, and 100.00 funding as a single Transaction POST (never a second withdrawal). The HTTP fixture server remains read-only.
+
+The receivables fixture also supplies Contacts, a long-name Trash item, and debt 9904 with payment 9708 linking to transaction 9612 for read-only browser navigation checks.

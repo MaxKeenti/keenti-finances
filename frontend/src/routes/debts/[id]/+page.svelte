@@ -54,17 +54,28 @@
 
 	const isPaid = $derived(data.debt.status === 'PAID');
 
+	type RecordedPayment = { debtId: number; paymentId: number | null; amount: number; transactionId: number | null };
+
+	// The Transaction that saving created, kept on the page after the toast is
+	// gone so the User can still follow it.
+	let recordedPayment = $state<RecordedPayment | null>(null);
+
 	const sf = superForm(data.form, {
 		dataType: 'json',
 		validators: zod4Client(paymentSchema),
 		onResult({ result }) {
 			if (result.type === 'success') {
+				recordedPayment =
+					((result.data as Record<string, unknown> | undefined)?.recordedPayment as
+						| RecordedPayment
+						| undefined) ?? null;
 				toast.success(m.debts_payment_recorded());
 				invalidateAll();
 			} else if (result.type === 'failure') {
 				const msg = (result.data as Record<string, unknown> | undefined)?.form as
 					| { message?: string }
 					| undefined;
+				recordedPayment = null;
 				if (msg?.message) toast.error(msg.message);
 				else toast.error(m.debts_payment_record_failed());
 			}
@@ -173,9 +184,13 @@
 									</Table.Cell>
 									<Table.Cell class="text-right">
 										{#if (payment as DebtPayment).transactionId}
-											<span class="text-xs text-muted-foreground font-mono">
+											<a
+												class="font-mono text-xs underline underline-offset-4 hover:text-foreground"
+												href="/transactions/{(payment as DebtPayment).transactionId}"
+												aria-label={m.debts_transaction_link_aria({ id: (payment as DebtPayment).transactionId ?? 0 })}
+											>
 												#{(payment as DebtPayment).transactionId}
-											</span>
+											</a>
 										{:else}
 											<span class="text-xs text-muted-foreground">—</span>
 										{/if}
@@ -285,6 +300,26 @@
 					</Form.Field>
 
 					<p class="text-sm text-muted-foreground">{m.debts_payment_creates_income()}</p>
+
+					{#if recordedPayment && recordedPayment.debtId === data.debt.id}
+						<div class="rounded-md border border-money-positive/40 bg-money-positive/5 p-3 text-sm" role="status">
+							{#if recordedPayment.transactionId}
+								<p>{m.debts_payment_created_transaction({ amount: fmt.format(recordedPayment.amount) })}</p>
+								<a
+									class="font-medium underline underline-offset-4"
+									href="/transactions/{recordedPayment.transactionId}"
+									aria-label={m.debts_transaction_link_aria({ id: recordedPayment.transactionId })}
+								>
+									{m.debts_payment_view_transaction()}
+								</a>
+							{:else}
+								<p>{m.debts_payment_transaction_missing({ amount: fmt.format(recordedPayment.amount) })}</p>
+								<a class="font-medium underline underline-offset-4" href="/transactions">
+									{m.debts_payment_view_transactions()}
+								</a>
+							{/if}
+						</div>
+					{/if}
 
 					<Button type="submit" disabled={isPaid || $submitting || data.accountTracking.setupRequired} class="w-full sm:w-auto">
 						{$submitting ? m.common_recording() : m.common_record_payment()}

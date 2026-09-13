@@ -47,17 +47,6 @@
 	);
 	const someSelected = $derived(selectedKeys.size > 0 && !allSelected);
 
-	function toggleItem(item: TrashItem) {
-		const key = itemKey(item);
-		if (selectedKeys.has(key)) selectedKeys.delete(key);
-		else selectedKeys.add(key);
-	}
-
-	function toggleAll() {
-		if (allSelected) selectedKeys.clear();
-		else for (const item of data.items) selectedKeys.add(itemKey(item));
-	}
-
 	async function runBulk(action: 'bulkRestore' | 'bulkPermanentDelete', items: TrashItem[]) {
 		const body = new FormData();
 		body.set('items', JSON.stringify(items.map((i) => ({ id: i.id, entityType: i.entityType }))));
@@ -142,7 +131,7 @@
 					onClick: handleBulkRestore,
 				},
 				{
-					label: m.common_delete(),
+					label: m.common_delete_permanently(),
 					icon: Trash2,
 					variant: 'destructive',
 					disabled: busy,
@@ -180,7 +169,7 @@
 <svelte:head><title>{m.trash_title()} · Keenti</title></svelte:head>
 
 <div class="space-y-6">
-	<div>
+	<div class="min-w-0">
 		<h1 class="text-2xl font-semibold tracking-tight">{m.trash_title()}</h1>
 		<p class="text-sm text-muted-foreground">
 			{m.trash_description()}
@@ -193,22 +182,58 @@
 			<Empty.Description>{m.trash_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
-		<div class="rounded-lg border">
+		<p class="text-sm text-muted-foreground sm:hidden">{m.trash_recover_hint()}</p>
+
+		<!-- Phone: cards. The five-column table pushed Restore and Delete
+		     permanently off-screen at 320px, which made recovery unreachable. -->
+		<ul class="grid gap-3 sm:hidden">
+			{#each data.items as item (item.entityType + '-' + item.id)}
+				<li class="rounded-lg border p-4">
+					<div class="flex items-start gap-3">
+						<Checkbox
+							bind:checked={() => selectedKeys.has(itemKey(item)), (checked) => { if (checked) selectedKeys.add(itemKey(item)); else selectedKeys.delete(itemKey(item)); }}
+							aria-label={m.trash_select_row()}
+						/>
+						<div class="min-w-0 flex-1">
+							<p class="font-medium break-words">{item.label}</p>
+							<div class="mt-1 flex flex-wrap items-center gap-2">
+								<Badge variant={typeBadgeVariant[item.entityType] ?? 'secondary'}>
+									{typeLabel[item.entityType]?.() ?? item.entityType}
+								</Badge>
+								<span class="text-sm text-muted-foreground">{formatDate(item.deletedAt)}</span>
+							</div>
+						</div>
+					</div>
+					<div class="mt-3 flex flex-wrap gap-2">
+						{@render restoreAction(item, 'flex-1')}
+						<!-- Labelled "Delete permanently", not "Delete": on this page the
+						     other action is recovery, and the two must not read alike. -->
+						<Button
+							class="flex-1"
+							variant="destructive"
+							size="sm"
+							onclick={() => openPermanentDelete(item)}
+						>{m.common_delete_permanently()}</Button>
+					</div>
+				</li>
+			{/each}
+		</ul>
+
+		<div class="hidden rounded-lg border sm:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
 						<Table.Head class="w-[40px]">
 							<Checkbox
-								checked={allSelected}
+								bind:checked={() => allSelected, (checked) => { if (checked) data.items.forEach((item) => selectedKeys.add(itemKey(item))); else selectedKeys.clear(); }}
 								indeterminate={someSelected}
-								onclick={toggleAll}
 								aria-label={m.trash_select_all()}
 							/>
 						</Table.Head>
 						<Table.Head>{m.common_name()}</Table.Head>
 						<Table.Head>{m.common_type()}</Table.Head>
 						<Table.Head>{m.common_deleted()}</Table.Head>
-						<Table.Head class="w-[160px] text-right">{m.common_actions()}</Table.Head>
+						<Table.Head class="w-[260px] text-right">{m.common_actions()}</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
@@ -216,8 +241,7 @@
 						<Table.Row data-state={selectedKeys.has(item.entityType + '-' + item.id) ? 'selected' : undefined}>
 							<Table.Cell>
 								<Checkbox
-									checked={selectedKeys.has(item.entityType + '-' + item.id)}
-									onclick={() => toggleItem(item)}
+									bind:checked={() => selectedKeys.has(itemKey(item)), (checked) => { if (checked) selectedKeys.add(itemKey(item)); else selectedKeys.delete(itemKey(item)); }}
 									aria-label={m.trash_select_row()}
 								/>
 							</Table.Cell>
@@ -230,34 +254,12 @@
 							<Table.Cell class="text-muted-foreground text-sm">{formatDate(item.deletedAt)}</Table.Cell>
 							<Table.Cell class="text-right">
 								<div class="flex justify-end gap-2">
-									<form
-										method="POST"
-										action="?/restore"
-										use:kitEnhance={async () => {
-											return async ({ result, update }) => {
-												if (result.type === 'success') {
-													toast.success(m.trash_item_restored({
-														type: typeLabel[item.entityType]?.() ?? m.entity_item(),
-													}));
-													await update();
-												} else {
-													const msg =
-														(result as { data?: { message?: string } }).data?.message ??
-														m.trash_restore_failed();
-													toast.error(msg);
-												}
-											};
-										}}
-									>
-										<input type="hidden" name="id" value={item.id} />
-										<input type="hidden" name="entityType" value={item.entityType} />
-										<Button type="submit" variant="outline" size="sm">{m.common_restore()}</Button>
-									</form>
+									{@render restoreAction(item, '')}
 									<Button
 										variant="destructive"
 										size="sm"
 										onclick={() => openPermanentDelete(item)}
-									>{m.common_delete()}</Button>
+									>{m.common_delete_permanently()}</Button>
 								</div>
 							</Table.Cell>
 						</Table.Row>
@@ -267,6 +269,37 @@
 		</div>
 	{/if}
 </div>
+
+<!-- One restore form, rendered by both the phone cards and the desktop table,
+     so recovery behaves identically at every width. -->
+{#snippet restoreAction(item: TrashItem, extraClass: string)}
+	<form
+		method="POST"
+		action="?/restore"
+		class={extraClass}
+		use:kitEnhance={async () => {
+			return async ({ result, update }) => {
+				if (result.type === 'success') {
+					toast.success(m.trash_item_restored({
+						type: typeLabel[item.entityType]?.() ?? m.entity_item(),
+					}));
+					await update();
+				} else {
+					const msg =
+						(result as { data?: { message?: string } }).data?.message ??
+						m.trash_restore_failed();
+					toast.error(msg);
+				}
+			};
+		}}
+	>
+		<input type="hidden" name="id" value={item.id} />
+		<input type="hidden" name="entityType" value={item.entityType} />
+		<Button type="submit" variant="outline" size="sm" class={extraClass ? 'w-full' : ''}>
+			{m.common_restore()}
+		</Button>
+	</form>
+{/snippet}
 
 <form
 	bind:this={permanentDeleteForm}

@@ -14,20 +14,20 @@
 	<div
 		role="toolbar"
 		aria-label={m.common_selected_count({ count: bar.count })}
-		class="flex w-full max-w-md items-center gap-2 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:w-auto"
+		class="flex w-full max-w-md flex-wrap items-center gap-2 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:w-auto"
 	>
 		<span class="whitespace-nowrap pl-1 text-sm font-medium text-sidebar-foreground">
 			{m.common_selected_count({ count: bar.count })}
 		</span>
 
-		<div class="ml-auto flex items-center gap-2">
+		<div class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
 			{#each bar.actions as action (action.label)}
 				<Button
 					variant={action.variant ?? 'default'}
 					size="sm"
 					disabled={action.disabled}
 					onclick={action.onClick}
-					class="whitespace-nowrap"
+					class="h-auto min-h-8 max-w-full whitespace-normal text-center"
 				>
 					{#if action.icon}
 						<action.icon class="size-4" />

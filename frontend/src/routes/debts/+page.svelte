@@ -21,6 +21,7 @@
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { DataTableWrapper } from '$lib/components/ui/data-table';
 	import type { ColumnDef, Row } from '@tanstack/table-core';
+	import { debtorKey } from '$lib/receivables';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -70,7 +71,6 @@
 	};
 
 	type Category = { id: number; name: string; type: string };
-	type DebtorSummary = { key: string; name: string; outstanding: number; debtCount: number };
 
 	let { data }: { data: PageData } = $props();
 
@@ -185,26 +185,12 @@
 		return debt.createdAt ? debt.createdAt.split('T')[0] : '';
 	}
 
-	const debtorSummaries = $derived.by(() => {
-		const summaries = new Map<string, DebtorSummary>();
-		for (const debt of data.debts as Debt[]) {
-			if (debt.status !== 'ACTIVE' || debt.remaining <= 0) continue;
-			const key = debt.contactId === null ? `debt-${debt.id}` : `contact-${debt.contactId}`;
-			const current = summaries.get(key);
-			if (current) {
-				current.outstanding += debt.remaining;
-				current.debtCount += 1;
-			} else {
-				summaries.set(key, {
-					key,
-					name: debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }),
-					outstanding: debt.remaining,
-					debtCount: 1,
-				});
-			}
-		}
-		return [...summaries.values()].sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
-	});
+	// Receivables totals are summarized by the loader so the opened debtor is a
+	// URL (`?debtor=`) rather than component-local state.
+	const debtorSummaries = $derived(data.receivables.debtors);
+	const openedDebtor = $derived(
+		debtorSummaries.find((debtor) => debtor.key === data.debtorFilter) ?? null,
+	);
 
 	// Desktop columns. `accessorFn` keeps the searchable text in the row model so
 	// the wrapper's global filter matches debtor and description, and sorting on
@@ -233,6 +219,7 @@
 	const dateFilterActive = $derived(dateFrom !== '' || dateTo !== '');
 	const visibleDebts = $derived(
 		(data.debts as Debt[]).filter((d) => {
+			if (data.debtorFilter && debtorKey(d) !== data.debtorFilter) return false;
 			if (statusFilter !== 'ALL') {
 				const matches = statusFilter === 'PAID' ? d.status === 'PAID' : d.status !== 'PAID';
 				if (!matches) return false;
@@ -266,12 +253,12 @@
 <svelte:head><title>{m.debts_title()} · Keenti</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<div>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div class="min-w-0">
 			<h1 class="text-2xl font-semibold tracking-tight">{m.debts_title()}</h1>
 			<p class="text-sm text-muted-foreground">{m.debts_description()}</p>
 		</div>
-		<div class="flex gap-2">
+		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" onclick={openBulkPayment}>{m.debts_bulk_payment()}</Button>
 			<Button onclick={openCreate}>{m.debts_new()}</Button>
 		</div>
@@ -279,15 +266,46 @@
 
 	{#if debtorSummaries.length > 0}
 		<section class="space-y-3" aria-labelledby="debtor-outstanding-title">
+			<div class="rounded-lg border p-4">
+				<p class="text-sm font-medium text-muted-foreground">{m.debts_total_owed_to_you()}</p>
+				<p class="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+					{fmt.format(data.receivables.totalOutstanding)}
+				</p>
+				<p class="mt-1 text-sm text-muted-foreground">
+					{m.debts_total_owed_to_you_description({
+						count: data.receivables.outstandingDebtCount,
+						debtors: debtorSummaries.length,
+					})}
+				</p>
+			</div>
+
 			<div>
 				<h2 id="debtor-outstanding-title" class="text-lg font-semibold">{m.debts_outstanding_by_debtor()}</h2>
 				<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_debtor_description()}</p>
 			</div>
+
+			{#if openedDebtor}
+				<div class="flex flex-wrap items-center gap-2">
+					<Badge variant="secondary">{m.debts_filter_debtor_active({ name: openedDebtor.name })}</Badge>
+					<Button variant="ghost" size="sm" href="/debts">{m.debts_filter_debtor_clear()}</Button>
+				</div>
+			{/if}
+
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 				{#each debtorSummaries as debtor (debtor.key)}
-					<Card.Root>
+					{@const opened = debtor.key === data.debtorFilter}
+					<Card.Root class={opened ? 'ring-2 ring-ring' : undefined}>
 						<Card.Content class="space-y-2 py-4">
-							<p class="truncate font-semibold">{debtor.name}</p>
+							<!-- The whole debtor drills down to their debts; keeping it a real
+							     link makes the opened debtor shareable and Back-navigable. -->
+							<a
+								href={opened ? '/debts' : `/debts?debtor=${debtor.key}`}
+								aria-label={m.debts_open_debtor_aria({ name: debtor.name })}
+								aria-current={opened ? 'true' : undefined}
+								class="block truncate font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+							>
+								{debtor.name}
+							</a>
 							<p class="text-sm text-muted-foreground">{debtor.debtCount === 1 ? m.debts_one_active_debt() : m.debts_active_debt_count({ count: debtor.debtCount })}</p>
 							<div class="border-t pt-2">
 								<p class="text-xs font-medium text-muted-foreground">{m.debts_amount_owed_to_you()}</p>

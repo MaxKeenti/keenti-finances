@@ -1,4 +1,4 @@
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
@@ -6,6 +6,7 @@ import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 import { dateInTimeZone } from '$lib/formatting';
+import { summarizeReceivables } from '$lib/receivables';
 
 const debtSchema = z.object({
 	id: z.coerce.number().optional(),
@@ -41,7 +42,7 @@ type Debt = {
 type Category = { id: number; name: string; type: string };
 type FinancialAccount = { id: number; name: string; kind: string; balance: number };
 
-export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
+export const load: PageServerLoad = async ({ fetch, cookies, parent, url }) => {
 	const session = getSession(cookies);
 	const accessToken = session?.accessToken;
 	const authHeaders: Record<string, string> = accessToken
@@ -49,6 +50,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 		: {};
 
 	let debts: Debt[] = [];
+	let debtsLoaded = false;
 	let contacts: Contact[] = [];
 	let categories: Category[] = [];
 	let accounts: FinancialAccount[] = [];
@@ -63,7 +65,10 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 			fetch(`${BACKEND}/api/accounts/status`, { headers: authHeaders }),
 		]);
 
-		if (debtRes.ok) debts = await debtRes.json();
+		if (debtRes.ok) {
+			const body = await debtRes.json();
+			if (Array.isArray(body)) { debts = body; debtsLoaded = true; }
+		}
 		else console.error(`[debts] load: backend returned ${debtRes.status} for debts`);
 
 		if (conRes.ok) contacts = await conRes.json();
@@ -78,6 +83,8 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 		console.error('[debts] load: backend unreachable');
 	}
 
+	if (!debtsLoaded) error(502, m.error_backend_unreachable());
+
 	// `toISOString()` is the UTC date, which is already tomorrow for a
 	// User at UTC-6 after 18:00 local. Resolve their calendar day instead.
 	const { preferences } = await parent();
@@ -90,7 +97,26 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 		),
 	]);
 
-	return { debts, contacts, categories, accounts, accountTracking, form, bulkForm };
+	const receivables = summarizeReceivables(debts, (debt) =>
+		debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }),
+	);
+	// An unknown key is treated as no drill-down rather than an empty page: the
+	// debtor may have been paid off or deleted since the link was made.
+	const requested = url.searchParams.get('debtor');
+	const debtorFilter =
+		requested && receivables.debtors.some((debtor) => debtor.key === requested) ? requested : null;
+
+	return {
+		debts,
+		contacts,
+		categories,
+		accounts,
+		accountTracking,
+		receivables,
+		debtorFilter,
+		form,
+		bulkForm,
+	};
 };
 
 export const actions: Actions = {

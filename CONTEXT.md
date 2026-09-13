@@ -127,8 +127,9 @@ _Avoid_: Share link, member portal.
 ### Debts
 
 **Debt**:
-A standalone amount of money owed, tracked outside Subscriptions. Has a status (`OPEN` / `PAID`) and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled.
-_Avoid_: Loan, IOU, invoice.
+A standalone amount of money owed **to the User**, tracked outside Subscriptions. Has a status (`ACTIVE` / `PAID`) and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled.
+**Debt** stays the domain and code term; user-facing copy calls it "Money owed to you" / "Te deben" so receivables read as distinct from credit the User owes. Decision D4, authorized by the product owner's continuation of the UX/UI execution plan on 10 September 2026.
+_Avoid_: Loan, IOU, invoice; in user-facing copy, "Debts" alone (ambiguous with credit owed by the User).
 
 **Debt Payment**:
 A single partial payment toward a Debt. Recording a Debt Payment automatically creates a corresponding INGRESS Transaction so the dashboard reflects the income without manual double-entry.
