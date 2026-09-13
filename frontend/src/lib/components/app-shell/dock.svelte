@@ -182,13 +182,13 @@
 			<a
 				href={item.href}
 				aria-label={item.label}
-				class="flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1 text-xs font-medium transition-colors
+				class="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1 text-xs font-medium transition-colors
 					{active
 					? 'text-sidebar-accent-foreground bg-sidebar-accent'
 					: 'text-sidebar-foreground hover:text-sidebar-accent-foreground'}"
 			>
 				<item.icon class="w-5 h-5 shrink-0" />
-				<span class="truncate">{item.label}</span>
+				<span class={item.href === '/debts' ? 'w-full whitespace-normal text-center leading-tight' : 'w-full truncate text-center'}>{item.label}</span>
 			</a>
 		{/each}
 

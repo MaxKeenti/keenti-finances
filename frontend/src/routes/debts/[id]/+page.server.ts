@@ -156,6 +156,18 @@ export const actions: Actions = {
 		console.log(
 			`[debts/${id}] recordPayment: success — paymentId: ${payment.id} amount: ${form.data.amount} transactionId: ${payment.transactionId}`,
 		);
-		return { form };
+		// ADR-0005: one Debt Payment creates exactly one INGRESS Transaction. The
+		// backend already reports which one, so the page can link to it instead of
+		// guessing; `null` means it was not reported, which the page says plainly
+		// rather than inventing an id.
+		return {
+			form,
+			recordedPayment: {
+				debtId: Number(id),
+				paymentId: payment.id ?? null,
+				amount: form.data.amount,
+				transactionId: payment.transactionId ?? null,
+			},
+		};
 	},
 };
