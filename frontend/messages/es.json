@@ -1007,5 +1007,9 @@
 	"debts_transaction_link_aria": "Abrir el movimiento {id}",
 	"trash_recover_hint": "Restaurar devuelve el elemento a su lugar. Eliminar definitivamente no se puede deshacer.",
 	"contacts_no_phone": "Sin teléfono",
-	"contacts_no_email": "Sin correo"
+	"contacts_no_email": "Sin correo",
+	"error_payment_not_linked": "Ese registro de pago no tiene ingreso vinculado.",
+	"subscriptions_transaction_unlink_failed": "No se pudo desvincular el ingreso. Inténtalo de nuevo.",
+	"subscriptions_unlink_transaction": "Desvincular ingreso",
+	"subscriptions_transaction_unlinked": "Ingreso desvinculado. El registro vuelve a estar pendiente."
 }

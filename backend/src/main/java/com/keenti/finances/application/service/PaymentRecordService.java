@@ -108,6 +108,47 @@ public class PaymentRecordService implements PaymentRecordUseCase {
         return updated;
     }
 
+    /**
+     * Reverse {@link #linkTransaction}: detach the Transaction and return the
+     * record to PENDING so the period can be settled again.
+     *
+     * <p>Symmetric with linking — it also drops the Transaction's own
+     * subscription association, since linking is what created it. A Transaction
+     * attached in bulk through "Link received income" is untouched, because such
+     * a Transaction is never referenced by a Payment Record.
+     *
+     * <p>A record marked PAID by hand (no {@code transactionId}) has nothing to
+     * unlink and yields 409, so this cannot be used as a backdoor "un-pay".
+     */
+    @Override
+    @Transactional
+    public PaymentRecord unlinkTransaction(Long subscriptionId, Long paymentId) {
+        // Same ownership guard as linkTransaction.
+        subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException("Subscription not found: " + subscriptionId));
+        PaymentRecord record = paymentRecordRepository.findById(paymentId)
+            .orElseThrow(() -> new NotFoundException("Payment record not found: " + paymentId));
+        if (!record.getSubscriptionId().equals(subscriptionId)) {
+            throw new NotFoundException("Payment record not found for subscription: " + subscriptionId);
+        }
+        Long transactionId = record.getTransactionId();
+        if (transactionId == null) {
+            throw new WebApplicationException(Response.status(Response.Status.CONFLICT)
+                .entity("{\"error\":\"Payment record has no linked transaction\"}")
+                .build());
+        }
+
+        PaymentRecord updated = paymentRecordRepository.update(new PaymentRecord(
+            record.getId(), record.getSubscriptionId(), record.getMemberId(),
+            record.getBillingDate(), record.getAmount(), "PENDING", null,
+            null, record.getCreatedAt()
+        ));
+        transactionUseCase.linkSubscription(transactionId, null);
+        LOG.infof("payment.unlink paymentId=%d subscriptionId=%d transactionId=%d status=PENDING",
+            paymentId, subscriptionId, transactionId);
+        return updated;
+    }
+
     @Override
     @Transactional
     public int deleteBillingPeriod(Long subscriptionId, LocalDate billingDate) {

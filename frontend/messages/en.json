@@ -1007,5 +1007,9 @@
 	"debts_transaction_link_aria": "Open Transaction {id}",
 	"trash_recover_hint": "Restoring puts the item back where it was. Deleting permanently cannot be undone.",
 	"contacts_no_phone": "No phone",
-	"contacts_no_email": "No email"
+	"contacts_no_email": "No email",
+	"error_payment_not_linked": "That payment record has no linked income.",
+	"subscriptions_transaction_unlink_failed": "Could not unlink the income. Try again.",
+	"subscriptions_unlink_transaction": "Unlink income",
+	"subscriptions_transaction_unlinked": "Income unlinked. The record is pending again."
 }

@@ -175,6 +175,41 @@ export const actions: Actions = {
 		return {};
 	},
 
+	unlinkTransactionFromPayment: async ({ params, request, fetch, cookies }) => {
+		const id = params.id;
+		const session = getSession(cookies);
+		const accessToken = session?.accessToken;
+		const authHeaders: Record<string, string> = accessToken
+			? { Authorization: `Bearer ${accessToken}` }
+			: {};
+
+		const data = await request.formData();
+		const paymentId = data.get('paymentId');
+
+		if (!paymentId) return fail(400, { message: m.error_missing_payment_id() });
+
+		let res: Response;
+		try {
+			res = await fetch(
+				`${BACKEND}/api/subscriptions/${id}/payments/${paymentId}/link-transaction`,
+				{ method: 'DELETE', headers: authHeaders },
+			);
+		} catch {
+			console.error(`[subscriptions/${id}] unlinkTransactionFromPayment: backend unreachable`);
+			return fail(502, { message: m.error_backend_unreachable() });
+		}
+
+		if (res.status === 404) return fail(404, { message: m.error_payment_record_not_found() });
+		if (res.status === 409) return fail(409, { message: m.error_payment_not_linked() });
+		if (!res.ok) {
+			console.error(`[subscriptions/${id}] unlinkTransactionFromPayment: backend error ${res.status}`);
+			return fail(502, { message: m.subscriptions_transaction_unlink_failed() });
+		}
+
+		console.log(`[subscriptions/${id}] unlinkTransactionFromPayment: success — paymentId=${paymentId}`);
+		return {};
+	},
+
 	linkTransactions: async ({ params, request, fetch, cookies }) => {
 		const id = params.id;
 		const session = getSession(cookies);

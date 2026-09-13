@@ -51,6 +51,14 @@ public class PaymentRecordResource {
     }
 
     @DELETE
+    @Path("/{paymentId}/link-transaction")
+    public Response unlinkTransaction(@PathParam("subscriptionId") Long subscriptionId,
+                                      @PathParam("paymentId") Long paymentId) {
+        PaymentRecord updated = paymentRecordUseCase.unlinkTransaction(subscriptionId, paymentId);
+        return Response.ok(toResponse(updated)).build();
+    }
+
+    @DELETE
     @Path("/period/{billingDate}")
     public Response deleteBillingPeriod(@PathParam("subscriptionId") Long subscriptionId,
                                         @PathParam("billingDate") String billingDateValue) {
