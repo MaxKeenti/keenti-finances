@@ -1,3 +1,5 @@
+import type { Section } from '$lib/types/section';
+
 export type Account = {
 	id: number;
 	name: string;
@@ -22,7 +24,8 @@ export type CreditStatement = {
 	id: number;
 	periodStart: string;
 	periodEnd: string;
-	dueDate: string;
+	/** `null` when the statement carries no usable due date (decision D2). */
+	dueDate: string | null;
 	officialBalance: number;
 	officialMinimumPayment: number;
 	officialAvoidInterest: number;
@@ -33,11 +36,19 @@ export type CreditStatement = {
 	mismatchAmount: number;
 };
 
+/**
+ * The Credit reads, each as its own section.
+ *
+ * Settings and statements fail independently, and both distinguish "not
+ * configured"/"none confirmed" from "could not be read" — a Credit Financial
+ * Account with no saved settings is a normal state, while an unreadable one
+ * must not be presented as having no limit and nothing owed.
+ */
 export type CreditDetail = {
-	settings: {
+	settings: Section<{
 		creditLimit: number;
 		statementClosingDay: number;
 		paymentDueDay: number;
-	} | null;
-	statements: CreditStatement[];
+	} | null>;
+	statements: Section<CreditStatement[]>;
 };

@@ -36,8 +36,10 @@
 		account.kind !== 'CREDIT'
 			? m.account_balance_asset()
 			: owed
-				? m.account_debt_current()
-				: m.account_credit_positive(),
+				? m.credit_label_debt()
+				: account.balance === 0
+					? m.credit_label_settled()
+					: m.credit_label_in_favor(),
 	);
 </script>
 

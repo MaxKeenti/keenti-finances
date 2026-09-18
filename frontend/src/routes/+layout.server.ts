@@ -1,8 +1,13 @@
 import type { LayoutServerLoad } from './$types';
+import { userToday, type DayResolution } from '$lib/obligation-status';
 import { redirect } from '@sveltejs/kit';
 import type { BalanceSummary } from '$lib/types/boxes';
 import { sectionUnavailable, type Section } from '$lib/types/section';
-import { parseBalanceSummary } from '$lib/server/payloads';
+import {
+	parseAccountTrackingStatus,
+	parseBalanceSummary,
+	type AccountTrackingStatus,
+} from '$lib/server/payloads';
 import { loadSection } from '$lib/server/section-load';
 // `import type`, not an inline type specifier: under verbatimModuleSyntax the
 // latter would still emit a runtime import and drag the rune module into the
@@ -45,6 +50,8 @@ function asThemeMode(value: unknown): ThemeMode | null {
 }
 
 export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) => {
+	const requestInstant = new Date();
+	let obligationToday: DayResolution = { status: 'unavailable', reason: 'zone' };
 	const cookieLocale = cookies.get('PARAGLIDE_LOCALE');
 	const cookieThemeMode = asThemeMode(cookies.get('KEENTI_THEME'));
 	let preferences: Preferences = {
@@ -56,6 +63,13 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 	// summary as 0.00 Available to Spend, which is a claim about the User's
 	// money rather than an absence of one.
 	let balanceSummary: Section<BalanceSummary> = sectionUnavailable('unreachable');
+	// Which formula produced the Net Balance on screen is a fact about the
+	// User's setup, and the only authority for it is this response's `active`
+	// boolean (decision D1). When the read fails the app says the tracking
+	// information is unavailable rather than describing the total with a
+	// formula nobody confirmed — and, in particular, rather than assuming the
+	// pre-activation one.
+	let accountTracking: Section<AccountTrackingStatus> = sectionUnavailable('unreachable');
 
 	if (locals.session) {
 		const [preferencesResult, balanceResult, accountStatusResult] = await Promise.allSettled([
@@ -64,13 +78,24 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 				parse: parseBalanceSummary,
 				label: 'layout/boxes-summary',
 			}),
-			fetch(`${BACKEND}/api/accounts/status`),
+			loadSection(fetch, `${BACKEND}/api/accounts/status`, {
+				parse: parseAccountTrackingStatus,
+				label: 'layout/account-status',
+			}),
 		]);
 
+		accountTracking =
+			accountStatusResult.status === 'fulfilled'
+				? accountStatusResult.value
+				: sectionUnavailable('unreachable');
+
+		// Only a successfully parsed `setupRequired: true` sends the User to
+		// setup. An unreadable status must not strand them on a setup screen
+		// they may not need, nor let them past one they do — so it changes
+		// nothing here and surfaces as an unavailable section instead.
 		if (
-			accountStatusResult.status === 'fulfilled' &&
-			accountStatusResult.value.ok &&
-			(await accountStatusResult.value.json() as { setupRequired?: boolean }).setupRequired &&
+			accountTracking.status === 'ok' &&
+			accountTracking.data.setupRequired &&
 			url.pathname !== '/accounts' &&
 			url.pathname !== '/logout' &&
 			!url.pathname.startsWith('/public/')
@@ -79,24 +104,33 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 		}
 
 		if (preferencesResult.status === 'fulfilled' && preferencesResult.value.ok) {
-			preferences = (await preferencesResult.value.json()) as Preferences;
-			if (preferences.locale === 'en' || preferences.locale === 'es') {
-				cookies.set('PARAGLIDE_LOCALE', preferences.locale, {
+			try {
+				const loadedPreferences = await preferencesResult.value.json();
+				// Appearance defaults are safe, but cannot stand in for the User's
+				// calendar when deciding whether a payment is past due. Capture once
+				// on the server so hydration uses the very same calendar day.
+				obligationToday = userToday(loadedPreferences?.timeZone, requestInstant);
+				preferences = { ...preferences, ...loadedPreferences };
+				if (preferences.locale === 'en' || preferences.locale === 'es') {
+					cookies.set('PARAGLIDE_LOCALE', preferences.locale, {
+						path: '/',
+						sameSite: 'lax',
+						maxAge: 34_560_000,
+						httpOnly: false,
+					});
+				}
+				// Mirrored to a cookie so hooks.server.ts and the inline script in
+				// app.html can resolve the scheme before any JS bundle loads.
+				preferences.themeMode = asThemeMode(preferences.themeMode) ?? DEFAULT_PREFERENCES.themeMode;
+				cookies.set('KEENTI_THEME', preferences.themeMode, {
 					path: '/',
 					sameSite: 'lax',
 					maxAge: 34_560_000,
 					httpOnly: false,
 				});
+			} catch {
+				console.error('[layout] invalid user preferences; calendar unavailable');
 			}
-			// Mirrored to a cookie so hooks.server.ts and the inline script in
-			// app.html can resolve the scheme before any JS bundle loads.
-			preferences.themeMode = asThemeMode(preferences.themeMode) ?? DEFAULT_PREFERENCES.themeMode;
-			cookies.set('KEENTI_THEME', preferences.themeMode, {
-				path: '/',
-				sameSite: 'lax',
-				maxAge: 34_560_000,
-				httpOnly: false,
-			});
 		} else {
 			console.error('[layout] failed to load user preferences; using defaults');
 		}
@@ -108,5 +142,5 @@ export const load: LayoutServerLoad = async ({ locals, fetch, cookies, url }) =>
 			balanceResult.status === 'fulfilled' ? balanceResult.value : sectionUnavailable('unreachable');
 	}
 
-	return { session: locals.session, preferences, balanceSummary };
+	return { session: locals.session, preferences, balanceSummary, accountTracking, obligationToday };
 };

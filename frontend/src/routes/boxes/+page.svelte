@@ -33,6 +33,7 @@
 	import { sectionValue } from '$lib/types/section';
 	import { boxPlanState } from '$lib/types/box-plans';
 	import { SectionUnavailable } from '$lib/components/section-status';
+	import { NetBalanceNote, ShortfallAlert } from '$lib/components/balance';
 	import type { BoxDto } from '$lib/types/boxes';
 	import type { PageData } from './$types';
 
@@ -58,6 +59,10 @@
 	// Unavailable balance totals are shown as unavailable, not as 0.00.
 	const balance = $derived(sectionValue(data.balanceSummary));
 	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
+	const tracking = $derived(sectionValue(data.accountTracking));
+	// The real Box balances, so the shortfall explanation only offers a
+	// withdrawal when some Box actually holds money to withdraw.
+	const boxBalances = $derived(data.boxes.map((box: BoxDto) => box.balance));
 
 	const sf = superForm(untrack(() => data.form), {
 		validators: zod4Client(boxSchema),
@@ -147,19 +152,17 @@
 		</Alert.Root>
 	{/if}
 
-	{#if isUnreconciled && balance}
-		<Alert.Root variant="destructive">
-			<AlertTriangle aria-hidden="true" />
-			<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
-			<Alert.Description>
-				{m.balance_reconciliation_boxes_description({
-					amount: fmt.format(Math.abs(balance.availableToSpend)),
-				})}
-			</Alert.Description>
-			<Alert.Action>
-				<Button href="/transactions" size="sm" variant="outline">{m.balance_review_transactions()}</Button>
-			</Alert.Action>
-		</Alert.Root>
+	<!-- Deposits stay paused while this is negative; the explanation says which
+	     of the two figures produced it and never suggests withdrawing from
+	     Boxes that hold nothing. -->
+	<!-- The alert above already says which of the two figures produced the
+	     shortfall. The paragraph that used to sit here repeated it with the
+	     old advice — withdraw, record missing income, correct a Transaction —
+	     which offers a withdrawal from Boxes that may hold nothing and treats a
+	     negative position as proof of a wrong record (decision D1). -->
+	<ShortfallAlert totals={balance} format={(value) => fmt.format(value)} {boxBalances} reviewHref={null} />
+	{#if isUnreconciled}
+		<p class="text-sm text-muted-foreground">{m.boxes_deposits_blocked()}</p>
 	{/if}
 
 	{#if balance === null}
@@ -171,6 +174,7 @@
 					<Card.Description>{m.dashboard_net_balance()}</Card.Description>
 					<Card.Title class="text-xl tabular-nums">{fmt.format(balance.netBalance)}</Card.Title>
 				</Card.Header>
+				<Card.Content><NetBalanceNote {tracking} /></Card.Content>
 			</Card.Root>
 			<Card.Root size="sm">
 				<Card.Header>
@@ -185,6 +189,7 @@
 						{fmt.format(balance.availableToSpend)}
 					</Card.Title>
 				</Card.Header>
+				<Card.Content><p class="text-xs text-muted-foreground">{m.balance_available_note()}</p></Card.Content>
 			</Card.Root>
 		</section>
 	{/if}

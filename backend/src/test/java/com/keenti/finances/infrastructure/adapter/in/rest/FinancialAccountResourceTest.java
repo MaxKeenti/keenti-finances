@@ -228,6 +228,24 @@ class FinancialAccountResourceTest {
             .then().statusCode(200).body("size()", equalTo(1))
             .body("[0].paidAmount", equalTo(60.0f))
             .body("[0].outstandingBalance", equalTo(40.0f));
+
+        // Paying a statement moves existing money; it is not another expense.
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/dashboard/summary")
+            .then().statusCode(200).body("netBalance", equalTo(100.0f));
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/transactions")
+            .then().statusCode(200).body("size()", equalTo(1));
+
+        // Credit in favor and an unpaid historical statement can coexist.
+        // A refund changes the ledger, but must not allocate a card payment.
+        transaction(user, incomeCategory, plata, "20.00").statusCode(201);
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/accounts/{id}", plata)
+            .then().statusCode(200).body("balance", equalTo(80.0f));
+        given().header("X-WorkOS-User-Id", user)
+            .when().get("/api/accounts/{id}/credit-statements", plata)
+            .then().statusCode(200).body("[0].outstandingBalance", equalTo(40.0f));
     }
 
     @Test

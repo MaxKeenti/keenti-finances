@@ -178,16 +178,148 @@ export function parseCreditSettings(value: unknown): CreditSettings | null {
 	return creditLimit === null ? null : { creditLimit };
 }
 
-export type CreditStatementSummary = { dueDate: string; outstandingBalance: number };
+export type CreditSettingsDetail = CreditSettings & {
+	statementClosingDay: number;
+	paymentDueDay: number;
+};
 
+/**
+ * The full Credit settings the account page edits.
+ *
+ * The limit alone is enough to derive available credit, but this page also
+ * prefills the cycle days into a form that writes them back, so a missing or
+ * unreadable day must fail the section rather than arrive in the form as a
+ * blank the User would unknowingly save over their real setting.
+ */
+export function parseCreditSettingsDetail(value: unknown): CreditSettingsDetail | null {
+	if (!isRecord(value)) return null;
+	const creditLimit = num(value.creditLimit);
+	const statementClosingDay = num(value.statementClosingDay);
+	const paymentDueDay = num(value.paymentDueDay);
+	if (creditLimit === null || statementClosingDay === null || paymentDueDay === null) return null;
+	return { creditLimit, statementClosingDay, paymentDueDay };
+}
+
+export type CreditStatementSummary = {
+	id: number;
+	periodStart: string;
+	periodEnd: string;
+	/**
+	 * `null` when the confirmed statement carries no usable due date.
+	 *
+	 * Decision D2 has a state for exactly this — outstanding, due date
+	 * unavailable — so the amount still owed survives. Failing the whole list
+	 * instead would discard a real outstanding balance over a missing date and
+	 * leave the card looking like it owes nothing.
+	 */
+	dueDate: string | null;
+	officialBalance: number;
+	officialMinimumPayment: number;
+	officialAvoidInterest: number;
+	officialNote: string | null;
+	paidAmount: number;
+	outstandingBalance: number;
+	/**
+	 * Recorded activity disagrees with the confirmed bank snapshot.
+	 *
+	 * An independent review notice, not a payment state: a mismatched statement
+	 * is still owed exactly its `outstandingBalance`, and neither figure is
+	 * evidence that the other is wrong.
+	 */
+	reconciliationMismatch: boolean;
+	mismatchAmount: number;
+};
+
+/**
+ * Confirmed Credit Statements.
+ *
+ * Every figure here is a bank-issued snapshot the User later acts on — the
+ * outstanding payment, the minimum, the amount that avoids interest — so a
+ * missing or unreadable one fails the whole list rather than becoming a zero
+ * that would read as "nothing left to pay". `reconciliationMismatch` must be a
+ * real boolean for the same reason: absent is not the same claim as `false`.
+ *
+ * The due date is the exception. It changes how the obligation is *labeled*,
+ * not whether it exists, and D2 defines an outstanding/due-date-unknown state
+ * for it, so an unusable one arrives as `null` and the amount owed survives.
+ */
 export function parseCreditStatements(value: unknown): CreditStatementSummary[] | null {
 	return parseList(value, (item) => {
 		if (!isRecord(item)) return null;
+		const id = num(item.id);
+		const periodStart = isoDate(item.periodStart);
+		const periodEnd = isoDate(item.periodEnd);
+		// Unlike the amounts, an unusable due date does not fail the statement:
+		// D2 keeps the outstanding balance and presents it as due-date-unknown.
 		const dueDate = isoDate(item.dueDate);
+		const officialBalance = num(item.officialBalance);
+		const officialMinimumPayment = num(item.officialMinimumPayment);
+		const officialAvoidInterest = num(item.officialAvoidInterest);
+		const officialNote = nullableStr(item.officialNote);
+		const paidAmount = num(item.paidAmount);
 		const outstandingBalance = num(item.outstandingBalance);
-		if (dueDate === null || outstandingBalance === null) return null;
-		return { dueDate, outstandingBalance };
+		const mismatchAmount = num(item.mismatchAmount);
+		if (
+			id === null ||
+			periodStart === null ||
+			periodEnd === null ||
+			officialBalance === null ||
+			officialMinimumPayment === null ||
+			officialAvoidInterest === null ||
+			officialNote === undefined ||
+			paidAmount === null ||
+			outstandingBalance === null ||
+			mismatchAmount === null ||
+			typeof item.reconciliationMismatch !== 'boolean'
+		) {
+			return null;
+		}
+		return {
+			id,
+			periodStart,
+			periodEnd,
+			dueDate,
+			officialBalance,
+			officialMinimumPayment,
+			officialAvoidInterest,
+			officialNote,
+			paidAmount,
+			outstandingBalance,
+			reconciliationMismatch: item.reconciliationMismatch,
+			mismatchAmount,
+		};
 	});
+}
+
+export type AccountTrackingStatus = {
+	/**
+	 * The authoritative tracking mode.
+	 *
+	 * This boolean is the only thing that decides which formula produced the
+	 * Net Balance on screen, so it must be a real boolean: decision D1 forbids
+	 * inferring the mode from balances, and a defaulted `false` here would be
+	 * exactly that inference wearing a different hat.
+	 */
+	active: boolean;
+	setupRequired: boolean;
+	activatedAt: string | null;
+	transactionNetBalance: number | null;
+	accountNetBalance: number | null;
+};
+
+export function parseAccountTrackingStatus(value: unknown): AccountTrackingStatus | null {
+	if (!isRecord(value)) return null;
+	if (typeof value.active !== 'boolean' || typeof value.setupRequired !== 'boolean') return null;
+	// The two net balances are explanatory metadata for the setup screen. They
+	// are reported when readable and withheld otherwise; an unreadable one is
+	// not a reason to discard a perfectly good `active` boolean.
+	return {
+		active: value.active,
+		setupRequired: value.setupRequired,
+		activatedAt: nullableStr(value.activatedAt) ?? null,
+		transactionNetBalance: num(value.transactionNetBalance),
+		accountNetBalance: num(value.accountNetBalance),
+	};
 }
 
 const BOX_PLAN_TYPES = new Set<BoxPlanType>(['SAVING_GOAL', 'SPENDING_BUDGET']);
@@ -406,4 +538,15 @@ export function parseTransactions(value: unknown): TransactionResponse[] | null 
 			subscriptionId,
 		};
 	});
+}
+
+/** Current estimate must contain a real amount and calendar period before display. */
+export function parseCurrentCreditEstimate(value: unknown) {
+	if (!isRecord(value)) return null;
+	const periodStart = isoDate(value.periodStart);
+	const periodEnd = isoDate(value.periodEnd);
+	const dueDate = isoDate(value.dueDate);
+	const estimatedBalance = num(value.estimatedBalance);
+	if (periodStart === null || periodEnd === null || dueDate === null || estimatedBalance === null) return null;
+	return { periodStart, periodEnd, dueDate, estimatedBalance };
 }

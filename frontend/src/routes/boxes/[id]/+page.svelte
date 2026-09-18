@@ -37,6 +37,7 @@
 	import { formatLocale, mxnFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
+	import { availableToSpendExplanation } from '$lib/balance-presentation';
 	import {
 		boxMovementTransactionSourceState,
 		hasClickableBoxMovementTransaction,
@@ -104,6 +105,11 @@
 	// need them (deposits are capped by Available to Spend) are disabled.
 	const balance = $derived(sectionValue(data.balanceSummary));
 	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
+	// The same derivation the dashboard and the Boxes overview use, so this page
+	// cannot describe the shortfall differently from the ones the User just came
+	// from. Only this Box's balance is known here, so the withdrawal offer is
+	// judged from it rather than from every Box.
+	const shortfall = $derived(availableToSpendExplanation(balance));
 	// One reason, used by every path that can start or submit a deposit: the
 	// entry points, the plan top-up, and the dialog itself. Withdrawals and
 	// transfers are limited by the Box balance, so they are unaffected.
@@ -261,19 +267,47 @@
 			</Alert.Action>
 		</Alert.Root>
 	{:else if isUnreconciled && balance}
+		<!-- The old notice claimed "reconciliation required" and offered a
+		     withdrawal as the remedy for any negative Available to Spend. Both
+		     are wrong when the Net Balance itself is negative: withdrawing from
+		     this Box releases a reservation, it does not add money, and a
+		     negative recorded position is not proof that a record is wrong
+		     (decision D1). The shared explanation tells the two apart, and the
+		     withdrawal is only offered for the case it can actually resolve. -->
 		<Alert.Root variant="destructive">
 			<AlertTriangle aria-hidden="true" />
-			<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
-			<Alert.Description>
-				{m.balance_reconciliation_box_detail({
-					amount: fmt.format(Math.abs(balance.availableToSpend)),
-				})}
+			<Alert.Title>
+				{shortfall.state === 'over-reserved'
+					? m.balance_over_reserved_title()
+					: m.balance_negative_net_title()}
+			</Alert.Title>
+			<Alert.Description class="space-y-1">
+				<p>
+					{#if shortfall.state === 'over-reserved'}
+						{m.balance_over_reserved_description({
+							net: fmt.format(balance.netBalance),
+							boxes: fmt.format(balance.inBoxes),
+							amount: fmt.format(shortfall.shortfall ?? 0),
+						})}
+					{:else}
+						{m.balance_negative_net_description({ amount: fmt.format(shortfall.negativeNet ?? 0) })}
+					{/if}
+				</p>
+				<p>
+					{hasBalance && shortfall.state === 'over-reserved'
+						? m.balance_over_reserved_withdraw_hint()
+						: m.boxes_withdraw_releases_only_note()}
+				</p>
 			</Alert.Description>
-			{#if hasBalance}
+			{#if hasBalance && shortfall.state === 'over-reserved'}
 				<Alert.Action>
 					<Button type="button" size="sm" variant="outline" onclick={() => openMovement('WITHDRAWAL')}>
 						{m.boxes_withdraw()}
 					</Button>
+				</Alert.Action>
+			{:else if shortfall.state === 'negative-net'}
+				<Alert.Action>
+					<Button href="/accounts" size="sm" variant="outline">{m.balance_review_accounts()}</Button>
 				</Alert.Action>
 			{/if}
 		</Alert.Root>

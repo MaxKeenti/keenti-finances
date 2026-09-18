@@ -1,8 +1,8 @@
 # D1 — Balance presentation and tracking source
 
-Status: proposed for product-owner review. This note does not authorize or implement 1A-balance or 3A. Prepared alongside the independently shippable receivables increment.
+Status: accepted as the implementation starting point following the product owner’s merge of PR #36 and request to continue on 14 September 2026. Accounting formulas remain unchanged.
 
-## Proposed decision
+## Decision
 
 Reuse `GET /api/accounts/status` rather than add a backend contract. `AccountTrackingStatusResponse` already supplies `active`, `setupRequired`, `activatedAt`, `transactionNetBalance` and `accountNetBalance`. The layout currently reads this response to redirect setup but does not expose a validated tracking-mode section. Expose its authoritative boolean through a validated available/unavailable section for downstream presentation. Never infer mode from whether totals are equal, nonzero, or whether an account list is empty.
 
@@ -16,7 +16,7 @@ If tracking mode is known but the balance read fails, retain the mode explanatio
 
 Account tracking activation and the stored ledger remain unchanged. Available to Spend remains Net Balance minus In Boxes in both modes. Describe it as money unallocated to Boxes, with an explicit note that unrecorded future essentials, subscriptions and expected receipts are not a cash forecast. An existing recorded card purchase is already reflected; an unpaid statement must not subtract it again.
 
-## Proposed labels
+## Labels
 
 | Meaning | English | Spanish |
 |---|---|---|
@@ -44,4 +44,4 @@ Implementation verification uses the existing 0A fixtures and the synthetic `FX-
 - `backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/AccountTrackingStatusResponse.java`.
 - `frontend/src/routes/+layout.server.ts`: existing account-status read and setup redirect.
 
-Review decision: approve these labels, source reuse and unknown-mode behavior before implementing the dependent balance/credit presentation.
+Implementation follows these labels, source reuse and unknown-mode behavior.
