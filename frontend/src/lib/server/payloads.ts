@@ -373,7 +373,17 @@ export type Subscription = {
 	billingCycle: string;
 	type: string;
 	categoryId: number | null;
-	nextBillingDate: string;
+	/**
+	 * The generation cursor, or `null` when it could not be read.
+	 *
+	 * Unreadable does not fail the whole Subscription. The cursor only says
+	 * whether Keenti still owes itself Payment Records; the name, price, split
+	 * and stored records are independent facts, and dropping all of them over
+	 * one bad date turned a missing cursor into a page that would not load.
+	 * Every surface reads the cursor through `billingGenerationStatus`, which
+	 * already reports an unreadable one as `unavailable` rather than guessing.
+	 */
+	nextBillingDate: string | null;
 	tokenUuid: string | null;
 	ownerParticipates: boolean | null;
 	createdAt: string;
@@ -392,8 +402,7 @@ export function parseSubscription(value: unknown): Subscription | null {
 		name === null ||
 		cost === null ||
 		billingCycle === null ||
-		type === null ||
-		nextBillingDate === null
+		type === null
 	) {
 		return null;
 	}
@@ -409,6 +418,51 @@ export function parseSubscription(value: unknown): Subscription | null {
 		ownerParticipates: typeof value.ownerParticipates === 'boolean' ? value.ownerParticipates : null,
 		createdAt: str(value.createdAt) ?? '',
 	};
+}
+
+/**
+ * The Subscriptions list.
+ *
+ * The overview sums these into a recurring-commitment figure, so an unreadable
+ * price has to fail the list rather than be skipped: a total that silently
+ * omits one Subscription understates the commitment without saying so.
+ */
+export function parseSubscriptions(value: unknown): Subscription[] | null {
+	return parseList(value, parseSubscription);
+}
+
+export type CategorySummary = { id: number; name: string; type: string };
+
+export function parseCategories(value: unknown): CategorySummary[] | null {
+	return parseList(value, (item) => {
+		if (!isRecord(item)) return null;
+		const id = num(item.id);
+		const name = str(item.name);
+		if (id === null || name === null) return null;
+		return { id, name, type: str(item.type) ?? '' };
+	});
+}
+
+export type ContactSummary = {
+	id: number;
+	name: string;
+	phone: string | null;
+	email: string | null;
+};
+
+export function parseContacts(value: unknown): ContactSummary[] | null {
+	return parseList(value, (item) => {
+		if (!isRecord(item)) return null;
+		const id = num(item.id);
+		const name = str(item.name);
+		if (id === null || name === null) return null;
+		return {
+			id,
+			name,
+			phone: nullableStr(item.phone) ?? null,
+			email: nullableStr(item.email) ?? null,
+		};
+	});
 }
 
 export type MemberResponse = {

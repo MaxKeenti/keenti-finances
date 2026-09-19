@@ -1487,6 +1487,95 @@ const subscriptionMiddleman: Scenario = {
 };
 
 /**
+ * The Subscriptions overview, for Slice 3B's price equivalents and the
+ * member-count states the cards show.
+ *
+ * Three Subscriptions deliberately differ: a monthly Shared one with Members,
+ * a Shared one with none, and a yearly Personal one whose price only counts as
+ * a twelfth in the monthly equivalent. 600.00 + 150.00 + (1,200.00 / 12) =
+ * 850.00 per month, 10,200.00 per year — gross list prices, not cash due.
+ */
+const subscriptionList: Scenario = {
+	id: 'FX-SUB-LIST-01',
+	description:
+		'Subscriptions overview with a populated Shared, a member-less Shared, and a yearly Personal subscription.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		subscriptionCount: 3,
+		monthlyEquivalent: 850,
+		yearlyEquivalent: 10_200,
+		populatedSharedId: 9408,
+		memberlessSharedId: 9409,
+		yearlyPersonalId: 9410,
+	},
+	routes: {
+		'GET /api/subscriptions': [
+			{
+				id: 9408,
+				name: 'Compartida sintética',
+				cost: 600,
+				billingCycle: 'MONTHLY',
+				type: 'SHARED',
+				categoryId: null,
+				nextBillingDate: '2026-09-15',
+				tokenUuid: null,
+				ownerParticipates: true,
+				createdAt: '2026-03-01T12:00:00Z',
+			},
+			{
+				id: 9409,
+				name: 'Compartida sin miembros',
+				cost: 150,
+				billingCycle: 'MONTHLY',
+				type: 'SHARED',
+				categoryId: null,
+				nextBillingDate: '2026-09-07',
+				tokenUuid: null,
+				ownerParticipates: false,
+				createdAt: '2026-03-02T12:00:00Z',
+			},
+			{
+				id: 9410,
+				name: 'Anual sintética',
+				cost: 1_200,
+				billingCycle: 'YEARLY',
+				type: 'PERSONAL',
+				categoryId: null,
+				nextBillingDate: '2027-01-05',
+				tokenUuid: null,
+				ownerParticipates: true,
+				createdAt: '2026-03-03T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9408/members': [
+			{
+				id: 9417,
+				subscriptionId: 9408,
+				contactId: 9508,
+				contactName: 'Contacto sintético 8',
+				shareAmount: 200,
+				createdAt: '2026-03-01T12:00:00Z',
+			},
+			{
+				id: 9418,
+				subscriptionId: 9408,
+				contactId: 9509,
+				contactName: 'Contacto sintético 9',
+				shareAmount: 200,
+				createdAt: '2026-03-01T12:00:00Z',
+			},
+		],
+		'GET /api/subscriptions/9409/members': [],
+		'GET /api/categories': [{ id: 9801, name: 'Servicios sintéticos', type: 'EGRESS' }],
+		'GET /api/contacts': [
+			{ id: 9508, name: 'Contacto sintético 8', phone: null, email: null },
+			{ id: 9509, name: 'Contacto sintético 9', phone: null, email: null },
+			{ id: 9510, name: 'Contacto sintético 10', phone: null, email: null },
+		],
+	},
+};
+
+/**
  * Credit in the User's favor while a confirmed statement payment is still
  * unpaid. Both figures are true at once; 3A must explain them rather than
  * declare either wrong.
@@ -1730,6 +1819,7 @@ const ALL: readonly Scenario[] = Object.freeze([
 	boxesNoPlan,
 	subscriptionOwnerParticipating,
 	subscriptionMiddleman,
+	subscriptionList,
 	creditInFavorUnpaidStatement,
 	dashboardNegativeAvailable,
 ]);

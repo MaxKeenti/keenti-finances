@@ -519,7 +519,7 @@ describe('subscription detail loader sections', () => {
 		expect(data.payments.data).toHaveLength(3);
 	});
 
-	test('a malformed next billing date is a page-level failure, not a bad render', async () => {
+	test('a malformed next billing date is an unreadable cursor, not a dead page', async () => {
 		const backend = createFixtureBackend('FX-SUB-SHARED-POPULATED-01', {
 			routes: {
 				'GET /api/subscriptions/9401': {
@@ -528,12 +528,22 @@ describe('subscription detail loader sections', () => {
 					cost: 299,
 					billingCycle: 'MONTHLY',
 					type: 'SHARED',
+					// Shaped like a date but not a real day; `2026-13-45` would roll
+					// over into a wrong-but-plausible day if it were ever parsed.
 					nextBillingDate: '2026-13-45',
 				},
 			},
 		});
+		const data = await runSubscription(backend, '9401');
 
-		await expect(runSubscription(backend, '9401')).rejects.toMatchObject({ status: 502 });
+		// The cursor is withheld — never a rolled-over or substituted day — while
+		// the price, the members and the stored records, which are independent
+		// facts, still load. Failing the page took all of them down over a date
+		// that only says whether Keenti still owes itself records.
+		expect(data.subscription.nextBillingDate).toBeNull();
+		expect(data.subscription.cost).toBe(299);
+		expect(data.members.status).toBe('ok');
+		expect(data.payments.data).toHaveLength(3);
 	});
 
 	test('sections recover on a retry without any write request', async () => {

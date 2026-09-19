@@ -34,6 +34,8 @@ First matching row wins, per Payment Record. `PaymentRecordResponse` exposes bil
 
 **Product decision:** do not call a PENDING contribution overdue merely because billingDate is in the past. A contribution due-date/grace policy is not recorded in the current contract. If overdue contribution labels are desired, define and approve that policy before adding them. A missing transaction link does not make a PAID record unpaid.
 
+The contribution interpretation applies to records with a Subscription Member. Personal subscriptions generate a record with `memberId=null` for the full price (`BillingService.generatePeriod`); label its stored status as a payment record, not money received from another person. Do not count these records in member contribution totals. Keep that distinction from the record itself even if the subscription type has since changed. Marking a Payment Record PAID only updates its status and paid date (`PaymentRecordService.recordPayment`); it creates no Transaction. A linked INGRESS identifies recorded income, never the provider's expense.
+
 For an existing period, aggregate its stored Payment Record amounts and statuses; do not recompute historical amounts from today's subscription price or membership. Expected contribution totals based on current membership must be identified as current expectations, not historical billed facts. Current owner share is distinct from gross provider cost. A record marked PAID does not establish that the provider expense was recorded or paid.
 
 ## Truth table C — confirmed statement payment

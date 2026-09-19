@@ -3,16 +3,24 @@
 	import { enhance as kitEnhance } from '$app/forms';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import * as ScrollArea from '$lib/components/ui/scroll-area';
+	import { NativeSelect } from '$lib/components/native-select';
 	import { formatDateOnly, formatMonthYear, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { SectionUnavailable } from '$lib/components/section-status';
 	import { sectionValue } from '$lib/types/section';
+	import { billingGenerationStatus } from '$lib/obligation-status';
+	import {
+		billingGenerationDescription,
+		billingGenerationLabel,
+		contributionBadgeVariant,
+		recordStateLabel,
+	} from '$lib/subscription-labels';
+	import { currentSplit, periodSummary, periodsOf } from '$lib/subscription-summary';
 	import type { PageData } from './$types';
 
 	type MemberResponse = {
@@ -86,10 +94,21 @@
 		SHARED: 'warning',
 	};
 
-	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
-		PENDING: 'warning',
-		PAID: 'success',
-	};
+	// One captured instant per render, resolved in the User's own zone, so this
+	// page, the dashboard and the manual generation action agree about which
+	// calendar day it is. `nextBillingDate` is a generation cursor: it says
+	// whether Keenti still owes itself Payment Records, never whether the
+	// provider charged or was paid.
+	const generation = $derived(
+		billingGenerationStatus({
+			nextBillingDate: data.subscription.nextBillingDate,
+			today: data.obligationToday,
+		}),
+	);
+
+	// Current price, current membership — an expectation, not a bill. The
+	// period figures further down come only from stored Payment Records.
+	const split = $derived(currentSplit({ subscription: data.subscription, members }));
 
 	function memberName(memberId: number | null): string {
 		if (memberId === null) return m.common_owner();
@@ -97,23 +116,8 @@
 		return member?.contactName ?? m.member_number({ id: memberId });
 	}
 
-	function statusLabel(status: string): string {
-		if (status === 'PAID') return m.status_paid();
-		if (status === 'PENDING') return m.status_pending();
-		return status;
-	}
-
 	// Distinct billing periods, newest first — one tab per period.
-	const periods = $derived.by(() => {
-		const seen = new Set<string>();
-		for (const p of payments ?? []) seen.add(p.billingDate);
-		return Array.from(seen).sort((a, b) => b.localeCompare(a));
-	});
-
-	// Records for one period.
-	function recordsForPeriod(billingDate: string): PaymentRecord[] {
-		return (payments ?? []).filter((p: PaymentRecord) => p.billingDate === billingDate);
-	}
+	const periods = $derived(periodsOf(payments));
 
 	// Find the transaction that settled a PAID record (for the "paid via" hint).
 	function linkedTransaction(transactionId: number | null): TransactionResponse | undefined {
@@ -121,20 +125,47 @@
 		return (linkedTransactions ?? []).find((t: TransactionResponse) => t.id === transactionId);
 	}
 
-	// Eager init (so SSR has an active tab); the effect re-points it when the set
-	// of periods changes, e.g. after generating billing or linking a payment.
+	// Eager init (so SSR has a selected period); the effect re-points it when the
+	// set of periods changes, e.g. after generating billing or deleting a period.
 	let selectedPeriod = $state(
 		[...new Set((sectionValue(data.payments) ?? []).map((p: PaymentRecord) => p.billingDate))].sort((a, b) =>
 			b.localeCompare(a),
 		)[0] ?? '',
 	);
 	$effect(() => {
-		if (periods.length > 0 && !periods.includes(selectedPeriod)) {
-			selectedPeriod = periods[0];
+		if (periods.length > 0) {
+			if (!periods.includes(selectedPeriod)) selectedPeriod = periods[0];
+			return;
 		}
+		// No periods at all — deleting the last one, or a payments read that
+		// failed. A selection kept here would leave the summary asking for a
+		// period the loaded records no longer have, which `periodSummary`
+		// answers with "no records for this period": a statement about that
+		// period rather than about the empty (or unreadable) section.
+		if (selectedPeriod !== '') selectedPeriod = '';
 	});
 
+	// Everything about the selected period comes from the records stored for
+	// it. A period billed at an older price keeps that price here; nothing is
+	// recomputed from today's cost or today's member list.
+	const summary = $derived(
+		periodSummary({ records: payments, billingDate: selectedPeriod === '' ? null : selectedPeriod }),
+	);
+
+	// The cycle the price is charged over, shown beside the price itself. An
+	// unrecognised cycle names none rather than guessing "monthly".
+	const cycleLabel = $derived(
+		data.subscription.billingCycle === 'MONTHLY'
+			? m.billing_monthly()
+			: data.subscription.billingCycle === 'YEARLY'
+				? m.billing_yearly()
+				: null,
+	);
+
 	let copyFeedback = $state(false);
+	// Generation is idempotent per period, but a second submit while the first
+	// is in flight still races two reloads against one another.
+	let generating = $state(false);
 	let linkDialogOpen = $state(false);
 	let selectedTxIds = $state<Set<number>>(new Set());
 
@@ -218,14 +249,16 @@
 				</div>
 			</div>
 
+			<!-- No "next billing" date here. `nextBillingDate` is a generation
+			     cursor, and a past cursor rendered as an upcoming charge told the
+			     User the provider bills them on a day that has already gone. The
+			     cursor is stated once, in the generation block below, in the
+			     wording that says what it actually tracks. -->
 			<div class="grid gap-1 text-sm">
-				<p class="text-muted-foreground">
-					{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{formatDateOnly(data.subscription.nextBillingDate, data.preferences.locale)}</span>
-				</p>
 				{#if data.subscription.type === 'SHARED'}
 					<p class="text-muted-foreground">
 						{m.subscriptions_owner_participates_label()} <span class="font-medium text-foreground">
-							{data.subscription.ownerParticipates === false ? m.common_no() : m.common_yes()}
+							{data.subscription.ownerParticipates === false ? m.common_no() : data.subscription.ownerParticipates === true ? m.common_yes() : '—'}
 						</span>
 					</p>
 				{/if}
@@ -247,6 +280,213 @@
 		</Card.Content>
 	</Card.Root>
 
+	<!-- Period summary: four separate facts, deliberately not one badge.
+	     What the provider charges now, what the User currently expects to
+	     collect, what this period's stored records actually say, and what
+	     Keenti still has to generate. None of them is a provider payment. -->
+	<Card.Root>
+		<Card.Content class="space-y-5">
+			<h2 class="font-semibold text-base">{m.subscriptions_summary_title()}</h2>
+
+			<!-- Current price and split -->
+			<div class="space-y-2">
+				<div class="grid gap-4 sm:grid-cols-3">
+					<div>
+						<!-- The cycle sits with the price: "600.00" alone leaves the
+						     User to guess whether that is a month or a year. -->
+						<p class="text-xs text-muted-foreground">
+							{m.subscriptions_provider_cost_current()}{cycleLabel ? ` · ${cycleLabel}` : ''}
+						</p>
+						<p class="text-xl font-semibold tabular-nums">
+							{split.providerCost === null ? '—' : fmt.format(split.providerCost)}
+						</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">{m.subscriptions_expected_current()}</p>
+						<p class="text-xl font-semibold tabular-nums">
+							{split.expectedContributions === null ? '—' : fmt.format(split.expectedContributions)}
+						</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">{m.subscriptions_own_share_current()}</p>
+						<p class="text-xl font-semibold tabular-nums">
+							{split.ownShare === null ? '—' : fmt.format(split.ownShare)}
+						</p>
+					</div>
+				</div>
+				<!-- One provenance line, not a paragraph: where these three
+				     figures come from, and the one thing they cannot say. -->
+				<p class="text-xs text-muted-foreground">{m.subscriptions_summary_provenance()}</p>
+				{#if split.state === 'split'}
+					<p class="text-xs text-muted-foreground">
+						{m.subscriptions_split_ways({ count: split.splitCount ?? 0, amount: fmt.format(split.shareAmount ?? 0) })}{data
+							.subscription.ownerParticipates === false
+							? ` · ${m.subscriptions_own_share_middleman()}`
+							: ''}
+					</p>
+					{#if split.unreadableShares > 0}
+						<p class="text-xs text-muted-foreground">
+							{m.subscriptions_expected_estimated_note({ count: split.unreadableShares })}
+						</p>
+					{/if}
+					{#if split.roundingRemainder !== null}
+						<p class="text-xs text-muted-foreground">
+							{m.subscriptions_split_rounding_note({ amount: fmt.format(split.roundingRemainder) })}
+						</p>
+					{/if}
+				{:else if split.state === 'personal'}
+					<p class="text-xs text-muted-foreground">{m.subscriptions_own_share_personal()}</p>
+				{:else if split.state === 'no-members'}
+					<p class="text-xs text-muted-foreground">
+						{data.subscription.ownerParticipates === false
+							? m.subscriptions_own_share_unallocated()
+							: m.subscriptions_no_members_yet_action()}
+					</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">{m.subscriptions_members_unavailable_hint()}</p>
+				{/if}
+			</div>
+
+			<!-- Selected period, from stored Payment Records only. The period
+			     control sits with the figures it changes: it used to live two
+			     cards further down, so choosing a period meant scrolling away
+			     from the numbers being chosen. This is the page's only period
+			     control — the records list below follows it. -->
+			<div class="space-y-3 border-t pt-4">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<p class="text-sm font-medium">
+						{m.subscriptions_summary_period()}{selectedPeriod ? `: ${periodLabel(selectedPeriod)}` : ''}
+					</p>
+					{#if periods.length > 1}
+						<NativeSelect
+							name="period"
+							value={selectedPeriod}
+							onValueChange={(value) => (selectedPeriod = value)}
+							placeholder={m.subscriptions_period_select()}
+							items={periods.map((period) => ({ value: period, label: periodLabel(period) }))}
+							class="h-8 w-full text-xs sm:w-44"
+							aria-label={m.subscriptions_period_select()}
+						/>
+					{/if}
+				</div>
+				{#if summary.state === 'unavailable'}
+					<p class="text-sm text-muted-foreground">{m.subscriptions_period_unavailable()}</p>
+				{:else if periods.length === 0}
+					<!-- Loaded and genuinely empty: nothing has been generated yet. -->
+					<p class="text-sm text-muted-foreground">{m.subscriptions_no_payment_records()}</p>
+				{:else if summary.state === 'no-records'}
+					<p class="text-sm text-muted-foreground">{m.subscriptions_period_none()}</p>
+				{:else}
+					<!-- `—`, never `0.00`: a period whose records could not be read
+					     has no total, and a zero would be a claim about the money
+					     that arrived, not a report of a failed read. -->
+					<div class="grid gap-4 sm:grid-cols-3">
+						<div>
+							<p class="text-xs text-muted-foreground">{m.subscriptions_period_billed()}</p>
+							<p class="text-lg font-semibold tabular-nums">
+								{summary.billed === null ? '—' : fmt.format(summary.billed)}
+							</p>
+						</div>
+						<div>
+							<p class="text-xs text-muted-foreground">{m.subscriptions_period_collected()}</p>
+							<p class="text-lg font-semibold tabular-nums text-money-positive">
+								{summary.collected === null ? '—' : fmt.format(summary.collected)}
+							</p>
+						</div>
+						<div>
+							<p class="text-xs text-muted-foreground">{m.subscriptions_period_outstanding()}</p>
+							<p class="text-lg font-semibold tabular-nums">
+								{summary.outstanding === null ? '—' : fmt.format(summary.outstanding)}
+							</p>
+						</div>
+					</div>
+					{#if summary.billed === null}
+						<p class="text-xs text-muted-foreground">{m.subscriptions_period_totals_unavailable()}</p>
+					{:else}
+						<p class="text-xs text-muted-foreground">
+							{m.subscriptions_period_stored_note({ period: periodLabel(selectedPeriod) })}
+							{m.subscriptions_contribution_awaiting_note()}
+						</p>
+						{#if summary.partial}
+							<p class="text-xs text-muted-foreground">
+								{m.subscriptions_period_totals_partial()}
+								{m.subscriptions_period_unreadable({ count: summary.unreadableCount })}
+							</p>
+						{/if}
+					{/if}
+					<!-- Every own-share record, not just the first: billing writes
+					     one per period, but a list that showed `[0]` alone would
+					     silently drop any other and round its amount to zero. -->
+					{#each summary.ownerRecords as entry (entry.record.id)}
+						<p class="text-xs text-muted-foreground">
+							{entry.status.amount === null
+								? m.subscriptions_owner_record_unreadable()
+								: `${m.subscriptions_owner_record()}: ${fmt.format(entry.status.amount)}`}
+						</p>
+					{/each}
+				{/if}
+			</div>
+
+			<!-- Generation cursor, with the action that advances it. "Pending" is
+			     about records Keenti has not written, never about an unpaid
+			     provider charge. The button lives here rather than beside the
+			     records list, so the state and the thing that changes it are read
+			     and acted on in one place. -->
+			<div class="space-y-2 border-t pt-4">
+				<div class="flex flex-wrap items-start justify-between gap-2">
+					<div class="min-w-0 space-y-1">
+						<p class="text-sm font-medium">{m.subscriptions_generation_title()}</p>
+						<p class="text-sm">{billingGenerationLabel(generation.state)}</p>
+					</div>
+					<form
+						method="POST"
+						action="?/generateBilling"
+						class="shrink-0"
+						use:kitEnhance={async () => {
+							generating = true;
+							return async ({ result, update }) => {
+								generating = false;
+								if (result.type === 'success') {
+									const count = (result.data as { generated?: number })?.generated ?? 0;
+									toast.success(
+										count > 0
+											? count === 1
+												? m.subscriptions_billing_generated_one()
+												: m.subscriptions_billing_generated_many({ count })
+											: m.subscriptions_billing_up_to_date(),
+									);
+									await update();
+								} else {
+									const msg =
+										(result as { data?: { message?: string } }).data?.message ??
+										m.subscriptions_billing_failed();
+									toast.error(msg);
+								}
+							};
+						}}
+					>
+						<Button type="submit" variant="outline" size="sm" disabled={generating}>
+							{m.subscriptions_generate_billing()}
+						</Button>
+					</form>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					{billingGenerationDescription(generation, data.preferences.locale)}
+				</p>
+				<p class="text-xs text-muted-foreground">{m.subscriptions_action_generate_explainer()}</p>
+				{#if data.subscription.type === 'SHARED' && members !== null && members.length === 0}
+					<p class="text-xs text-muted-foreground">{m.subscriptions_generation_no_members()}</p>
+					<div>
+						<Button variant="outline" size="sm" href="/subscriptions?members={data.subscription.id}">
+							{m.subscriptions_add_members()}
+						</Button>
+					</div>
+				{/if}
+				<p class="text-xs text-muted-foreground">{m.subscriptions_provider_expense_note()}</p>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
 	<!-- Members (SHARED only) -->
 	{#if data.subscription.type === 'SHARED'}
 		<Card.Root>
@@ -256,6 +496,10 @@
 					<SectionUnavailable title={m.section_members_unavailable()} compact />
 				{:else if members.length === 0}
 					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members_assigned()}</p>
+					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members_yet_action()}</p>
+					<Button variant="outline" size="sm" href="/subscriptions?members={data.subscription.id}">
+						{m.subscriptions_add_members()}
+					</Button>
 				{:else}
 					<ul class="divide-y">
 						{#each members as member (member.id)}
@@ -320,36 +564,15 @@
 	<!-- Payment Records -->
 	<Card.Root>
 		<Card.Content class="space-y-4">
-			<div class="flex items-center justify-between">
+			<!-- The generation action lives beside the generation state above;
+			     a second copy here would be a competing control for one write. -->
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h2 class="font-semibold text-base">{m.subscriptions_payment_records()}</h2>
-				<form
-					method="POST"
-					action="?/generateBilling"
-					use:kitEnhance={async () => {
-						return async ({ result, update }) => {
-							if (result.type === 'success') {
-								const count = (result.data as { generated?: number })?.generated ?? 0;
-								toast.success(
-									count > 0
-										? count === 1
-											? m.subscriptions_billing_generated_one()
-											: m.subscriptions_billing_generated_many({ count })
-										: m.subscriptions_billing_up_to_date(),
-								);
-								await update();
-							} else {
-								const msg =
-									(result as { data?: { message?: string } }).data?.message ??
-									m.subscriptions_billing_failed();
-								toast.error(msg);
-							}
-						};
-					}}
-				>
-					<Button type="submit" variant="outline" size="sm" class="h-7 text-xs px-3">
-						{m.subscriptions_generate_billing()}
-					</Button>
-				</form>
+				{#if selectedPeriod}
+					<p class="text-xs text-muted-foreground">
+						{m.subscriptions_period_records_title({ period: periodLabel(selectedPeriod) })}
+					</p>
+				{/if}
 			</div>
 
 			{#if payments === null}
@@ -358,118 +581,128 @@
 				<p class="text-sm text-muted-foreground">
 					{m.subscriptions_no_payment_records()}
 				</p>
+			{:else if selectedPeriod === ''}
+				<p class="text-sm text-muted-foreground">{m.subscriptions_period_none()}</p>
 			{:else}
-				<Tabs.Root bind:value={selectedPeriod} class="w-full">
-					<div class="overflow-x-auto pb-1">
-						<Tabs.List>
-							{#each periods as period (period)}
-								<Tabs.Trigger value={period}>{periodLabel(period)}</Tabs.Trigger>
-							{/each}
-						</Tabs.List>
+				<!-- One period, the one the summary's control selected. -->
+				{@const periodRecords = [...summary.memberRecords, ...summary.ownerRecords]}
+				{#if periodRecords.length > 0 && periodRecords.every((entry) => entry.record.transactionId === null)}
+					<div class="flex justify-end">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							class="h-7 px-3 text-xs text-destructive hover:text-destructive"
+							onclick={() => openDeleteBillingPeriod(selectedPeriod)}
+						>
+							{m.subscriptions_billing_delete()}
+						</Button>
 					</div>
-
-					{#each periods as period (period)}
-						<Tabs.Content value={period}>
-							{@const periodRecords = recordsForPeriod(period)}
-							{#if periodRecords.every((payment) => payment.transactionId === null)}
-								<div class="mb-3 flex justify-end">
+				{/if}
+				<ul class="divide-y rounded-md border">
+					{#each periodRecords as entry (entry.record.id)}
+						{@const payment = entry.record}
+						{@const contribution = entry.status}
+						{@const tx = linkedTransaction(payment.transactionId)}
+						<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+							<div class="min-w-0 space-y-0.5">
+								<p class="text-sm font-medium">
+									{payment.memberId === null ? m.subscriptions_owner_record() : memberName(payment.memberId)}
+								</p>
+								<!-- The stored amount for this period, never today's share. -->
+								<p class="text-sm text-muted-foreground">
+									{contribution.amount === null ? '—' : fmt.format(contribution.amount)}
+								</p>
+								{#if contribution.paidDate}
+									<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: formatDateOnly(contribution.paidDate, data.preferences.locale) })}</p>
+								{/if}
+								{#if tx}
+									<p class="text-xs text-muted-foreground truncate">
+										{m.subscriptions_paid_via_transaction({ description: tx.description })}
+									</p>
+								{:else if payment.transactionId !== null}
+									<p class="text-xs text-muted-foreground">{m.subscriptions_link_details_unavailable()}</p>
+								{:else if contribution.state === 'received' && payment.memberId !== null}
+									<!-- A received contribution with no link is still received:
+									     a missing link is a missing link, not an unpaid record. -->
+									<p class="text-xs text-muted-foreground">{m.subscriptions_contribution_received_no_link()}</p>
+								{/if}
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								<Badge variant={contributionBadgeVariant(contribution.state)}>
+									{recordStateLabel(contribution.state, payment.memberId === null)}
+								</Badge>
+								{#if payment.transactionId && contribution.state !== 'unavailable'}
+									<form
+										method="POST"
+										action="?/unlinkTransactionFromPayment"
+										use:kitEnhance={async () => {
+											return async ({ result, update }) => {
+												if (result.type === 'success') {
+													toast.success(m.subscriptions_transaction_unlinked());
+													await update();
+												} else {
+													const msg =
+														(result as { data?: { message?: string } }).data?.message ??
+														m.subscriptions_transaction_unlink_failed();
+													toast.error(msg);
+												}
+											};
+										}}
+									>
+										<input type="hidden" name="paymentId" value={payment.id} />
+										<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
+											{m.subscriptions_unlink_transaction()}
+										</Button>
+									</form>
+								{/if}
+								<!-- Only an awaiting contribution can be received. An
+								     unreadable record offers no write against itself. -->
+								{#if contribution.state === 'awaiting'}
 									<Button
 										type="button"
-										variant="outline"
 										size="sm"
-										class="h-7 px-3 text-xs text-destructive hover:text-destructive"
-										onclick={() => openDeleteBillingPeriod(period)}
+										variant="outline"
+										class="h-7 text-xs px-3"
+										disabled={unlinkedTransactions === null}
+										title={unlinkedTransactions === null ? m.section_linking_unavailable() : undefined}
+										onclick={() => openPayLink(payment.id)}
 									>
-										{m.subscriptions_billing_delete()}
+										{m.subscriptions_link_transaction()}
 									</Button>
-								</div>
-							{/if}
-							<ul class="divide-y rounded-md border">
-								{#each periodRecords as payment (payment.id)}
-									{@const tx = linkedTransaction(payment.transactionId)}
-									<li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-										<div class="min-w-0 space-y-0.5">
-											<p class="text-sm font-medium">{memberName(payment.memberId)}</p>
-											<p class="text-sm text-muted-foreground">{fmt.format(payment.amount)}</p>
-											{#if payment.paidDate}
-												<p class="text-xs text-muted-foreground">{m.subscriptions_paid({ date: formatDateOnly(payment.paidDate, data.preferences.locale) })}</p>
-											{/if}
-											{#if tx}
-												<p class="text-xs text-muted-foreground truncate">
-													{m.subscriptions_paid_via_transaction({ description: tx.description })}
-												</p>
-											{/if}
-										</div>
-										<div class="flex items-center gap-2 shrink-0">
-											<Badge variant={statusBadgeVariant[payment.status]}>
-												{statusLabel(payment.status)}
-											</Badge>
-											{#if payment.transactionId}
-												<form
-													method="POST"
-													action="?/unlinkTransactionFromPayment"
-													use:kitEnhance={async () => {
-														return async ({ result, update }) => {
-															if (result.type === 'success') {
-																toast.success(m.subscriptions_transaction_unlinked());
-																await update();
-															} else {
-																const msg =
-																	(result as { data?: { message?: string } }).data?.message ??
-																	m.subscriptions_transaction_unlink_failed();
-																toast.error(msg);
-															}
-														};
-													}}
-												>
-													<input type="hidden" name="paymentId" value={payment.id} />
-													<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
-														{m.subscriptions_unlink_transaction()}
-													</Button>
-												</form>
-											{/if}
-											{#if payment.status === 'PENDING'}
-												<Button
-													type="button"
-													size="sm"
-													variant="outline"
-													class="h-7 text-xs px-3"
-													disabled={unlinkedTransactions === null}
-													title={unlinkedTransactions === null ? m.section_linking_unavailable() : undefined}
-													onclick={() => openPayLink(payment.id)}
-												>
-													{m.subscriptions_link_transaction()}
-												</Button>
-												<form
-													method="POST"
-													action="?/recordPayment"
-													use:kitEnhance={async () => {
-														return async ({ result, update }) => {
-															if (result.type === 'success') {
-																toast.success(m.subscriptions_payment_recorded());
-																await update();
-															} else {
-																const msg =
-																	(result as { data?: { message?: string } }).data?.message ??
-																	m.subscriptions_payment_record_failed();
-																toast.error(msg);
-															}
-														};
-													}}
-												>
-													<input type="hidden" name="paymentId" value={payment.id} />
-													<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
-														{m.subscriptions_record_payment()}
-													</Button>
-												</form>
-											{/if}
-										</div>
-									</li>
-								{/each}
-							</ul>
-						</Tabs.Content>
+									<form
+										method="POST"
+										action="?/recordPayment"
+										use:kitEnhance={async () => {
+											return async ({ result, update }) => {
+												if (result.type === 'success') {
+													toast.success(m.subscriptions_payment_recorded());
+													await update();
+												} else {
+													const msg =
+														(result as { data?: { message?: string } }).data?.message ??
+														m.subscriptions_payment_record_failed();
+													toast.error(msg);
+												}
+											};
+										}}
+									>
+										<input type="hidden" name="paymentId" value={payment.id} />
+										<Button type="submit" size="sm" variant="outline" class="h-7 text-xs px-3">
+											{m.subscriptions_record_payment()}
+										</Button>
+									</form>
+								{/if}
+							</div>
+						</li>
 					{/each}
-				</Tabs.Root>
+				</ul>
+				<!-- Each action's explanation sits with the action, not in a block
+				     of prose at the top of the page. -->
+				<div class="space-y-1 text-xs text-muted-foreground">
+					<p>{m.subscriptions_action_record_explainer()}</p>
+					<p>{m.subscriptions_action_link_explainer()}</p>
+				</div>
 			{/if}
 		</Card.Content>
 	</Card.Root>

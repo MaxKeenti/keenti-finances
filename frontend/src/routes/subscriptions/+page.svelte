@@ -3,6 +3,7 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { z } from 'zod';
 	import { toast } from 'svelte-sonner';
+	import { page } from '$app/state';
 	import { enhance as kitEnhance } from '$app/forms';
 	import { submitWithAdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -18,6 +19,11 @@
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { SectionUnavailable } from '$lib/components/section-status';
+	import { sectionValue } from '$lib/types/section';
+	import { priceEquivalents } from '$lib/subscription-summary';
+	import { billingGenerationStatus } from '$lib/obligation-status';
+	import { billingGenerationLabel } from '$lib/subscription-labels';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -48,22 +54,49 @@
 		billingCycle: string;
 		type: string;
 		categoryId: number | null;
-		nextBillingDate: string;
+		/** Generation cursor; `null` when the stored date could not be read. */
+		nextBillingDate: string | null;
 		tokenUuid: string | null;
 		ownerParticipates: boolean | null;
 		createdAt: string;
-		members?: MemberResponse[];
+		members?: { status: string; data?: MemberResponse[] };
 	};
 
 	let { data }: { data: PageData } = $props();
+
+	// `null` means the list could not be read. It is deliberately not an empty
+	// array: "you have no subscriptions" and "we could not read them" lead to
+	// different totals, and only one of them is a fact.
+	const subscriptions = $derived(sectionValue(data.subscriptions));
+	const categories = $derived(sectionValue(data.categories));
+	const contacts = $derived(sectionValue(data.contacts));
+
+	/** A Shared Subscription's Members, or `null` when that list failed. */
+	function membersOf(sub: Subscription): MemberResponse[] | null {
+		if (sub.type !== 'SHARED') return [];
+		if (!sub.members || sub.members.status !== 'ok') return null;
+		return sub.members.data ?? null;
+	}
 
 	let dialogOpen = $state(false);
 	let memberDialogOpen = $state(false);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
 	let deleteForm = $state<HTMLFormElement | null>(null);
-	let memberTargetSub = $state<Subscription | null>(null);
+	// The dialog holds an *id*, not a captured Subscription. Holding the object
+	// froze the member list as it was when the dialog opened: adding or removing
+	// a Member reloaded the page data, and the dialog kept rendering the stale
+	// copy, so the change only appeared after closing and reopening.
+	let memberTargetId = $state<number | null>(null);
+	const memberTargetSub = $derived(
+		memberTargetId === null
+			? null
+			: ((subscriptions ?? []).find((sub) => sub.id === memberTargetId) ?? null),
+	);
 	let selectedContactId = $state('');
+	// One member write at a time: `addMember` is not idempotent, and a second
+	// submit before the first reload lands would ask for the same Member twice.
+	let memberActionPending = $state(false);
 
 	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
@@ -101,6 +134,10 @@
 	}
 
 	function openEdit(sub: Subscription) {
+		if (typeof sub.ownerParticipates !== 'boolean') {
+			toast.error(m.subscriptions_edit_unavailable());
+			return;
+		}
 		editMode = true;
 		form.set({
 			id: sub.id,
@@ -109,8 +146,10 @@
 			billingCycle: sub.billingCycle as 'MONTHLY' | 'YEARLY',
 			type: sub.type as 'PERSONAL' | 'SHARED',
 			categoryId: sub.categoryId ?? '',
-			nextBillingDate: sub.nextBillingDate,
-			ownerParticipates: sub.ownerParticipates ?? true,
+			// An unreadable stored cursor cannot be echoed back as if it were the
+			// User's choice; leave it empty so saving requires a deliberate date.
+			nextBillingDate: sub.nextBillingDate ?? '',
+			ownerParticipates: sub.ownerParticipates,
 		});
 		dialogOpen = true;
 	}
@@ -127,16 +166,51 @@
 	}
 
 	function openMembers(sub: Subscription) {
-		memberTargetSub = sub;
+		memberTargetId = sub.id;
 		selectedContactId = '';
 		memberDialogOpen = true;
 	}
 
+	// `/subscriptions?members=<id>` is where the detail page's "Add members"
+	// empty action lands, since member management lives on this page. It only
+	// opens a dialog — no write happens until the User adds someone.
+	//
+	// The request is honoured once per id. The query parameter outlives the
+	// dialog, and every add, remove and delete reloads the page data, so a
+	// guard of "is the dialog closed" reopened the dialog the User had just
+	// dismissed — and did it again on every subsequent reload.
+	let handledMemberRequest = $state<number | null>(null);
+	$effect(() => {
+		const requested = Number(page.url.searchParams.get('members'));
+		if (!requested) {
+			handledMemberRequest = null;
+			return;
+		}
+		if (handledMemberRequest === requested) return;
+		const target = (subscriptions ?? []).find((sub) => sub.id === requested);
+		if (!target) return;
+		handledMemberRequest = requested;
+		openMembers(target);
+	});
+
+	// A dialog whose Subscription vanished from the reloaded list (deleted in
+	// another tab, or a list read that failed) has nothing left to manage.
+	$effect(() => {
+		if (memberDialogOpen && memberTargetId !== null && memberTargetSub === null) {
+			memberDialogOpen = false;
+			memberTargetId = null;
+		}
+	});
+
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 
+	// A failed member list cannot tell which Contacts are already Members, so
+	// offering "every Contact" would invite a duplicate the backend rejects.
 	function availableContacts(sub: Subscription) {
-		const memberContactIds = new Set((sub.members ?? []).map((m) => m.contactId));
-		return data.contacts.filter((c) => !memberContactIds.has(c.id));
+		const members = membersOf(sub);
+		if (members === null || contacts === null) return null;
+		const memberContactIds = new Set(members.map((m) => m.contactId));
+		return contacts.filter((c) => !memberContactIds.has(c.id));
 	}
 
 	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
@@ -149,16 +223,11 @@
 		SHARED: 'warning',
 	};
 
-	// Three subscriptions and no total anywhere — the recurring commitment is
-	// the one number this page exists to convey. Yearly plans are normalised
-	// to a twelfth so the two figures are comparable.
-	const monthlyTotal = $derived(
-		data.subscriptions.reduce(
-			(sum, sub) => sum + (sub.billingCycle === 'YEARLY' ? sub.cost / 12 : sub.cost),
-			0,
-		),
-	);
-	const yearlyTotal = $derived(monthlyTotal * 12);
+	// The recurring commitment is the one number this page exists to convey,
+	// and it is a *price* equivalent: yearly plans are normalised to a twelfth
+	// so the two figures are comparable, which is not the cash due in any
+	// single month. A failed list yields `null` rather than a confident 0.00.
+	const totals = $derived(priceEquivalents(subscriptions));
 </script>
 
 <svelte:head><title>{m.subscriptions_title()} · Keenti</title></svelte:head>
@@ -172,30 +241,48 @@
 		<Button onclick={openCreate}>{m.subscriptions_new()}</Button>
 	</div>
 
-	{#if data.subscriptions.length > 0}
+	{#if totals === null}
+		<SectionUnavailable
+			title={m.section_subscriptions_unavailable()}
+			description={m.section_subscriptions_unavailable_description()}
+		/>
+	{:else if subscriptions !== null && subscriptions.length > 0}
 		<Card.Root>
-			<Card.Content class="grid gap-4 sm:grid-cols-2">
-				<div>
-					<p class="text-xs text-muted-foreground">{m.subscriptions_monthly_total()}</p>
-					<p class="text-2xl font-semibold tabular-nums">{fmt.format(monthlyTotal)}</p>
-					<p class="mt-1 text-xs text-muted-foreground">{m.subscriptions_monthly_total_description()}</p>
+			<Card.Content class="space-y-3">
+				<p class="text-sm font-medium">{m.subscriptions_price_equivalents_title()}</p>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<div>
+						<p class="text-xs text-muted-foreground">{m.subscriptions_monthly_total()}</p>
+						<p class="text-2xl font-semibold tabular-nums">{fmt.format(totals.monthly)}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{m.subscriptions_monthly_total_description()}</p>
+					</div>
+					<div class="sm:border-l sm:pl-4">
+						<p class="text-xs text-muted-foreground">{m.subscriptions_yearly_total()}</p>
+						<p class="text-2xl font-semibold tabular-nums">{fmt.format(totals.yearly)}</p>
+					</div>
 				</div>
-				<div class="sm:border-l sm:pl-4">
-					<p class="text-xs text-muted-foreground">{m.subscriptions_yearly_total()}</p>
-					<p class="text-2xl font-semibold tabular-nums">{fmt.format(yearlyTotal)}</p>
-				</div>
+				<!-- Gross price equivalents, not cash due and not net of the
+				     contributions the User collects back from Members. -->
+				<p class="text-xs text-muted-foreground">{m.subscriptions_price_equivalents_note()}</p>
+				{#if totals.excluded > 0}
+					<p class="text-xs text-muted-foreground">{m.subscriptions_totals_excluded({ count: totals.excluded })}</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}
 
-	{#if data.subscriptions.length === 0}
+	{#if subscriptions === null}
+		<!-- The unavailable notice above already says why; nothing is listed. -->
+	{:else if subscriptions.length === 0}
 		<Empty.Root class="border">
 			<Empty.Title>{m.subscriptions_empty_title()}</Empty.Title>
 			<Empty.Description>{m.subscriptions_empty_description()}</Empty.Description>
 		</Empty.Root>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-			{#each data.subscriptions as sub (sub.id)}
+			{#each subscriptions as sub (sub.id)}
+				{@const subMembers = membersOf(sub)}
+				{@const generation = billingGenerationStatus({ nextBillingDate: sub.nextBillingDate, today: data.obligationToday })}
 				<Card.Root class="flex flex-col relative">
 					<a
 						href="/subscriptions/{sub.id}"
@@ -219,11 +306,21 @@
 						</div>
 
 						<div class="text-xs text-muted-foreground space-y-0.5">
-							<p>{m.subscriptions_next_billing()} <span class="font-medium text-foreground">{formatDateOnly(sub.nextBillingDate, data.preferences.locale)}</span></p>
+							<p>{billingGenerationLabel(generation.state)}{#if generation.scheduledDate}<span class="font-medium text-foreground">{' · '}{formatDateOnly(generation.scheduledDate, data.preferences.locale)}</span>{/if}</p>
 							{#if sub.type === 'SHARED'}
-								<p>{m.subscriptions_members_count()} <span class="font-medium text-foreground">{(sub.members ?? []).length}</span></p>
+								{#if subMembers === null}
+									<!-- A failed member read must not render as "0 members",
+									     which would also imply billing has nothing to create. -->
+									<p>{m.subscriptions_members_count()} <span class="font-medium text-foreground">{m.subscriptions_members_count_unavailable()}</span></p>
+								{:else}
+									<p>{m.subscriptions_members_count()} <span class="font-medium text-foreground">{subMembers.length}</span></p>
+								{/if}
 							{/if}
 						</div>
+
+						{#if sub.type === 'SHARED' && subMembers !== null && subMembers.length === 0}
+							<p class="text-xs text-muted-foreground">{m.subscriptions_no_members_yet_action()}</p>
+						{/if}
 
 						<!-- Buttons size to their labels; `flex-1` on Edit alone made it
 						     hog the row while its neighbours stayed small. -->
@@ -231,7 +328,11 @@
 							<Button variant="outline" size="sm" href="/subscriptions/{sub.id}">{m.common_view()}</Button>
 							<Button variant="outline" size="sm" onclick={() => openEdit(sub)}>{m.common_edit()}</Button>
 							{#if sub.type === 'SHARED'}
-								<Button variant="outline" size="sm" onclick={() => openMembers(sub)}>{m.subscriptions_members()}</Button>
+								<Button variant="outline" size="sm" onclick={() => openMembers(sub)}>
+									{subMembers !== null && subMembers.length === 0
+										? m.subscriptions_add_members()
+										: m.subscriptions_members()}
+								</Button>
 							{/if}
 							<Button variant="ghost" size="sm" class="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive" onclick={() => openDelete(sub)}>{m.common_delete()}</Button>
 						</div>
@@ -339,12 +440,15 @@
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
 						<Form.Label>{m.common_category_optional()}</Form.Label>
+						{#if categories === null}
+							<p class="text-xs text-muted-foreground">{m.section_categories_unavailable()}</p>
+						{/if}
 						<NativeSelect
 							name={fieldName}
 							value={$form.categoryId !== '' ? String($form.categoryId) : ''}
 							onValueChange={(v) => { $form.categoryId = v ? Number(v) : ''; }}
 							placeholder={m.common_none()}
-							items={data.categories.map(c => ({ value: String(c.id), label: c.name }))}
+							items={(categories ?? []).map(c => ({ value: String(c.id), label: c.name }))}
 							{...triggerProps}
 						/>
 					{/snippet}
@@ -427,24 +531,31 @@
 		</Dialog.Header>
 
 		{#if memberTargetSub}
+			{@const dialogMembers = membersOf(memberTargetSub)}
+			{@const dialogContacts = availableContacts(memberTargetSub)}
 			<div class="space-y-4">
 				<!-- Current members list -->
-				{#if (memberTargetSub.members ?? []).length === 0}
+				{#if dialogMembers === null}
+					<SectionUnavailable title={m.section_members_unavailable()} compact />
+				{:else if dialogMembers.length === 0}
 					<p class="text-sm text-muted-foreground">{m.subscriptions_no_members()}</p>
 				{:else}
 					<ul class="divide-y rounded-md border">
-						{#each memberTargetSub.members ?? [] as member (member.id)}
+						{#each dialogMembers as member (member.id)}
 							<li class="flex items-center justify-between px-3 py-2">
 								<span class="text-sm">{member.contactName ?? m.contact_number({ id: member.contactId ?? member.id })}</span>
 								<form
 									method="POST"
 									action="?/removeMember"
 									use:kitEnhance={async () => {
+										memberActionPending = true;
 										return async ({ result, update }) => {
+											memberActionPending = false;
 											if (result.type === 'success') {
 												toast.success(m.subscriptions_member_removed());
+												// The dialog stays open on the reloaded list, so the
+												// removal is visible where it was made.
 												await update();
-												memberDialogOpen = false;
 											} else {
 												const msg =
 													(result as { data?: { message?: string } }).data?.message ??
@@ -454,9 +565,11 @@
 										};
 									}}
 								>
-									<input type="hidden" name="subscriptionId" value={memberTargetSub?.id} />
+									<input type="hidden" name="subscriptionId" value={memberTargetSub.id} />
 									<input type="hidden" name="memberId" value={member.id} />
-									<Button type="submit" variant="destructive" size="sm">{m.common_remove()}</Button>
+									<Button type="submit" variant="destructive" size="sm" disabled={memberActionPending}>
+										{m.common_remove()}
+									</Button>
 								</form>
 							</li>
 						{/each}
@@ -464,17 +577,26 @@
 				{/if}
 
 				<!-- Add member -->
-				{#if availableContacts(memberTargetSub).length > 0}
+				{#if dialogContacts === null}
+					<p class="text-sm text-muted-foreground">
+						{contacts === null ? m.section_contacts_unavailable() : m.subscriptions_members_unavailable_hint()}
+					</p>
+				{:else if dialogContacts.length > 0}
 					<form
 						method="POST"
 						action="?/addMember"
 						use:kitEnhance={async () => {
+							memberActionPending = true;
 							return async ({ result, update }) => {
+								memberActionPending = false;
 								if (result.type === 'success') {
 									selectedContactId = '';
 									toast.success(m.subscriptions_member_added());
+									// Stay open on the refreshed member list: adding one
+									// Member is usually the first of several, and the
+									// dialog now renders the live list rather than the
+									// snapshot it opened with.
 									await update();
-									memberDialogOpen = false;
 								} else {
 									const msg =
 										(result as { data?: { message?: string } }).data?.message ??
@@ -491,12 +613,14 @@
 								<Select.Value placeholder={m.subscriptions_select_contact()} />
 							</Select.Trigger>
 							<Select.Content>
-								{#each availableContacts(memberTargetSub) as c}
+								{#each dialogContacts as c}
 									<Select.Item value={String(c.id)}>{c.name}</Select.Item>
 								{/each}
 							</Select.Content>
 						</Select.Root>
-						<Button type="submit" disabled={!selectedContactId}>{m.common_add()}</Button>
+						<Button type="submit" disabled={!selectedContactId || memberActionPending}>
+							{m.common_add()}
+						</Button>
 					</form>
 				{:else}
 					<p class="text-sm text-muted-foreground">{m.subscriptions_all_contacts_members()}</p>
