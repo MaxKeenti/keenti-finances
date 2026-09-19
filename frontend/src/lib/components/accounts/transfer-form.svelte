@@ -17,6 +17,7 @@
 		action,
 		locale,
 		initial,
+		prefill,
 		primary = false,
 		timeZone,
 		onSuccess,
@@ -25,6 +26,13 @@
 		action: string;
 		locale: string;
 		initial?: Transfer;
+		/**
+		 * Starting values for a contextual card payment.
+		 *
+		 * A prefill is a suggestion, not a record: every field stays editable,
+		 * and closing the dialog without submitting writes nothing.
+		 */
+		prefill?: { destinationAccountId?: number | null; amount?: number | null };
 		primary?: boolean;
 		/** IANA zone the User's "today" is resolved in. */
 		timeZone: string;
@@ -35,9 +43,19 @@
 	const initialTransfer = untrack(() => initial);
 	const fieldPrefix = initialTransfer ? `transfer-${initialTransfer.id}` : 'transfer-new';
 	const accountItems = $derived(accounts.map((account) => ({ value: String(account.id), label: account.name })));
+	const initialPrefill = untrack(() => prefill);
 	let sourceAccountId = $state(initialTransfer ? String(initialTransfer.sourceAccountId) : '');
-	let destinationAccountId = $state(initialTransfer ? String(initialTransfer.destinationAccountId) : '');
-	let amount = $state<string | number>(initialTransfer?.amount ?? '');
+	let destinationAccountId = $state(
+		initialTransfer
+			? String(initialTransfer.destinationAccountId)
+			: initialPrefill?.destinationAccountId
+				? String(initialPrefill.destinationAccountId)
+				: '',
+	);
+	// The source is deliberately left empty: only the User knows which account
+	// the money actually came from, and guessing one would be a claim about a
+	// movement that has not happened.
+	let amount = $state<string | number>(initialTransfer?.amount ?? initialPrefill?.amount ?? '');
 	// `toISOString()` yields the UTC date. For a User at UTC-6 that is already
 	// tomorrow after 18:00 local, and the backend rejects future-dated
 	// Transfers — so every evening Transfer failed with a generic error.

@@ -9,10 +9,26 @@ Boxes let a User reserve part of their existing Net Balance for a purpose while 
 At all times:
 
 ```text
-Net Balance       = all-time INGRESS - all-time EGRESS
-In Boxes          = sum of active Box balances
+Net Balance        = sum of signed active Financial Account balances   (tracking active)
+                   = all-time INGRESS - all-time EGRESS               (tracking not activated)
+In Boxes           = sum of active Box balances
 Available to Spend = Net Balance - In Boxes
 ```
+
+Which of the two Net Balance formulas applies is read from the `active` boolean on the account tracking status (ADR-0022; decision D1). It is never inferred from the totals — a User whose recorded income minus expenses happens to equal their account ledger is not thereby tracking. When that read fails, the app says the tracking information is unavailable and still shows a total that loaded successfully, rather than describing it with a formula nobody confirmed. Neither failure may produce a zero.
+
+Available to Spend is money unallocated to Boxes. It is not a cash forecast: unrecorded future essentials, Subscriptions, and expected receipts are not subtracted from it, and an already-recorded card purchase is not subtracted a second time by an unpaid Credit Statement.
+
+Credit figures sit outside all three totals in the sense that matters here: a Credit Financial Account's signed balance is already inside Net Balance, while its limit-derived available credit and any confirmed statement's outstanding payment are separately labeled facts that enter none of the totals above.
+
+A negative Available to Spend has two distinct causes, and the app tells them apart rather than reporting one shortfall:
+
+- **Over-reservation** — Net Balance is zero or positive and Boxes reserve more than it. The remedy is to review reservations; a withdrawal is only offered when some Box actually holds money.
+- **Negative Net Balance** — the signed recorded position itself is below zero. Withdrawing from a Box cannot resolve it, and withdrawing from an empty one never can.
+
+The same two-way explanation is used on the dashboard, the Boxes overview, and a Box's own page, so the User is not told one story and then another. On a Box page the withdrawal is offered only when that Box holds money *and* the cause is over-reservation; withdrawing releases a reservation back to Available to Spend and never adds money that was not received. Deposits stay paused while Available to Spend is below zero, which is stated as the fact it is rather than as a demand to reconcile.
+
+A confirmed Credit Statement's `reconciliationMismatch` is a third, independent notice. It is neither of the above and does not establish that a record is wrong; a negative Available to Spend alone never proves one either.
 
 - Box Movements never change Net Balance.
 - A Box balance can never be negative.
@@ -124,8 +140,8 @@ Several triggers may match one Transaction. If their combined suggestions exceed
 
 ## User interface
 
-- Keep Available to Spend visible in the application shell.
-- Show Net Balance, In Boxes, and Available to Spend together on the dashboard.
+- Keep Available to Spend visible in the application shell, with the note that it is money unallocated to Boxes rather than a forecast.
+- Show Net Balance, In Boxes, and Available to Spend together on the dashboard, and state under Net Balance which formula produced it.
 - Link the In Boxes figure to the Boxes overview.
 - Reconcile the overview total exactly to the dashboard's In Boxes figure.
 - On the Boxes overview, make the Box's name and its **Open Box** action lead to the complete Box page — plan, reserved money, and history — rather than to a history-only destination.

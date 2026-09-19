@@ -3,6 +3,8 @@ package com.keenti.finances.infrastructure.adapter.in.rest;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import com.keenti.finances.infrastructure.adapter.out.persistence.UserEntity;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,7 +23,7 @@ class BillingResourceTest {
     void concurrentGenerationCreatesOnePersonalPaymentRecordAndAdvancesOnce() throws Exception {
         String userId = "test-billing-concurrent-" + System.nanoTime();
         long subscriptionId = createPersonalSubscriptionDueToday(userId);
-        LocalDate expectedNextBillingDate = LocalDate.now().plusMonths(1);
+        LocalDate expectedNextBillingDate = LocalDate.now(ZoneId.of(UserEntity.DEFAULT_TIME_ZONE)).plusMonths(1);
 
         int generated = generateConcurrently(userId, subscriptionId);
 
@@ -37,7 +39,7 @@ class BillingResourceTest {
         long subscriptionId = createSharedSubscriptionDueToday(userId);
         addSubscriptionMember(userId, subscriptionId, createContact(userId, "Alex"));
         addSubscriptionMember(userId, subscriptionId, createContact(userId, "Sam"));
-        LocalDate expectedNextBillingDate = LocalDate.now().plusMonths(1);
+        LocalDate expectedNextBillingDate = LocalDate.now(ZoneId.of(UserEntity.DEFAULT_TIME_ZONE)).plusMonths(1);
 
         int generated = generateConcurrently(userId, subscriptionId);
 
@@ -123,7 +125,7 @@ class BillingResourceTest {
                           "nextBillingDate": "%s",
                           "ownerParticipates": %s
                         }
-                        """.formatted(type.toLowerCase(), type, LocalDate.now(), ownerParticipates))
+                        """.formatted(type.toLowerCase(), type, LocalDate.now(ZoneId.of(UserEntity.DEFAULT_TIME_ZONE)), ownerParticipates))
                 .when().post("/api/subscriptions")
                 .then()
                 .statusCode(201)

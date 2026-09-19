@@ -2,6 +2,15 @@ import { error, fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 import { m } from '$lib/paraglide/messages.js';
+import { loadOptionalSection, loadSection } from '$lib/server/section-load';
+import {
+	parseCreditSettingsDetail,
+	parseCurrentCreditEstimate,
+	parseCreditStatements,
+	type CreditSettingsDetail,
+	type CreditStatementSummary,
+} from '$lib/server/payloads';
+import { sectionOk } from '$lib/types/section';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -46,26 +55,6 @@ type Activity = {
 	amount: number;
 };
 
-type CreditSettings = {
-	creditLimit: number;
-	statementClosingDay: number;
-	paymentDueDay: number;
-};
-type CreditStatement = {
-	id: number;
-	periodStart: string;
-	periodEnd: string;
-	dueDate: string;
-	officialBalance: number;
-	officialMinimumPayment: number;
-	officialAvoidInterest: number;
-	officialNote: string | null;
-	paidAmount: number;
-	outstandingBalance: number;
-	reconciliationMismatch: boolean;
-	mismatchAmount: number;
-};
-
 function headers(cookies: Parameters<typeof getSession>[0], json = false): Record<string, string> {
 	const token = getSession(cookies)?.accessToken;
 	return {
@@ -85,22 +74,48 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 	if (!accountRes.ok) error(accountRes.status === 404 ? 404 : 502, m.error_account_not_found());
 	const account = (await accountRes.json()) as Account;
 
-	const [transactionsRes, transfersRes, settingsRes, statementsRes, msiPlansRes, currentEstimateRes] = await Promise.all([
-		fetch(`${BACKEND}/api/transactions`, { headers: auth }),
-		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
-		account.kind === 'CREDIT'
-			? fetch(`${BACKEND}/api/accounts/${id}/credit-settings`, {
-					headers: auth,
+	const isCredit = account.kind === 'CREDIT';
+	const [transactionsRes, transfersRes, settingsSection, statementsSection, msiPlansRes, currentEstimateRes] =
+		await Promise.all([
+			fetch(`${BACKEND}/api/transactions`, { headers: auth }),
+			fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
+			// A Credit Financial Account with nothing configured yet answers 404.
+			// That is an absence, not a failure — there is no limit, so available
+			// credit is genuinely unknown rather than unreadable.
+			isCredit
+				? loadOptionalSection<CreditSettingsDetail>(
+						fetch,
+						`${BACKEND}/api/accounts/${id}/credit-settings`,
+						{
+							parse: parseCreditSettingsDetail,
+							headers: auth,
+							label: `account/credit-settings/${id}`,
+							absentStatuses: [404],
+						},
+					)
+				: Promise.resolve(sectionOk<CreditSettingsDetail | null>(null)),
+			// Confirmed statements carry bank-issued figures the User pays
+			// against. An unreadable list must stay unavailable: an empty list
+			// would read as "nothing left to pay".
+			isCredit
+				? loadSection<CreditStatementSummary[]>(
+						fetch,
+						`${BACKEND}/api/accounts/${id}/credit-statements`,
+						{
+							parse: parseCreditStatements,
+							headers: auth,
+							label: `account/credit-statements/${id}`,
+						},
+					)
+				: Promise.resolve(sectionOk<CreditStatementSummary[]>([])),
+			isCredit ? fetch(`${BACKEND}/api/accounts/${id}/msi-plans`, { headers: auth }) : Promise.resolve(null),
+			isCredit
+				? loadOptionalSection(fetch, `${BACKEND}/api/accounts/${id}/credit-statements/current-estimate`, {
+					parse: parseCurrentCreditEstimate, headers: auth, label: `account/estimate/${id}`,
+					absentStatuses: [409],
 				})
-			: Promise.resolve(null),
-		account.kind === 'CREDIT'
-			? fetch(`${BACKEND}/api/accounts/${id}/credit-statements`, {
-					headers: auth,
-				})
-			: Promise.resolve(null),
-		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/msi-plans`, { headers: auth }) : Promise.resolve(null),
-		account.kind === 'CREDIT' ? fetch(`${BACKEND}/api/accounts/${id}/credit-statements/current-estimate`, { headers: auth }) : Promise.resolve(null),
-	]);
+				: Promise.resolve(null),
+		]);
 	const transactions = transactionsRes.ok ? ((await transactionsRes.json()) as Transaction[]) : [];
 	const transfers = transfersRes.ok ? ((await transfersRes.json()) as Transfer[]) : [];
 	const activity: Activity[] = [
@@ -131,26 +146,31 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 			}),
 	].sort((left, right) => right.date.localeCompare(left.date));
 
-	const settings = settingsRes?.ok ? ((await settingsRes.json()) as CreditSettings) : null;
-	const statements = statementsRes?.ok ? ((await statementsRes.json()) as CreditStatement[]) : [];
-	const nextStatement = statements.filter((statement) => statement.outstandingBalance > 0).sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0] ?? null;
 	const msiPlans = msiPlansRes?.ok ? await msiPlansRes.json() : [];
-	const currentEstimate = currentEstimateRes?.ok ? await currentEstimateRes.json() : null;
+	// The estimate is Keenti's own projection from recorded activity. It is a
+	// separate read from the confirmed snapshots and stays labeled as an
+	// estimate; a failed one is withheld rather than shown as a figure.
+	const currentEstimate = currentEstimateRes?.status === 'ok' ? currentEstimateRes.data : null;
+	const estimateAvailable = currentEstimate !== null;
+	// A successful settings absence and the expected schedule conflict are a
+	// setup state, not an outage. Never infer absence from a failed settings read.
+	const statementScheduleUnconfigured = settingsSection.status === 'ok' && settingsSection.data === null
+		&& currentEstimateRes?.status === 'ok' && currentEstimateRes.data === null;
 	const creditTransactions = transactions.filter((transaction) => transaction.accountId === id && transaction.direction === 'EGRESS');
 	return {
 		account,
 		activity,
-		credit:
-			account.kind === 'CREDIT'
-				? {
-						settings,
-						statements,
-						nextStatement,
-						msiPlans,
-						currentEstimate,
-						creditTransactions,
-					}
-				: null,
+		credit: isCredit
+			? {
+					settings: settingsSection,
+					statements: statementsSection,
+					msiPlans,
+					currentEstimate,
+					estimateAvailable,
+					statementScheduleUnconfigured,
+					creditTransactions,
+				}
+			: null,
 	};
 };
 

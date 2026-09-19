@@ -1,12 +1,12 @@
 # D2 — Obligation status and calendar-day contract
 
-Status: proposed for product-owner review. This note does not implement 1D, 3A or 3B. It separates three different facts: generating billing, receiving a contribution, and paying a confirmed Credit Statement.
+Status: accepted as the implementation starting point following the product owner’s merge of PR #36 and request to continue on 14 September 2026. Accounting formulas remain unchanged.
 
 ## Calendar contract and required backend alignment
 
 Use the User's configured IANA time zone to derive today from one captured instant for each request/render. Compare date-only values as calendar dates; do not parse them into the browser's local midnight. Missing or invalid zone/date inputs produce an unavailable date status, with Retry/review guidance, not a guessed overdue label.
 
-**Existing discrepancy:** `BillingService.generateForSubscription` currently uses `LocalDate.now()` without `UserTimeZoneProvider`. A user-zone label can therefore disagree with whether the button actually generates records. Before implementing D2, use the existing User time-zone provider in this service and test the boundary. This is an explicit proposed alignment of the manual action's day semantics, not merely a copy change. Preserve the catch-up cap, per-subscription lock, uniqueness, user scope and idempotency from ADR-0019.
+**Alignment implemented with this increment:** `BillingService.generateForSubscription` previously used `LocalDate.now()` without `UserTimeZoneProvider`. A user-zone label could therefore disagree with whether the button actually generates records. The service now uses the existing User time-zone provider, with fixed-instant boundary verification. This is an explicit alignment of the manual action's day semantics, not merely a copy change. Preserve the catch-up cap, per-subscription lock, uniqueness, user scope and idempotency from ADR-0019.
 
 ## Truth table A — billing generation
 
@@ -32,7 +32,7 @@ First matching row wins, per Payment Record. `PaymentRecordResponse` exposes bil
 | status = PENDING | Awaiting contribution for the displayed billing period | Record payment or link existing income under the existing contract |
 | Successfully loaded section has no records for selected period | No contribution records for this period | Generate billing if table A permits; add members if required |
 
-**Recommended product decision:** do not call a PENDING contribution overdue merely because billingDate is in the past. A contribution due-date/grace policy is not recorded in the current contract. If overdue contribution labels are desired, define and approve that policy before adding them. A missing transaction link does not make a PAID record unpaid.
+**Product decision:** do not call a PENDING contribution overdue merely because billingDate is in the past. A contribution due-date/grace policy is not recorded in the current contract. If overdue contribution labels are desired, define and approve that policy before adding them. A missing transaction link does not make a PAID record unpaid.
 
 For an existing period, aggregate its stored Payment Record amounts and statuses; do not recompute historical amounts from today's subscription price or membership. Expected contribution totals based on current membership must be identified as current expectations, not historical billed facts. Current owner share is distinct from gross provider cost. A record marked PAID does not establish that the provider expense was recorded or paid.
 
@@ -43,6 +43,7 @@ First matching row wins per statement. Use the backend's `outstandingBalance` (o
 | Inputs | Presented state | Action |
 |---|---|---|
 | Statement read failed, confirmation metadata malformed, or confirmed outstanding amount unavailable | Statement payment status unavailable | Retry/review statement |
+| Confirmed-statement list is empty; settings read confirms no schedule and estimate returns its documented not-configured response | Set up statement schedule | Open Advanced settings; configure schedule or confirm a statement |
 | Confirmed-statement list read succeeds with no applicable statement; separate estimate read succeeds | Estimated statement, not confirmed | Review/confirm statement |
 | Confirmed, outstandingBalance <= 0 | Statement payment covered | View statement/history |
 | Confirmed, outstandingBalance > 0, due date/zone invalid | Outstanding statement payment; due date unavailable | Review statement |
@@ -72,4 +73,4 @@ Cover yesterday/today/tomorrow, missing dates, invalid zone, PAID/PENDING, parti
 - `backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/PaymentRecordResponse.java`.
 - `backend/src/main/java/com/keenti/finances/infrastructure/adapter/in/rest/FinancialAccountResource.java`, `toResponse`: outstandingBalance and mismatch are distinct.
 
-Review decision: approve the user-zone action alignment, these three tables, and the choice to keep contributions “awaiting” until a separate due-date policy exists. Then implement the shared derivation in 1D before consuming it in 3A/3B.
+Implementation uses the shared derivation in 1D before consuming it in 3A/3B. Contributions remain “awaiting” until a separate due-date policy exists.

@@ -15,7 +15,12 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { availableCredit, creditMagnitude, creditPosition } from '$lib/balance-presentation';
+	import { accountStatementPaymentStatus, isOutstandingStatement } from '$lib/obligation-status';
+	import { statementAmountLabel, statementStateLabel } from '$lib/statement-labels';
+	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -30,14 +35,49 @@
 		CASH: m.account_kind_cash(), DEBIT: m.account_kind_debit(), CHECKING: m.account_kind_checking(), SAVINGS: m.account_kind_savings(), CREDIT: m.account_kind_credit(),
 	} as Record<string, string>)[data.account.kind] ?? data.account.kind);
 	const balanceLabel = $derived(data.account.kind === 'CREDIT' && data.account.balance < 0 ? fmt.format(Math.abs(data.account.balance)) : fmt.format(data.account.balance));
-	// Without credit settings there is no limit to subtract from, so available
-	// credit is unknown rather than zero — rendering $0.00 claimed the User
-	// had none left. `null` makes the card show the same "set this up" hint
-	// the credit-limit card beside it already uses.
-	const availableCredit = $derived(
-		data.credit?.settings
-			? Math.max(data.credit.settings.creditLimit + data.account.balance, 0)
-			: null,
+
+	// The three credit figures are deliberately separate facts and never
+	// summed: the signed balance is what this card owes (already inside Net
+	// Balance), available credit is limit-derived capacity outside every total,
+	// and a confirmed statement's outstanding payment is its own obligation.
+	const position = $derived(creditPosition(data.account.balance));
+	const positionAmount = $derived(creditMagnitude(data.account.balance));
+	// `null` from the section means the settings could not be read; `null`
+	// inside an ok section means none are configured. Only the latter offers
+	// the "set this up" hint — and neither shows $0.00 available credit, which
+	// would claim the User has none left.
+	const creditSettings = $derived(
+		data.credit ? sectionValue(data.credit.settings) : null,
+	);
+	const creditSettingsUnavailable = $derived(data.credit?.settings.status === 'unavailable');
+	const availableCreditAmount = $derived(
+		creditSettings ? availableCredit(creditSettings.creditLimit, data.account.balance) : null,
+	);
+
+	// One captured instant per render, resolved in the User's own zone, so this
+	// page and the dashboard agree about which calendar day it is.
+	const today = $derived(data.obligationToday);
+	const statements = $derived(data.credit ? sectionValue(data.credit.statements) : null);
+	const statementPayment = $derived(
+		accountStatementPaymentStatus({
+			statements,
+			today,
+			read: (statement) => statement,
+			// "Estimated statement, not confirmed" describes the estimate, so it
+			// is only said once that separate read succeeded.
+			estimateAvailable: data.credit?.estimateAvailable === true,
+		}),
+	);
+	const needsStatementSchedule = $derived(data.credit?.statementScheduleUnconfigured && statements?.length === 0);
+	const outstanding = $derived(isOutstandingStatement(statementPayment.status.state));
+	// Prefills the existing neutral Transfer workflow on the Accounts page with
+	// this card as the destination. It opens a form; nothing is recorded until
+	// the User confirms it there.
+	const payCardHref = $derived(
+		`/accounts?payCard=${data.account.id}` +
+			(statementPayment.status.outstanding !== null && statementPayment.status.outstanding > 0
+				? `&amount=${statementPayment.status.outstanding}`
+				: ''),
 	);
 	const purchaseItems = $derived(data.credit?.creditTransactions.map((transaction) => ({
 		value: String(transaction.id),
@@ -84,20 +124,124 @@
 	{#if lifecycleError}<Alert.Root variant="destructive"><Alert.Description>{lifecycleError}</Alert.Description></Alert.Root>{/if}
 	{#if !data.account.archived && data.account.balance !== 0}<Alert.Root><Alert.Description>{m.account_archive_zero_required()}</Alert.Description></Alert.Root>{/if}
 
+	<!-- The Credit Financial Account's position, its limit-derived capacity, and
+	     its confirmed statement obligation are three separate labeled facts. The
+	     page used to show "Current debt" even when the balance was in the
+	     User's favour, and to leave the statement payment implicit. -->
 	<section class="grid gap-4 sm:grid-cols-3">
-		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? (data.account.balance > 0 ? m.account_credit_positive() : m.account_debt_current()) : m.account_current_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums"><span class:text-destructive={data.account.kind === 'CREDIT' && data.account.balance < 0}>{balanceLabel}</span></Card.Title></Card.Header></Card.Root>
-		<Card.Root><Card.Header><Card.Description>{data.account.kind === 'CREDIT' ? m.account_available_credit() : m.account_opening_balance()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.account.kind === 'CREDIT' ? (availableCredit === null ? m.account_credit_limit_unset() : fmt.format(availableCredit)) : fmt.format(data.account.openingBalance)}</Card.Title></Card.Header></Card.Root>
+		<Card.Root>
+			<Card.Header>
+				<Card.Description>
+					{#if data.account.kind !== 'CREDIT'}
+						{m.account_current_balance()}
+					{:else if position === 'debt'}
+						{m.credit_label_debt()}
+					{:else if position === 'in-favor'}
+						{m.credit_label_in_favor()}
+					{:else if position === 'settled'}
+						{m.credit_label_settled()}
+					{:else}
+						{m.credit_balance_unknown()}
+					{/if}
+				</Card.Description>
+				<Card.Title class="text-2xl tabular-nums">
+					<span class:text-destructive={position === 'debt'}>
+						{data.account.kind === 'CREDIT'
+							? positionAmount === null
+								? m.credit_balance_unknown()
+								: fmt.format(positionAmount)
+							: balanceLabel}
+					</span>
+				</Card.Title>
+			</Card.Header>
+			{#if data.account.kind === 'CREDIT' && position !== 'unknown'}
+				<Card.Content>
+					<p class="text-xs text-muted-foreground">
+						{position === 'in-favor' ? m.credit_in_favor_note() : m.credit_debt_note()}
+					</p>
+				</Card.Content>
+			{/if}
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Description>{data.account.kind === 'CREDIT' ? m.credit_label_available() : m.account_opening_balance()}</Card.Description>
+				{#if data.account.kind !== 'CREDIT'}
+					<Card.Title class="text-2xl tabular-nums">{fmt.format(data.account.openingBalance)}</Card.Title>
+				{:else if availableCreditAmount !== null}
+					<Card.Title class="text-2xl tabular-nums">{fmt.format(availableCreditAmount)}</Card.Title>
+				{:else if !creditSettingsUnavailable}
+					<Card.Title class="text-base font-medium">{m.account_credit_limit_unset()}</Card.Title>
+				{/if}
+			</Card.Header>
+			<Card.Content>
+				{#if data.account.kind === 'CREDIT' && creditSettingsUnavailable}
+					<SectionUnavailable title={m.credit_label_available()} compact />
+				{:else if data.account.kind === 'CREDIT'}
+					{#if creditSettings}
+						<p class="text-xs text-muted-foreground">
+							{m.account_credit_limit()}: {fmt.format(creditSettings.creditLimit)}
+						</p>
+					{/if}
+					<p class="text-xs text-muted-foreground">{m.credit_available_note()}</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
+
 		<Card.Root><Card.Header><Card.Description>{m.account_tracking_started()}</Card.Description><Card.Title class="text-2xl">{formatDateOnly(data.account.openingDate, data.preferences.locale)}</Card.Title></Card.Header></Card.Root>
 	</section>
 
 	{#if data.credit}
-		<section class="grid gap-4 sm:grid-cols-2">
-			<Card.Root><Card.Header><Card.Description>{m.account_credit_limit()}</Card.Description><Card.Title class="text-2xl tabular-nums">{data.credit.settings ? fmt.format(data.credit.settings.creditLimit) : m.account_credit_limit_unset()}</Card.Title></Card.Header></Card.Root>
-			<Card.Root><Card.Header><Card.Description>{m.account_next_payment()}</Card.Description><Card.Title class="text-2xl">{data.credit.nextStatement ? formatDateOnly(data.credit.nextStatement.dueDate, data.preferences.locale) : m.account_no_payment_due()}</Card.Title></Card.Header>{#if data.credit.nextStatement}<Card.Content><p class="text-sm text-muted-foreground">{m.account_remaining_to_avoid({ remaining: fmt.format(data.credit.nextStatement.outstandingBalance), avoidInterest: fmt.format(Math.max(data.credit.nextStatement.officialAvoidInterest - data.credit.nextStatement.paidAmount, 0)) })}</p></Card.Content>{/if}</Card.Root>
-		</section>
-		{#if data.credit.currentEstimate}<Card.Root><Card.Header><Card.Description>{m.account_current_estimate({ date: formatDateOnly(data.credit.currentEstimate.periodEnd, data.preferences.locale) })}</Card.Description><Card.Title class="text-2xl tabular-nums">{fmt.format(data.credit.currentEstimate.estimatedBalance)}</Card.Title></Card.Header><Card.Content><p class="text-sm text-muted-foreground">{m.account_estimate_description({ date: formatDateOnly(data.credit.currentEstimate.dueDate, data.preferences.locale) })}</p></Card.Content></Card.Root>{/if}
+		<!-- The confirmed statement payment: the backend's outstandingBalance,
+		     never the current signed balance, the available credit, the minimum,
+		     or the avoid-interest amount. Those stay separately labeled. -->
+		<Card.Root>
+			<Card.Header>
+				<Card.Description>{m.credit_label_outstanding_statement()}</Card.Description>
+				<Card.Title class="text-xl">{needsStatementSchedule ? m.credit_schedule_needed_title() : statementStateLabel(statementPayment.status.state)}</Card.Title>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				{#if needsStatementSchedule}
+					<p class="text-sm text-muted-foreground">{m.credit_schedule_needed_description()}</p>
+				{:else if statementPayment.status.state === 'unavailable'}
+					<SectionUnavailable title={m.statement_status_unavailable()} />
+				{:else if statementPayment.status.state === 'estimated-only'}
+					<p class="text-sm text-muted-foreground">{m.statement_status_estimated_description()}</p>
+					{#if data.credit.currentEstimate}
+						<p class="text-2xl font-semibold tabular-nums">{fmt.format(data.credit.currentEstimate.estimatedBalance)}</p>
+						<p class="text-sm text-muted-foreground">{m.account_current_estimate({ date: formatDateOnly(data.credit.currentEstimate.periodEnd, data.preferences.locale) })} · {m.account_estimate_description({ date: formatDateOnly(data.credit.currentEstimate.dueDate, data.preferences.locale) })}</p>
+					{/if}
+				{:else}
+					{#if statementAmountLabel(statementPayment.status, (value) => fmt.format(value), data.preferences.locale)}
+						<p class="text-lg font-semibold tabular-nums">
+							{statementAmountLabel(statementPayment.status, (value) => fmt.format(value), data.preferences.locale)}
+						</p>
+					{/if}
+					{#if statementPayment.statement}
+						<p class="text-sm text-muted-foreground">
+							{m.statement_minimum_and_avoid({
+								minimum: fmt.format(statementPayment.statement.officialMinimumPayment),
+								avoidInterest: fmt.format(statementPayment.statement.officialAvoidInterest),
+							})}
+						</p>
+					{/if}
+					<!-- A bank-issued snapshot, kept as recorded. A later change to
+					     prior activity flags a mismatch rather than rewriting it. -->
+					<p class="text-xs text-muted-foreground">{m.statement_snapshot_note()}</p>
+					<p class="text-xs text-muted-foreground">{m.statement_not_subtracted_note()}</p>
+					{#if outstanding && !data.account.archived}
+						<!-- Paying the card is a Transfer, not an expense: it goes
+						     through the existing neutral Transfer workflow, which
+						     allocates oldest-unpaid-statement first. -->
+						<div class="space-y-1">
+							<Button href={payCardHref} variant="outline">{m.credit_pay_card()}</Button>
+							<p class="text-xs text-muted-foreground">{m.credit_pay_card_description()}</p>
+						</div>
+					{/if}
+				{/if}
 
-		<CreditAccountPanel account={data.account} detail={data.credit} locale={data.preferences.locale} />
+			</Card.Content>
+		</Card.Root>
 
 		<Card.Root>
 			<Card.Header><Card.Title>{m.account_msi_title()}</Card.Title><Card.Description>{m.account_msi_description()}</Card.Description></Card.Header>
@@ -118,12 +262,17 @@
 		</Card.Root>
 	{/if}
 
+
 	<Card.Root>
 		<Card.Header><Card.Title>{m.account_activity_title()}</Card.Title><Card.Description>{m.account_activity_description()}</Card.Description></Card.Header>
 		<Card.Content>
 			{#if data.activity.length === 0}<p class="text-sm text-muted-foreground">{m.account_no_activity()}</p>{:else}<div class="divide-y rounded-lg border">{#each data.activity as item (item.id)}<div class="flex flex-wrap items-center justify-between gap-3 p-4"><div><p class="font-medium">{item.title}</p><p class="text-sm text-muted-foreground">{item.type === 'TRANSFER' ? m.transfer_title() : m.common_transaction()} · {item.date}{item.detail ? ` · ${item.detail}` : ''}</p></div><span class:text-destructive={item.amount < 0} class="font-medium tabular-nums">{item.amount > 0 ? '+' : '−'}{fmt.format(Math.abs(item.amount))}</span></div>{/each}</div>{/if}
 		</Card.Content>
 	</Card.Root>
+	{#if data.credit}
+		<!-- Advanced setup sits below the everyday reading. -->
+		<CreditAccountPanel account={data.account} detail={data.credit} locale={data.preferences.locale} {today} />
+	{/if}
 </div>
 
 <Dialog.Root bind:open={appearanceOpen}>

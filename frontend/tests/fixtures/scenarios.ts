@@ -318,6 +318,8 @@ const emptyBoxNegativeAvailable: Scenario = {
 			displayOrder: 2,
 		}),
 		'GET /api/boxes/9205/movements': [],
+		'GET /api/boxes/9205/history': [],
+		'GET /api/boxes/9205/plans': [],
 		'GET /api/boxes/summary': boxSummary({
 			netBalance: 1_900,
 			inBoxes: 2_600,
@@ -1518,6 +1520,19 @@ const creditInFavorUnpaidStatement: Scenario = {
 			account({ id: 9113, name: 'Cuenta sintética H', kind: 'DEBIT', balance: 1_000 }),
 			account({ id: 9112, name: 'Tarjeta sintética a favor', kind: 'CREDIT', balance: 85 }),
 		],
+		'GET /api/accounts?archived=true': [],
+		'GET /api/accounts/9112': account({
+			id: 9112, name: 'Tarjeta sintética a favor', kind: 'CREDIT', balance: 85,
+		}),
+		'GET /api/transactions': [],
+		'GET /api/account-transfers': [],
+		'GET /api/accounts/9112/msi-plans': [],
+		'GET /api/accounts/9112/credit-statements/current-estimate': {
+			periodStart: '2026-09-06',
+			periodEnd: '2026-10-05',
+			dueDate: '2026-10-20',
+			estimatedBalance: 0,
+		},
 		'GET /api/accounts/9112/credit-settings': {
 			creditLimit: 12_000,
 			statementClosingDay: 5,

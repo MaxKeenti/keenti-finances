@@ -55,7 +55,8 @@
 						<a
 							href="/boxes"
 							class="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {isUnreconciled ? 'text-destructive' : ''}"
-							aria-label={`${m.balance_available_to_spend()}: ${fmt.format(balance.availableToSpend)}`}
+							aria-label={`${m.balance_available_to_spend()}: ${fmt.format(balance.availableToSpend)}. ${m.balance_available_note()}`}
+							title={m.balance_available_note()}
 						>
 							{#if isUnreconciled}
 								<AlertTriangle class="size-4 shrink-0" aria-hidden="true" />

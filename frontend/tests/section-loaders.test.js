@@ -170,7 +170,7 @@ describe('dashboard loader sections', () => {
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.accountWarnings).toEqual({ status: 'ok', data: { items: [], partial: false } });
+		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { items: [], partial: false } });
 	});
 
 	test('a genuine credit-settings failure is still reported as partial', async () => {

@@ -1,5 +1,7 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
+import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
 import com.keenti.finances.infrastructure.adapter.out.persistence.ContactEntity;
 import com.keenti.finances.infrastructure.adapter.out.persistence.PaymentRecordEntity;
 import com.keenti.finances.infrastructure.adapter.out.persistence.SubscriptionEntity;
@@ -11,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.LocalDateTime;
 import java.util.OptionalInt;
 import java.util.UUID;
@@ -27,6 +30,12 @@ class BillingServiceTest {
 
     @Inject
     EntityManager em;
+
+    @Inject
+    UserContext userContext;
+
+    @Inject
+    UserTimeZoneProvider userTimeZoneProvider;
 
     /**
      * Backfill (ADR-0019): a single click catches up every overdue period from
@@ -45,7 +54,7 @@ class BillingServiceTest {
         assertTrue(created.getAsInt() >= 3, "catches up at least three overdue monthly periods");
         assertEquals(created.getAsInt(), PaymentRecordEntity.count("subscription.id = ?1", sub.id),
             "one record per caught-up period");
-        assertTrue(reload(sub).nextBillingDate.isAfter(LocalDate.now()),
+        assertTrue(reload(sub).nextBillingDate.isAfter(LocalDate.now(ZoneId.of(UserEntity.DEFAULT_TIME_ZONE))),
             "nextBillingDate advances past today");
     }
 
@@ -117,6 +126,19 @@ class BillingServiceTest {
         assertEquals(OptionalInt.empty(), billingService.generateForSubscription(999_999_999L));
     }
 
+    @Test
+    @Transactional
+    void calendarProviderReadsTheCurrentUsersConfiguredZone() {
+        UserEntity user = ensureUser("test-billing-configured-zone");
+        user.timeZone = "Asia/Tokyo";
+        em.flush();
+        userContext.setUserId(user.id);
+        assertEquals(ZoneId.of("Asia/Tokyo"), userTimeZoneProvider.getTimeZone());
+        user.timeZone = "Pacific/Niue";
+        em.flush();
+        assertEquals(ZoneId.of("Pacific/Niue"), userTimeZoneProvider.getTimeZone());
+    }
+
     // --- fixtures ---
 
     private UserEntity ensureUser(String workosId) {
@@ -140,11 +162,12 @@ class BillingServiceTest {
 
     private SubscriptionEntity subscriptionDueIn(UserEntity user, int days, String type) {
         SubscriptionEntity s = new SubscriptionEntity();
+        userContext.setUserId(user.id);
         s.name = "Test sub " + UUID.randomUUID();
         s.cost = new BigDecimal("100.00");
         s.billingCycle = "MONTHLY";
         s.type = type;
-        s.nextBillingDate = LocalDate.now().plusDays(days);
+        s.nextBillingDate = LocalDate.now(ZoneId.of(UserEntity.DEFAULT_TIME_ZONE)).plusDays(days);
         s.tokenUuid = UUID.randomUUID().toString();
         s.createdAt = LocalDateTime.now();
         s.ownerParticipates = true;

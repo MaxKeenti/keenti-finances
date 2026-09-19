@@ -4,6 +4,7 @@ import com.keenti.finances.domain.model.PaymentRecord;
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.SubscriptionMember;
 import com.keenti.finances.domain.port.out.PaymentRecordRepository;
+import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
 import com.keenti.finances.domain.port.out.SubscriptionMemberRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -29,6 +30,9 @@ public class BillingService {
 
     @Inject
     PaymentRecordRepository paymentRecordRepository;
+
+    @Inject
+    UserTimeZoneProvider userTimeZoneProvider;
 
     /** Safety bound: never roll through more periods than this in one click,
      * in case a corrupted {@code nextBillingDate} sits far in the past. */
@@ -68,7 +72,7 @@ public class BillingService {
             return OptionalInt.empty();
         }
         Subscription sub = found.get();
-        LocalDate today = LocalDate.now();
+        LocalDate today = userTimeZoneProvider.today();
         LocalDate billingDate = sub.getNextBillingDate();
         int created = 0;
         int periods = 0;

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -14,7 +16,10 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { creditPosition } from '$lib/balance-presentation';
+	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -46,7 +51,31 @@
 	const creditInFavour = $derived(creditTotal > 0);
 	const netTotal = $derived(heldTotal + creditTotal);
 
+	// The authoritative tracking status. An unreadable one is unavailable, not
+	// "not activated": offering the activation flow off a failed read would ask
+	// the User to match a pre-activation Net Balance nobody computed.
+	const status = $derived(sectionValue(data.status));
+	const payCardAccount = $derived(
+		data.payCard.accountId === null
+			? null
+			: (accounts.find((account) => account.id === data.payCard.accountId && account.kind === 'CREDIT') ?? null),
+	);
+
 	let transferOpen = $state(false);
+	let consumedPaymentPrefill = $state('');
+	// A contextual card payment opens this dialog prefilled. Opening a form is
+	// not recording anything: dismissing it leaves the ledger untouched.
+	$effect(() => {
+		const key = `${data.payCard.accountId}:${data.payCard.amount}`;
+		if (payCardAccount && consumedPaymentPrefill !== key) {
+			consumedPaymentPrefill = key;
+			transferOpen = true;
+			const url = new URL(page.url);
+			url.searchParams.delete('payCard');
+			url.searchParams.delete('amount');
+			replaceState(url, page.state);
+		}
+	});
 	let addAccountOpen = $state(false);
 	let addAccountError = $state('');
 	let newAccountName = $state('');
@@ -58,8 +87,10 @@
 		return kindItems.find((item) => item.value === kind)?.label ?? kind;
 	}
 
+	// Credit debt is shown as a magnitude under its own label, so the minus
+	// sign is not repeated on a figure already labeled as owed.
 	function accountBalance(account: Account) {
-		return account.kind === 'CREDIT' && account.balance < 0
+		return account.kind === 'CREDIT' && creditPosition(account.balance) === 'debt'
 			? fmt.format(Math.abs(account.balance))
 			: fmt.format(account.balance);
 	}
@@ -95,7 +126,7 @@
 			<h1 class="text-2xl font-semibold tracking-tight">{m.accounts_title()}</h1>
 			<p class="text-sm text-muted-foreground">{m.accounts_description()}</p>
 		</div>
-		{#if data.status.active}
+		{#if status?.active}
 			<div class="flex flex-wrap gap-2">
 				<Button variant="outline" onclick={() => (transferOpen = true)}>
 					<ArrowLeftRight />{m.transfer_title()}
@@ -105,8 +136,17 @@
 		{/if}
 	</header>
 
-	{#if !data.status.active}
-		<AccountSetupForm transactionNetBalance={data.status.transactionNetBalance} locale={data.preferences.locale} {today} />
+	{#if status === null}
+		<SectionUnavailable title={m.section_tracking_unavailable()} description={m.balance_source_unknown()} />
+	{:else if !status.active}
+		{#if status.transactionNetBalance === null}
+			<!-- Activation asks the User to declare opening balances that sum to
+			     their pre-activation Net Balance. Without that figure the form
+			     cannot state the target, and a zero would be a fabricated one. -->
+			<SectionUnavailable title={m.section_balance_unavailable()} />
+		{:else}
+			<AccountSetupForm transactionNetBalance={status.transactionNetBalance} locale={data.preferences.locale} {today} />
+		{/if}
 	{:else}
 		<!-- The page's whole job is "where is my money", and it never answered
 		     it: five cards, no total anywhere. -->
@@ -118,7 +158,11 @@
 				</div>
 				<div>
 					<p class="text-xs text-muted-foreground">
-						{creditInFavour ? m.account_credit_positive() : m.accounts_summary_owed()}
+						{creditInFavour
+							? m.credit_label_in_favor()
+							: creditTotal === 0
+								? m.credit_label_settled()
+								: m.credit_label_debt()}
 					</p>
 					<p class="text-2xl font-semibold tabular-nums {creditTotal < 0 ? 'text-money-negative' : ''}">
 						{fmt.format(Math.abs(creditTotal))}
@@ -188,21 +232,31 @@
 	{/if}
 </div>
 
-{#if data.status.active}
+{#if status?.active}
 	<!-- Transferring is an occasional action. It previously sat permanently
 	     expanded as a five-field form between the accounts and their history,
 	     pushing the history off-screen. -->
 	<Dialog.Root bind:open={transferOpen}>
 		<Dialog.Content class="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
 			<Dialog.Header>
-				<Dialog.Title>{m.transfer_title()}</Dialog.Title>
-				<Dialog.Description>{m.transfer_description()}</Dialog.Description>
+				<Dialog.Title>{payCardAccount ? m.credit_pay_card() : m.transfer_title()}</Dialog.Title>
+				<Dialog.Description>
+					{payCardAccount ? m.credit_pay_card_description() : m.transfer_description()}
+				</Dialog.Description>
 			</Dialog.Header>
+			{#if payCardAccount}
+				<p class="text-sm text-muted-foreground">
+					{m.transfer_prefilled_notice({ name: payCardAccount.name })}
+				</p>
+			{/if}
 			<TransferForm
 				{accounts}
 				action="?/transfer"
 				locale={data.preferences.locale}
 				timeZone={data.preferences.timeZone}
+				prefill={payCardAccount
+					? { destinationAccountId: payCardAccount.id, amount: data.payCard.amount }
+					: undefined}
 				primary
 				onSuccess={() => (transferOpen = false)}
 			/>

@@ -2,6 +2,8 @@ import { fail } from '@sveltejs/kit';
 import { getSession } from '$lib/server/workos-session';
 import type { Actions, PageServerLoad } from './$types';
 import { m } from '$lib/paraglide/messages.js';
+import { loadSection } from '$lib/server/section-load';
+import { parseAccountTrackingStatus } from '$lib/server/payloads';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -13,28 +15,37 @@ function headers(cookies: Parameters<typeof getSession>[0], json = false): Recor
 	};
 }
 
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
+export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
 	const auth = headers(cookies);
-	const [statusRes, accountsRes, archivedAccountsRes, transfersRes] = await Promise.all([
-		fetch(`${BACKEND}/api/accounts/status`, { headers: auth }),
+	// The tracking status decides whether this page offers activation or the
+	// activated view, and the pre-activation Net Balance it offers to match.
+	// The previous fallback answered a failed read with `active: false` and a
+	// net balance of 0.00, which is an activation screen built on a figure
+	// nobody computed. An unreadable status is now unavailable (decision D1).
+	const [status, accountsRes, archivedAccountsRes, transfersRes] = await Promise.all([
+		loadSection(fetch, `${BACKEND}/api/accounts/status`, {
+			parse: parseAccountTrackingStatus,
+			headers: auth,
+			label: 'accounts/status',
+		}),
 		fetch(`${BACKEND}/api/accounts`, { headers: auth }),
 		fetch(`${BACKEND}/api/accounts?archived=true`, { headers: auth }),
 		fetch(`${BACKEND}/api/account-transfers`, { headers: auth }),
 	]);
-	const status = statusRes.ok
-		? await statusRes.json()
-		: {
-				active: false,
-				setupRequired: false,
-				transactionNetBalance: 0,
-				accountNetBalance: 0,
-			};
 	const accounts = accountsRes.ok ? await accountsRes.json() : [];
 	return {
 		status,
 		accounts,
 		archivedAccounts: archivedAccountsRes.ok ? await archivedAccountsRes.json() : [],
 		transfers: transfersRes.ok ? await transfersRes.json() : [],
+		// A contextual card payment arrives here as a prefill request, not as a
+		// recorded movement: it only opens the existing Transfer dialog with the
+		// Credit Financial Account as its destination. Nothing is written unless
+		// the User submits that form.
+		payCard: {
+			accountId: Number(url.searchParams.get('payCard')) || null,
+			amount: Number(url.searchParams.get('amount')) || null,
+		},
 	};
 };
 

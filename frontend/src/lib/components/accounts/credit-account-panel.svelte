@@ -1,9 +1,20 @@
 <script lang="ts">
+	/**
+	 * Confirmed Credit Statements and the settings behind them.
+	 *
+	 * Ordered by how often it is needed (Slice 3A): the statements the User
+	 * actually reads sit at the top, and the credit limit, cycle days, and the
+	 * confirm-a-statement form — occasional setup, not daily reading — are
+	 * collapsed underneath. Each statement states its own payment status from
+	 * the shared D2 derivation, so this panel and the summary above it cannot
+	 * describe the same statement differently.
+	 */
 	import { enhance } from '$app/forms';
 	import { untrack } from 'svelte';
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 	import { CurrencyInput } from '$lib/components/currency-input';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
+	import { SectionUnavailable } from '$lib/components/section-status';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Card from '$lib/components/ui/card';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -11,13 +22,29 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { statementStateLabel } from '$lib/statement-labels';
+	import { statementPaymentStatus, type DayResolution } from '$lib/obligation-status';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Account, CreditDetail } from './types';
 
-	let { account, detail, locale }: { account: Account; detail?: CreditDetail; locale: string } = $props();
+	let {
+		account,
+		detail,
+		locale,
+		today,
+	}: { account: Account; detail?: CreditDetail; locale: string; today: DayResolution } = $props();
 	const fmt = $derived(mxnFormatter(locale));
 	const initialDetail = untrack(() => detail);
-	let creditLimit = $state<string | number>(initialDetail?.settings?.creditLimit ?? '');
+	const settings = $derived(detail?.settings.status === 'ok' ? detail.settings.data : null);
+	// "Could not be read" and "never configured" are different claims: only the
+	// second one may prefill this form with blanks the User could save over a
+	// real setting.
+	const settingsUnavailable = $derived(detail?.settings.status === 'unavailable');
+	const statements = $derived(detail?.statements.status === 'ok' ? detail.statements.data : null);
+	const initialSettings =
+		initialDetail?.settings.status === 'ok' ? initialDetail.settings.data : null;
+
+	let creditLimit = $state<string | number>(initialSettings?.creditLimit ?? '');
 	let periodStart = $state('');
 	let periodEnd = $state('');
 	let dueDate = $state('');
@@ -33,69 +60,58 @@
 		<Card.Description>{m.credit_payment_description()}</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-6">
-		{#if !account.archived}
-		<Collapsible.Root>
-			<Collapsible.Trigger class={buttonVariants({ variant: 'outline', class: 'w-full justify-between' })}>
-				{m.account_credit_settings()}<ChevronsUpDown />
-			</Collapsible.Trigger>
-			<Collapsible.Content class="pt-4">
-				<form method="POST" action="?/saveCreditSettings" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
-					<input type="hidden" name="accountId" value={account.id} />
-					<div class="grid gap-2"><Label for={`credit-limit-${account.id}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`credit-limit-${account.id}`} name="creditLimit" bind:value={creditLimit} {locale} required /></div>
-					<div class="grid gap-2"><Label for={`closing-day-${account.id}`}>{m.account_statement_closing_day()}</Label><Input id={`closing-day-${account.id}`} name="statementClosingDay" type="number" min="1" max="31" required value={detail?.settings?.statementClosingDay ?? ''} /></div>
-					<div class="grid gap-2"><Label for={`payment-day-${account.id}`}>{m.account_payment_due_day()}</Label><Input id={`payment-day-${account.id}`} name="paymentDueDay" type="number" min="1" max="31" required value={detail?.settings?.paymentDueDay ?? ''} /></div>
-					<div class="flex items-end justify-end"><Button type="submit" variant="outline">{m.credit_save_settings()}</Button></div>
-				</form>
-			</Collapsible.Content>
-		</Collapsible.Root>
+		<section class="space-y-3" aria-labelledby={`confirmed-statements-${account.id}`}>
+			<h2 id={`confirmed-statements-${account.id}`} class="font-medium">{m.credit_confirmed_title()}</h2>
 
-		<section class="space-y-4" aria-labelledby={`confirm-statement-${account.id}`}>
-			<div>
-				<h2 id={`confirm-statement-${account.id}`} class="font-medium">{m.credit_confirm_title()}</h2>
-				<p class="text-sm text-muted-foreground">{m.credit_confirm_description()}</p>
-			</div>
-			<form method="POST" action="?/confirmCreditStatement" use:enhance class="space-y-4">
-				<input type="hidden" name="accountId" value={account.id} />
-				<div class="rounded-lg bg-muted/30 p-4">
-					<h4 class="mb-3 text-sm font-medium">{m.common_date()}</h4>
-					<div class="grid gap-4 md:grid-cols-3">
-						<div class="grid gap-2"><Label for={`period-start-${account.id}`}>{m.account_period_start()}</Label><NativeDatePicker id={`period-start-${account.id}`} name="periodStart" value={periodStart} onValueChange={(value) => (periodStart = value)} /></div>
-						<div class="grid gap-2"><Label for={`period-end-${account.id}`}>{m.account_period_end()}</Label><NativeDatePicker id={`period-end-${account.id}`} name="periodEnd" value={periodEnd} onValueChange={(value) => (periodEnd = value)} /></div>
-						<div class="grid gap-2"><Label for={`statement-due-${account.id}`}>{m.account_due_date()}</Label><NativeDatePicker id={`statement-due-${account.id}`} name="dueDate" value={dueDate} onValueChange={(value) => (dueDate = value)} /></div>
-					</div>
-				</div>
-				<div class="rounded-lg bg-muted/30 p-4">
-					<h4 class="mb-3 text-sm font-medium">{m.account_statement_figures()}</h4>
-					<div class="grid gap-4 md:grid-cols-3">
-						<div class="grid gap-2"><Label for={`official-balance-${account.id}`}>{m.account_official_balance()}</Label><CurrencyInput id={`official-balance-${account.id}`} name="officialBalance" bind:value={officialBalance} {locale} required /></div>
-						<div class="grid gap-2"><Label for={`minimum-payment-${account.id}`}>{m.account_minimum_payment()}</Label><CurrencyInput id={`minimum-payment-${account.id}`} name="officialMinimumPayment" bind:value={officialMinimumPayment} {locale} required /></div>
-						<div class="grid gap-2"><Label for={`avoid-interest-${account.id}`}>{m.account_avoid_interest()}</Label><CurrencyInput id={`avoid-interest-${account.id}`} name="officialAvoidInterest" bind:value={officialAvoidInterest} {locale} required /></div>
-						<div class="grid gap-2 md:col-span-3"><Label for={`official-note-${account.id}`}>{m.common_notes()} {m.common_optional()}</Label><Input id={`official-note-${account.id}`} name="officialNote" /></div>
-					</div>
-				</div>
-				<div class="flex justify-end"><Button type="submit" variant="outline">{m.credit_confirm()}</Button></div>
-			</form>
-				</section>
+			{#if statements === null}
+				<!-- An unreadable list is unavailable, never an empty one: "no
+				     statements" would read as nothing left to pay. -->
+				<SectionUnavailable title={m.statement_status_unavailable()} />
+			{:else if statements.length === 0}
+				<p class="text-sm text-muted-foreground">{m.credit_statements_none()}</p>
 			{:else}
-				<p class="border-t pt-6 text-sm text-muted-foreground">{m.account_no_statements()}</p>
-			{/if}
-
-		{#if detail?.statements?.length}
-			<section class="space-y-3 border-t pt-6" aria-labelledby={`confirmed-statements-${account.id}`}>
-				<h2 id={`confirmed-statements-${account.id}`} class="font-medium">{m.credit_confirmed_title()}</h2>
-				{#each detail.statements as statement}
+				{#each statements as statement (statement.id)}
+					{@const status = statementPaymentStatus({
+						outstandingBalance: statement.outstandingBalance,
+						dueDate: statement.dueDate,
+						reconciliationMismatch: statement.reconciliationMismatch,
+						mismatchAmount: statement.mismatchAmount,
+						today,
+					})}
 					<div class="space-y-3 rounded-lg border bg-background p-4">
 						<div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-							<span>{m.account_statement_due_remaining({ date: formatDateOnly(statement.dueDate, locale), amount: fmt.format(statement.outstandingBalance) })}</span>
-							<span class="text-muted-foreground">{fmt.format(statement.officialAvoidInterest)} · {m.account_avoid_interest()}</span>
+							<span class="font-medium">{statementStateLabel(status.state)}</span>
+							<!-- A statement with no usable due date still owes its
+							     outstanding balance; only the date is withheld. -->
+							<span class="text-muted-foreground">
+								{statement.dueDate === null
+									? m.account_statement_due_unknown_remaining({
+											amount: fmt.format(statement.outstandingBalance),
+										})
+									: m.account_statement_due_remaining({
+											date: formatDateOnly(statement.dueDate, locale),
+											amount: fmt.format(statement.outstandingBalance),
+										})}
+							</span>
 						</div>
-						{#if statement.reconciliationMismatch}<Alert.Root><Alert.Description>{m.credit_mismatch({ amount: fmt.format(Math.abs(statement.mismatchAmount)) })}</Alert.Description></Alert.Root>{/if}
+						<p class="text-xs text-muted-foreground">
+							{m.statement_minimum_and_avoid({
+								minimum: fmt.format(statement.officialMinimumPayment),
+								avoidInterest: fmt.format(statement.officialAvoidInterest),
+							})}
+						</p>
+						<!-- An independent review notice. The statement is still owed
+						     exactly its outstanding balance, and the snapshot is not
+						     declared wrong. -->
+						{#if statement.reconciliationMismatch}
+							<Alert.Root><Alert.Description>{m.credit_mismatch({ amount: fmt.format(Math.abs(statement.mismatchAmount)) })}</Alert.Description></Alert.Root>
+						{/if}
 						{#if !account.archived}<Collapsible.Root>
 							<Collapsible.Trigger class={buttonVariants({ variant: 'ghost', size: 'sm' })}>{m.credit_reconfirm()}<ChevronsUpDown /></Collapsible.Trigger>
 							<Collapsible.Content class="pt-3">
 								<form method="POST" action="?/reconfirmCreditStatement" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
 									<input type="hidden" name="accountId" value={account.id} /><input type="hidden" name="statementId" value={statement.id} /><input type="hidden" name="periodStart" value={statement.periodStart} /><input type="hidden" name="periodEnd" value={statement.periodEnd} />
-									<div class="grid gap-2"><Label>{m.account_due_date()}</Label><NativeDatePicker name="dueDate" value={reconfirmDueDates[statement.id] ?? statement.dueDate} onValueChange={(value) => (reconfirmDueDates = { ...reconfirmDueDates, [statement.id]: value })} /></div>
+									<div class="grid gap-2"><Label>{m.account_due_date()}</Label><NativeDatePicker name="dueDate" value={reconfirmDueDates[statement.id] ?? statement.dueDate ?? ''} onValueChange={(value) => (reconfirmDueDates = { ...reconfirmDueDates, [statement.id]: value })} /></div>
 									<div class="grid gap-2"><Label>{m.account_official_balance()}</Label><CurrencyInput name="officialBalance" value={statement.officialBalance} {locale} /></div>
 									<div class="grid gap-2"><Label>{m.account_minimum_payment()}</Label><CurrencyInput name="officialMinimumPayment" value={statement.officialMinimumPayment} {locale} /></div>
 									<div class="grid gap-2"><Label>{m.account_avoid_interest()}</Label><CurrencyInput name="officialAvoidInterest" value={statement.officialAvoidInterest} {locale} /></div>
@@ -106,7 +122,60 @@
 						</Collapsible.Root>{/if}
 					</div>
 				{/each}
-			</section>
+			{/if}
+		</section>
+
+		{#if !account.archived}
+			<!-- Setup, not daily reading: collapsed and placed below the
+			     statements it configures. -->
+			<Collapsible.Root class="border-t pt-6">
+				<Collapsible.Trigger class={buttonVariants({ variant: 'outline', class: 'w-full justify-between' })}>
+					{m.credit_advanced_title()}<ChevronsUpDown />
+				</Collapsible.Trigger>
+				<Collapsible.Content class="space-y-6 pt-4">
+					<p class="text-sm text-muted-foreground">{m.credit_advanced_description()}</p>
+
+					{#if settingsUnavailable}
+						<SectionUnavailable title={m.account_credit_settings()} />
+					{:else}
+						<form method="POST" action="?/saveCreditSettings" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
+							<input type="hidden" name="accountId" value={account.id} />
+							<div class="grid gap-2"><Label for={`credit-limit-${account.id}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`credit-limit-${account.id}`} name="creditLimit" bind:value={creditLimit} {locale} required /></div>
+							<div class="grid gap-2"><Label for={`closing-day-${account.id}`}>{m.account_statement_closing_day()}</Label><Input id={`closing-day-${account.id}`} name="statementClosingDay" type="number" min="1" max="31" required value={settings?.statementClosingDay ?? ''} /></div>
+							<div class="grid gap-2"><Label for={`payment-day-${account.id}`}>{m.account_payment_due_day()}</Label><Input id={`payment-day-${account.id}`} name="paymentDueDay" type="number" min="1" max="31" required value={settings?.paymentDueDay ?? ''} /></div>
+							<div class="flex items-end justify-end"><Button type="submit" variant="outline">{m.credit_save_settings()}</Button></div>
+						</form>
+					{/if}
+
+					<section class="space-y-4" aria-labelledby={`confirm-statement-${account.id}`}>
+						<div>
+							<h3 id={`confirm-statement-${account.id}`} class="font-medium">{m.credit_confirm_title()}</h3>
+							<p class="text-sm text-muted-foreground">{m.credit_confirm_description()}</p>
+						</div>
+						<form method="POST" action="?/confirmCreditStatement" use:enhance class="space-y-4">
+							<input type="hidden" name="accountId" value={account.id} />
+							<div class="rounded-lg bg-muted/30 p-4">
+								<h4 class="mb-3 text-sm font-medium">{m.common_date()}</h4>
+								<div class="grid gap-4 md:grid-cols-3">
+									<div class="grid gap-2"><Label for={`period-start-${account.id}`}>{m.account_period_start()}</Label><NativeDatePicker id={`period-start-${account.id}`} name="periodStart" value={periodStart} onValueChange={(value) => (periodStart = value)} /></div>
+									<div class="grid gap-2"><Label for={`period-end-${account.id}`}>{m.account_period_end()}</Label><NativeDatePicker id={`period-end-${account.id}`} name="periodEnd" value={periodEnd} onValueChange={(value) => (periodEnd = value)} /></div>
+									<div class="grid gap-2"><Label for={`statement-due-${account.id}`}>{m.account_due_date()}</Label><NativeDatePicker id={`statement-due-${account.id}`} name="dueDate" value={dueDate} onValueChange={(value) => (dueDate = value)} /></div>
+								</div>
+							</div>
+							<div class="rounded-lg bg-muted/30 p-4">
+								<h4 class="mb-3 text-sm font-medium">{m.account_statement_figures()}</h4>
+								<div class="grid gap-4 md:grid-cols-3">
+									<div class="grid gap-2"><Label for={`official-balance-${account.id}`}>{m.account_official_balance()}</Label><CurrencyInput id={`official-balance-${account.id}`} name="officialBalance" bind:value={officialBalance} {locale} required /></div>
+									<div class="grid gap-2"><Label for={`minimum-payment-${account.id}`}>{m.account_minimum_payment()}</Label><CurrencyInput id={`minimum-payment-${account.id}`} name="officialMinimumPayment" bind:value={officialMinimumPayment} {locale} required /></div>
+									<div class="grid gap-2"><Label for={`avoid-interest-${account.id}`}>{m.account_avoid_interest()}</Label><CurrencyInput id={`avoid-interest-${account.id}`} name="officialAvoidInterest" bind:value={officialAvoidInterest} {locale} required /></div>
+									<div class="grid gap-2 md:col-span-3"><Label for={`official-note-${account.id}`}>{m.common_notes()} {m.common_optional()}</Label><Input id={`official-note-${account.id}`} name="officialNote" /></div>
+								</div>
+							</div>
+							<div class="flex justify-end"><Button type="submit" variant="outline">{m.credit_confirm()}</Button></div>
+						</form>
+					</section>
+				</Collapsible.Content>
+			</Collapsible.Root>
 		{/if}
 	</Card.Content>
 </Card.Root>

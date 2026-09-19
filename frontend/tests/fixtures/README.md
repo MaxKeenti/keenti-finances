@@ -134,3 +134,11 @@ Known limits: the fixture server is read-only, so POST/PUT/DELETE actions answer
 `FX-RECORDING-01` extends the empty-Box/negative-Available scenario with 31 synthetic transactions and account/category reads. Searching `needle` finds the last transaction before pagination. `/transactions?expenseFromBox=9205` opens an expense draft with the empty Box selected, without saving. Remove its zero allocation to record an unfunded expense: 100.00 changes projected Available from −700.00 to −800.00. Request-level tests cover no funding, 60.00 funding, and 100.00 funding as a single Transaction POST (never a second withdrawal). The HTTP fixture server remains read-only.
 
 The receivables fixture also supplies Contacts, a long-name Trash item, and debt 9904 with payment 9708 linking to transaction 9612 for read-only browser navigation checks.
+
+### Credit detail verification
+
+`FX-CREDIT-INFAVOR-STMT-01` also supplies the account detail, empty activity,
+empty archived-account list, MSI list, and the next statement estimate. Open
+`/accounts/9112` to verify the positive credit position alongside the unpaid
+confirmed statement, then open and cancel the contextual card-payment form.
+The fixture server remains read-only; it cannot record a Transfer.

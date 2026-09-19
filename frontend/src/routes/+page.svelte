@@ -5,8 +5,11 @@
 	import { MonthlyBarChart, NetTrendChart } from '$lib/components/dashboard';
 	import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import { SectionUnavailable } from '$lib/components/section-status';
+	import { NetBalanceNote, ShortfallAlert } from '$lib/components/balance';
 	import { mxnFormatter } from '$lib/formatting';
 	import { sectionValue } from '$lib/types/section';
+	import { accountStatementPaymentStatus } from '$lib/obligation-status';
+	import { statementAmountLabel, statementStateLabel } from '$lib/statement-labels';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -22,8 +25,47 @@
 	// zero balance, so nothing below renders a total from a missing summary.
 	const summary = $derived(sectionValue(data.summary));
 	const warnings = $derived(sectionValue(data.accountWarnings));
+	// The tracking read is independent of the balance read: either can fail
+	// alone, and neither failure may produce a zero or a guessed formula.
+	const tracking = $derived(sectionValue(data.accountTracking));
 	const isUnreconciled = $derived(summary !== null && summary.availableToSpend < 0);
 	const accountWarnings = $derived(warnings?.items ?? []);
+
+	// One captured instant per render, resolved in the User's own time zone:
+	// the same moment is 7 September in Mexico City and 8 September in Tokyo,
+	// so a due date compared against the browser's day can read "past due" a
+	// day early (decision D2).
+	const today = $derived(data.obligationToday);
+	// Each Credit Financial Account contributes the one statement that most
+	// needs attention, plus every statement flagged for reconciliation review.
+	const statementAccounts = $derived(
+		(warnings?.statementAccounts ?? []).map((entry) => ({
+			entry,
+			...accountStatementPaymentStatus({
+				statements: entry.statements,
+				today,
+				read: (statement) => statement,
+			}),
+		})),
+	);
+	// A covered statement stays out of the attention list rather than being
+	// reported as an obligation.
+	const statementRows = $derived(
+		statementAccounts.filter(
+			({ entry, status }) => entry.statements.length > 0 && status.state !== 'covered',
+		),
+	);
+	// Reconciliation mismatch is an independent review notice (D2), so it is
+	// listed from every flagged statement rather than from the one the attention
+	// slot happened to select. Filtering covered statements out first — or
+	// reading the mismatch flag off the selected statement only — silently drops
+	// the notice for a paid-but-mismatched statement and for any statement that
+	// lost the priority sort.
+	const mismatchRows = $derived(
+		statementAccounts.flatMap(({ entry, mismatches }) =>
+			mismatches.map(({ statement, status }) => ({ entry, statement, status })),
+		),
+	);
 	// "Partial" means some of this page loaded and some did not. When nothing
 	// loaded the sections say so individually, and when only the warning list is
 	// incomplete its own notice is more specific than this one.
@@ -51,20 +93,44 @@
 		<p class="text-sm text-muted-foreground">{m.section_warnings_partial()}</p>
 	{/if}
 
-	{#if isUnreconciled || accountWarnings.length > 0}
+	{#if isUnreconciled || accountWarnings.length > 0 || statementRows.length > 0 || mismatchRows.length > 0}
 		<div class="space-y-3">
-			{#if isUnreconciled && summary}
-				<Alert.Root variant="destructive">
+			<!-- Over-reserving and a negative Net Balance are told apart here, and
+			     a withdrawal is only suggested when a Box actually holds money. -->
+			<ShortfallAlert totals={summary} format={mxn} />
+
+			<!-- Confirmed statement payments are their own obligation. They are
+			     never folded into Available to Spend: the purchases behind them
+			     already moved Net Balance and are not subtracted twice. -->
+			{#each statementRows as { entry, status } (entry.accountId)}
+				<Alert.Root variant={status.state === 'outstanding-upcoming' ? 'default' : 'destructive'}>
 					<AlertTriangle aria-hidden="true" />
-					<Alert.Title>{m.balance_reconciliation_required()}</Alert.Title>
-					<Alert.Description>
-							{m.balance_reconciliation_description({ amount: mxn(Math.abs(summary.availableToSpend)) })}
+					<Alert.Title>{entry.accountName} · {statementStateLabel(status.state)}</Alert.Title>
+					<Alert.Description class="space-y-1">
+						{#if statementAmountLabel(status, mxn, data.preferences.locale)}
+							<p>{statementAmountLabel(status, mxn, data.preferences.locale)}</p>
+						{/if}
+						<p>{m.statement_not_subtracted_note()}</p>
 					</Alert.Description>
 					<Alert.Action>
-						<Button href="/boxes" size="sm" variant="outline">{m.balance_reconcile_action()}</Button>
+						<Button href={entry.href} size="sm" variant="outline">{m.statement_action_review()}</Button>
 					</Alert.Action>
 				</Alert.Root>
-			{/if}
+			{/each}
+
+			<!-- Independent review notices: they neither replace a payment state
+			     above nor declare the bank's snapshot wrong, so they are listed
+			     for every flagged statement — including covered ones. -->
+			{#each mismatchRows as { entry, statement, status } (statement.id)}
+				<Alert.Root>
+					<AlertTriangle aria-hidden="true" />
+					<Alert.Title>{m.balance_mismatch_title({ name: entry.accountName })}</Alert.Title>
+					<Alert.Description>{m.balance_mismatch_description({ amount: mxn(Math.abs(status.mismatchAmount ?? 0)) })}</Alert.Description>
+					<Alert.Action>
+						<Button href={entry.href} size="sm" variant="outline">{m.balance_mismatch_action()}</Button>
+					</Alert.Action>
+				</Alert.Root>
+			{/each}
 
 			{#each accountWarnings as warning}
 				<Alert.Root variant="destructive">
@@ -94,7 +160,9 @@
 				</Card.Title>
 			</Card.Header>
 			<Card.Content>
-				<p class="text-xs text-muted-foreground">{m.dashboard_net_balance_description()}</p>
+				<!-- Which formula produced this total is a fact about the User's
+				     setup, not something to infer from the total itself. -->
+				<NetBalanceNote {tracking} />
 			</Card.Content>
 		</Card.Root>
 
@@ -124,6 +192,11 @@
 				</Card.Header>
 				<Card.Content>
 					<p class="text-xs text-muted-foreground">{m.dashboard_available_to_spend_description()}</p>
+					<!-- Explicitly not a cash forecast: unrecorded future essentials,
+					     subscriptions and expected receipts are not subtracted here,
+					     and an already-recorded card purchase is not subtracted a
+					     second time by an unpaid statement. -->
+					<p class="mt-1 text-xs text-muted-foreground">{m.balance_available_note()}</p>
 				</Card.Content>
 			</Card.Root>
 		</div>
