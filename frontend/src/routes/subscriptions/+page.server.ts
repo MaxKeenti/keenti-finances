@@ -6,6 +6,18 @@ import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 import { dateInTimeZone } from '$lib/formatting';
+import { loadSection } from '$lib/server/section-load';
+import {
+	parseCategories,
+	parseContacts,
+	parseMembers,
+	parseSubscriptions,
+	type CategorySummary,
+	type ContactSummary,
+	type MemberResponse,
+	type Subscription,
+} from '$lib/server/payloads';
+import { sectionOk, sectionUnavailable, type Section } from '$lib/types/section';
 
 const subscriptionSchema = z.object({
 	id: z.coerce.number().optional(),
@@ -20,28 +32,17 @@ const subscriptionSchema = z.object({
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
-type Category = { id: number; name: string; type: string };
-type Contact = { id: number; name: string; phone: string | null; email: string | null };
-type MemberResponse = {
-	id: number;
-	subscriptionId: number;
-	contactId: number | null;
-	contactName: string | null;
-	shareAmount: number | null;
-	createdAt: string;
-};
-type Subscription = {
-	id: number;
-	name: string;
-	cost: number;
-	billingCycle: string;
-	type: string;
-	categoryId: number | null;
-	nextBillingDate: string;
-	tokenUuid: string | null;
-	ownerParticipates: boolean | null;
-	createdAt: string;
-	members?: MemberResponse[];
+/**
+ * One Subscription on the list, with its member list resolved separately.
+ *
+ * `members` is a section rather than an array: before Slice 3B a failed member
+ * request became `[]`, which the card rendered as "Members: 0" and the member
+ * dialog as "no members yet" — a claim about the User's Subscription that the
+ * failed request never supported. `PERSONAL` Subscriptions have no member list
+ * to read at all, which is why it is optional.
+ */
+export type SubscriptionListItem = Subscription & {
+	members?: Section<MemberResponse[]>;
 };
 
 export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
@@ -51,43 +52,52 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 		? { Authorization: `Bearer ${accessToken}` }
 		: {};
 
-	let subscriptions: Subscription[] = [];
-	let categories: Category[] = [];
-	let contacts: Contact[] = [];
+	// Each list reports its own availability. A failed Subscriptions request
+	// used to fall through to `[]`, which the page then totalled into a
+	// confident $0.00 monthly commitment.
+	const [subscriptionsSection, categories, contacts] = await Promise.all([
+		loadSection<Subscription[]>(fetch, `${BACKEND}/api/subscriptions`, {
+			parse: parseSubscriptions,
+			headers: authHeaders,
+			label: 'subscriptions',
+		}),
+		loadSection<CategorySummary[]>(fetch, `${BACKEND}/api/categories`, {
+			parse: parseCategories,
+			headers: authHeaders,
+			label: 'subscriptions/categories',
+		}),
+		loadSection<ContactSummary[]>(fetch, `${BACKEND}/api/contacts`, {
+			parse: parseContacts,
+			headers: authHeaders,
+			label: 'subscriptions/contacts',
+		}),
+	]);
 
-	try {
-		const [subRes, catRes, conRes] = await Promise.all([
-			fetch(`${BACKEND}/api/subscriptions`, { headers: authHeaders }),
-			fetch(`${BACKEND}/api/categories`, { headers: authHeaders }),
-			fetch(`${BACKEND}/api/contacts`, { headers: authHeaders }),
-		]);
-
-		if (subRes.ok) subscriptions = await subRes.json();
-		else console.error(`[subscriptions] load: backend returned ${subRes.status} for subscriptions`);
-
-		if (catRes.ok) categories = await catRes.json();
-		else console.error(`[subscriptions] load: backend returned ${catRes.status} for categories`);
-
-		if (conRes.ok) contacts = await conRes.json();
-		else console.error(`[subscriptions] load: backend returned ${conRes.status} for contacts`);
-
-		// Fetch members for shared subscriptions
-		const sharedSubs = subscriptions.filter((s) => s.type === 'SHARED');
-		if (sharedSubs.length > 0) {
-			const memberResults = await Promise.all(
-				sharedSubs.map((s) =>
-					fetch(`${BACKEND}/api/subscriptions/${s.id}/members`, { headers: authHeaders }).then(
-						(r) => (r.ok ? r.json() : []),
-					),
+	let subscriptions: Section<SubscriptionListItem[]>;
+	if (subscriptionsSection.status !== 'ok') {
+		subscriptions = sectionUnavailable(subscriptionsSection.reason);
+	} else {
+		const items: SubscriptionListItem[] = subscriptionsSection.data.map((subscription) => ({
+			...subscription,
+		}));
+		const shared = items.filter((item) => item.type === 'SHARED');
+		const memberSections = await Promise.all(
+			shared.map((item) =>
+				loadSection<MemberResponse[]>(
+					fetch,
+					`${BACKEND}/api/subscriptions/${item.id}/members`,
+					{
+						parse: parseMembers,
+						headers: authHeaders,
+						label: `subscriptions/${item.id}/members`,
+					},
 				),
-			);
-			sharedSubs.forEach((s, i) => {
-				const sub = subscriptions.find((x) => x.id === s.id);
-				if (sub) sub.members = memberResults[i];
-			});
-		}
-	} catch {
-		console.error('[subscriptions] load: backend unreachable');
+			),
+		);
+		shared.forEach((item, index) => {
+			item.members = memberSections[index];
+		});
+		subscriptions = sectionOk(items);
 	}
 
 	// `toISOString()` is the UTC date, which is already tomorrow for a

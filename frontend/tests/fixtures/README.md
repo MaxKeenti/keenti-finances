@@ -58,6 +58,7 @@ Prerequisites for 2A/2B, 3A/3B, and Phase 4.
 | `FX-BOX-NOPLAN-01` | Unplanned Box beside an unreadable one | Box 9214 has an empty plan list; Box 9215's plan route is the one a test or `FIXTURE_FAIL` makes fail. Net 2,400.00; In Boxes 900.00; Available 1,500.00 | 2A (absent vs unavailable) |
 | `FX-SUB-SHARED-OWNER-PARTIAL-01` | Shared subscription, Owner participates | Subscription 9406, cost 600.00 split three ways at 200.00; expected contributions 400.00, collected 200.00, outstanding 200.00; own share 200.00 | 3B |
 | `FX-SUB-SHARED-MIDDLEMAN-PARTIAL-01` | Shared subscription, middleman mode | Subscription 9407, cost 600.00 split between two Members at 300.00; expected 600.00, collected 300.00, outstanding 300.00; own share 0.00 | 3B |
+| `FX-SUB-LIST-01` | Subscriptions overview | Subscriptions 9408 (Shared monthly 600.00, 2 members at 200.00), 9409 (Shared monthly 150.00, no members, middleman), 9410 (Personal yearly 1,200.00); monthly price equivalent 850.00, yearly 10,200.00 | 3B |
 | `FX-CREDIT-INFAVOR-STMT-01` | Credit in favor with an unpaid statement | Account 9112 at +85.00, limit 12,000.00, available credit 12,085.00; statement 9303 outstanding 640.00 due 2026-09-20; Net 1,085.00 | 3A |
 | `FX-DASH-NEG-01` | Positive Net Balance, excessive reserves | See below | Phase 4 |
 
@@ -76,9 +77,19 @@ Prerequisites for 2A/2B, 3A/3B, and Phase 4.
 
 Arithmetic the fixture asserts: `4,120.50 + 55.50 = 4,176.00`; `4,176.00 − 5,300.00 = −1,124.00`; `9,000.00 + 55.50 = 9,055.50`. The 310.25 confirmed statement payment is a separately identified obligation and is never subtracted from Net Balance. Available credit is limit-derived capacity and never enters money held, Net Balance, In Boxes, or Available to Spend. Its figures are deliberately distinct from `FX-BAL-OVERRESERVED-01`, which does not substitute for it.
 
+### Subscriptions overview verification
+
+`FX-SUB-LIST-01` serves the overview's three reads (`/api/subscriptions`,
+`/api/categories`, `/api/contacts`) plus the member lists of its two Shared
+Subscriptions. Open `/subscriptions` to see the price-equivalent card, the
+member-less **Add members** action, and — with
+`FIXTURE_FAIL='GET /api/subscriptions=500'` — the unavailable list that shows
+no totals instead of `$0.00`. `FIXTURE_FAIL='GET /api/subscriptions/9408/members=503'`
+shows an unavailable member count beside a Subscription whose member list loaded.
+
 ### Reserved ID ranges
 
-Accounts `91xx`, boxes `92xx`, credit statements `93xx`, subscriptions/members/payments `94xx`, contacts `95xx`, transactions `96xx`, debt payments `97xx`, debts `99xx`. Slice 0B additionally uses box plans `925x`, Saving Goal periods `926x`, and plan revisions `927x`.
+Accounts `91xx`, boxes `92xx`, credit statements `93xx`, subscriptions/members/payments `94xx`, contacts `95xx`, transactions `96xx`, debt payments `97xx`, categories `98xx`, debts `99xx`. Slice 0B additionally uses box plans `925x`, Saving Goal periods `926x`, and plan revisions `927x`.
 
 ## Clock and time-zone inputs
 

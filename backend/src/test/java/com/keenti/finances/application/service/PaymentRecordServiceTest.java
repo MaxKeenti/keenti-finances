@@ -47,8 +47,11 @@ class PaymentRecordServiceTest {
         LocalDate txDate = LocalDate.now().minusDays(2);
         TransactionEntity tx = ingressTransaction(user, "Netflix", "50.00", txDate);
 
+        long transactionCount = TransactionEntity.count("user.id = ?1", user.id);
         PaymentRecord updated = paymentRecordService.linkTransaction(sub.id, record.id, tx.id);
 
+        assertEquals(transactionCount, TransactionEntity.count("user.id = ?1", user.id),
+            "linking existing income must not record another Transaction");
         assertEquals("PAID", updated.getStatus());
         assertEquals(txDate, updated.getPaidDate(), "paidDate follows the transaction date");
         assertEquals(tx.id, updated.getTransactionId());
@@ -137,6 +140,27 @@ class PaymentRecordServiceTest {
         assertEquals(2, PaymentRecordEntity.count("subscription.id = ?1", sub.id));
         assertEquals(first.id, PaymentRecordEntity.<PaymentRecordEntity>findById(first.id).id);
         assertEquals(second.id, PaymentRecordEntity.<PaymentRecordEntity>findById(second.id).id);
+    }
+
+    @Test
+    @Transactional
+    void markingAContributionReceivedDoesNotCreateIncome() {
+        UserEntity user = ensureUser("test-mark-received-no-income");
+        SubscriptionEntity sub = sharedSubscription(user);
+        SubscriptionMemberEntity member = member(sub, contact(user, "Member H"));
+        PaymentRecordEntity record = pendingRecord(sub, member, "50.00");
+        long before = TransactionEntity.count("user.id = ?1", user.id);
+
+        PaymentRecord updated = paymentRecordService.recordPayment(sub.id, record.id);
+        em.flush();
+
+        assertEquals("PAID", updated.getStatus());
+        assertNull(updated.getTransactionId());
+        assertEquals(before, TransactionEntity.count("user.id = ?1", user.id),
+            "marking received only updates the Payment Record; income must be recorded separately");
+        WebApplicationException duplicate = assertThrows(WebApplicationException.class,
+            () -> paymentRecordService.recordPayment(sub.id, record.id));
+        assertEquals(409, duplicate.getResponse().getStatus());
     }
 
     // --- fixtures ---
