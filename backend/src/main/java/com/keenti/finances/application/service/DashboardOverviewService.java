@@ -426,7 +426,8 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
         boolean partial = false;
 
         List<Debt> active = debtRepository.findAll().stream()
-            .filter(debt -> "ACTIVE".equals(debt.getStatus()))
+            .filter(debt -> "ACTIVE".equals(debt.getStatus())
+                && "INGRESS".equals(debt.getDirection()))
             .toList();
         Map<Long, BigDecimal> paidByDebt =
             debtPaymentRepository.sumByDebtIds(active.stream().map(Debt::getId).toList());

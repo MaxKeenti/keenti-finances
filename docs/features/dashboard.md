@@ -157,9 +157,10 @@ is the wrong offer for a plan we failed to understand.
 Recorded as owed to the User and **not received**. None of it is added to Net
 Balance, In Boxes or Available to Spend.
 
-- Outstanding `ACTIVE` Debts: `totalAmount − Σ Debt Payments`, listed only when
+- Outstanding `ACTIVE` Debts with Direction `INGRESS` (ADR-0023): `totalAmount − Σ Debt Payments`, listed only when
   something is still owed. A Debt whose payments already cover it is excluded
-  whatever its stored status says.
+  whatever its stored status says. `EGRESS` Debts describe what the User owes
+  and are excluded from money expected; the two directions are never netted.
 - Positive-amount `PENDING` Payment Records belonging to a Subscription Member.
   Zero-amount rows are omitted because this section counts money still owed,
   rather than every open Payment Record. They stay
@@ -221,7 +222,7 @@ database, so they run in CI.
 
 ## Source anchors
 
-- `CONTEXT.md`: Net Balance, In Boxes, Available to Spend, Box Plan, Debt.
+- `CONTEXT.md`: Net Balance, In Boxes, Available to Spend, Box Plan, Debt Direction.
 - ADR-0019 (manual billing generation), ADR-0021 (plans are guidance),
   ADR-0022 (signed ledger and statement snapshots), ADR-0011/0014 (user scope).
 - `docs/decisions/balance-presentation.md` (D1), `obligation-status.md` (D2).

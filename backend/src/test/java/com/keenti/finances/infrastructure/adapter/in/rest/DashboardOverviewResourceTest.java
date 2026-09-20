@@ -70,6 +70,13 @@ class DashboardOverviewResourceTest {
         assertEquals(-1124.00, amount(body, "position.data.availableToSpend"), CENT);
         // Limit-derived capacity: 9,000.00 + 55.50, floored at zero.
         assertEquals(9055.50, amount(body, "position.data.availableCredit"), CENT);
+
+        createAccount(user, "Other credit account", "CREDIT", "-200.00");
+        JsonPath mixed = overview(user);
+        assertEquals(200.00, amount(mixed, "position.data.creditDebt"), CENT);
+        assertEquals(55.50, amount(mixed, "position.data.creditInFavor"), CENT);
+        assertEquals(3976.00, amount(mixed, "position.data.netBalance"), CENT);
+        assertEquals(-1324.00, amount(mixed, "position.data.availableToSpend"), CENT);
     }
 
     /**
@@ -300,6 +307,22 @@ class DashboardOverviewResourceTest {
         JsonPath body = overview(user);
         assertEquals(0, body.getInt("expected.data.debtCount"));
         assertEquals(0.0, amount(body, "expected.data.debtsOutstanding"), CENT);
+    }
+
+    @Test
+    void excludesWhatTheUserOwesFromExpectedMoney() {
+        String user = newUser("overview-debt-directions");
+        long contact = createContact(user, "Both directions");
+        createDebt(user, contact, "300.00");
+        given().header("X-WorkOS-User-Id", user).contentType(ContentType.JSON)
+            .body(Map.of("contactId", contact, "direction", "EGRESS",
+                "description", "User owes the same contact", "totalAmount", "500.00"))
+            .when().post("/api/debts").then().statusCode(201);
+
+        JsonPath body = overview(user);
+        assertEquals(1, body.getInt("expected.data.debtCount"));
+        assertEquals(300.00, amount(body, "expected.data.debtsOutstanding"), CENT);
+        assertEquals(0.00, amount(body, "position.data.netBalance"), CENT);
     }
 
     /**

@@ -261,9 +261,10 @@ class DashboardOverviewServiceTest {
     void contributionFailureKeepsDebtTotalAndWithholdsContributionFigure() {
         quietWorld();
         on(DebtRepository.class, "findAll", List.of(
-            new Debt(1L, 10L, "Loan to Ana", money("300.00"), "ACTIVE", null),
-            new Debt(2L, null, "Settled", money("100.00"), "ACTIVE", null),
-            new Debt(3L, 10L, "Closed", money("999.00"), "PAID", null)));
+            new Debt(1L, 10L, "INGRESS", "Loan to Ana", money("300.00"), "ACTIVE", null),
+            new Debt(2L, null, "INGRESS", "Settled", money("100.00"), "ACTIVE", null),
+            new Debt(3L, 10L, "INGRESS", "Closed", money("999.00"), "PAID", null),
+            new Debt(4L, 10L, "EGRESS", "User owes", money("500.00"), "ACTIVE", null)));
         on(DebtPaymentRepository.class, "sumByDebtIds",
             Map.of(1L, money("100.00"), 2L, money("100.00")));
         on(ContactRepository.class, "findAll", List.of(new Contact(10L, "Ana", null, null)));
