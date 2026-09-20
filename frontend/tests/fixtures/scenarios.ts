@@ -2273,7 +2273,6 @@ const dashboardNegativeAvailable: Scenario = {
 						remainingAmount: 4_200,
 						progressPercent: 30,
 						currentCommitment: 1_400,
-						suggestedContribution: 1_400,
 						arrears: 0,
 						// min(currentCommitment, remainingAmount): the Saving Goal's
 						// counterpart to suggestedTopUp, so a goal near its target is
