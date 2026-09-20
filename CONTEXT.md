@@ -11,7 +11,7 @@ A single movement of money, in or out. Once a User activates Financial Account t
 _Avoid_: Entry, record, line item.
 
 **Direction**:
-The orientation of a Transaction. `INGRESS` is money coming in; `EGRESS` is money going out. A Category also has a Direction (`INGRESS`, `EGRESS`, or `BOTH`) that constrains which Transactions can use it.
+The orientation of a Transaction. `INGRESS` is money coming in; `EGRESS` is money going out. A Category also has a Direction (`INGRESS`, `EGRESS`, or `BOTH`) that constrains which Transactions can use it, and a Debt has one too — see Debt Direction.
 _Avoid_: Type (overloaded — see Subscription Type), in/out, debit/credit, income/expense (use INGRESS/EGRESS in code; "income" and "expense" are fine in user-facing copy).
 
 **Category**:
@@ -71,7 +71,7 @@ A dated internal allocation that deposits into, withdraws from, or transfers bet
 _Avoid_: Transaction, transfer Transaction, saving Transaction.
 
 **Box Funding**:
-The amount of an EGRESS Transaction paid from a Box. One Transaction may have Box Funding from several Boxes; any remainder is paid from Available to Spend. Box Funding is part of the Transaction correction lifecycle and is reversed when that Transaction is deleted.
+The amount of an EGRESS Transaction paid from a Box. One Transaction may have Box Funding from several Boxes; any remainder is paid from Available to Spend. Box Funding is part of the Transaction correction lifecycle and is reversed when that Transaction is deleted. A Debt Payment on a Debt the User owes may carry Box Funding, because the Transaction it creates is an ordinary EGRESS (ADR-0023); a bulk payment may not.
 _Avoid_: Category (what the spending was for), Box Movement (an independent internal allocation).
 
 **Box Plan**:
@@ -127,12 +127,19 @@ _Avoid_: Share link, member portal.
 ### Debts
 
 **Debt**:
-A standalone amount of money owed **to the User**, tracked outside Subscriptions. Has a status (`ACTIVE` / `PAID`) and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled.
-**Debt** stays the domain and code term; user-facing copy calls it "Money owed to you" / "Te deben" so receivables read as distinct from credit the User owes. Decision D4, authorized by the product owner's continuation of the UX/UI execution plan on 10 September 2026.
-_Avoid_: Loan, IOU, invoice; in user-facing copy, "Debts" alone (ambiguous with credit owed by the User).
+A standalone amount of money owed between the User and a Contact, tracked outside Subscriptions. It carries a Direction, a status (`ACTIVE` / `PAID`), and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled. The Direction is frozen once any Debt Payment exists (ADR-0023).
+_Avoid_: Loan, IOU, invoice, receivable, payable.
+
+**Debt Direction**:
+A Debt's orientation, reusing the Transaction Direction values: `INGRESS` means the Contact owes the User, `EGRESS` means the User owes the Contact. It is also the Direction of the Transaction each Debt Payment creates. User-facing copy names each side — "Owed to you" / "Te deben" and "You owe" / "Tú debes" — under one section called "Debts" / "Deudas" (ADR-0023, revisiting decision D4 of 10 September 2026).
+_Avoid_: Receivable/payable, debt type, sign, positive/negative debt.
+
+**Debt Counterpart**:
+One Contact on one side of the Debts page: every outstanding Debt of a single Direction with a single Contact, added up. A Contact who both owes the User and is owed by them is two Debt Counterparts, never one netted balance. A Debt with no Contact is its own Debt Counterpart.
+_Avoid_: Debtor/creditor in code (both are Debt Counterparts; the two words are fine in user-facing copy for the INGRESS and EGRESS sides respectively), counterparty.
 
 **Debt Payment**:
-A single partial payment toward a Debt. Recording a Debt Payment automatically creates a corresponding INGRESS Transaction so the dashboard reflects the income without manual double-entry.
+A single partial payment toward a Debt. Recording a Debt Payment automatically creates a corresponding Transaction, in the Debt's own Direction, so the dashboard reflects the money movement without manual double-entry.
 _Avoid_: Repayment, instalment.
 
 ### Identity
@@ -147,12 +154,13 @@ _Avoid_: tenant, customer.
 - **"Member"** on its own is ambiguous. **User** is an authenticated identity; **Subscription Member** is a (usually non-User) person who owes a split on a Shared Subscription. They share no schema.
 - **"Type"** is overloaded across the codebase (Direction, Subscription Type). When writing, name the field: "Subscription Type" or "Direction", never bare "type".
 - **"Income" / "Expense"** are fine in user-facing copy but the canonical internal terms are **INGRESS** and **EGRESS**.
+- **"Debt"** on its own no longer implies a side. Since ADR-0023 a Debt may be owed to the User or by them, so say **Debt Direction**, or name the side, whenever it matters.
 
 ## Example dialogue
 
 > **Dev:** When a Debt Payment comes in, do we generate an invoice?
 >
-> **Domain:** No — there's no Invoice in this app. The Debt itself is the thing that's owed. A Debt Payment just records a partial settlement against it and creates an INGRESS Transaction. The dashboard picks up the Transaction; the Debt's status flips to PAID once the running total catches up.
+> **Domain:** No — there's no Invoice in this app. The Debt itself is the thing that's owed. A Debt Payment just records a partial settlement against it and creates a Transaction in the Debt's own Direction — INGRESS if they owe you, EGRESS if you owe them. The dashboard picks up the Transaction; the Debt's status flips to PAID once the running total catches up.
 >
 > **Dev:** And for Subscriptions — the monthly billing thing — that's also not an invoice?
 >

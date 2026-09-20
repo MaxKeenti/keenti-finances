@@ -14,7 +14,18 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, mxnFormatter, dateInTimeZone } from '$lib/formatting';
+	import { debtDirection } from '$lib/debts';
+	import { BoxAllocationEditor } from '$lib/components/transactions';
+	import { SectionUnavailable } from '$lib/components/section-status';
+	import { boxAllocationSchema } from '$lib/schemas/transaction';
+	import {
+		allocationTotal,
+		amountToCents,
+		hasAtMostTwoDecimalPlaces,
+		type BoxAllocationInput,
+	} from '$lib/types/transactions';
+	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
@@ -23,6 +34,7 @@
 		paymentDate: z.string().min(1, m.validation_payment_date_required()),
 		categoryId: z.coerce.number().positive(m.validation_category_required()),
 		notes: z.string().optional(),
+		boxFunding: z.array(boxAllocationSchema).default([]),
 	});
 
 	type DebtPayment = {
@@ -54,6 +66,12 @@
 
 	const isPaid = $derived(data.debt.status === 'PAID');
 
+	// The Debt's Direction decides what a payment does: money owed to the User
+	// comes in, money the User owes goes out (ADR-0023). Everything on this card
+	// that names a Direction follows from it.
+	const direction = $derived(debtDirection(data.debt.direction));
+	const owedByUser = $derived(direction === 'EGRESS');
+
 	type RecordedPayment = { debtId: number; paymentId: number | null; amount: number; transactionId: number | null };
 
 	// The Transaction that saving created, kept on the page after the toast is
@@ -84,9 +102,43 @@
 
 	const { form, errors, enhance, submitting } = sf;
 
-	const ingressCategories = $derived(
+	const today = $derived(dateInTimeZone(data.preferences.timeZone));
+	// Editing funding needs Available to Spend to project against; without it the
+	// editor is withheld rather than shown with a guessed limit.
+	const availableBalance = $derived(sectionValue(data.balanceSummary));
+
+	function setBoxFunding(allocations: BoxAllocationInput[]) {
+		$form.boxFunding = allocations;
+	}
+
+	// The same conditions the editor already renders inline, gathered so an
+	// unpayable allocation cannot be submitted just because a message is hidden.
+	const fundingInvalid = $derived.by(() => {
+		if (!owedByUser || $form.boxFunding.length === 0) return false;
+		if ($form.paymentDate > today) return true;
+		if (
+			$form.boxFunding.some(
+				(allocation) => allocation.amount <= 0 || !hasAtMostTwoDecimalPlaces(allocation.amount),
+			)
+		) {
+			return true;
+		}
+		if (amountToCents(allocationTotal($form.boxFunding)) > amountToCents($form.amount)) return true;
+		return $form.boxFunding.some((allocation) => {
+			const balance = data.boxes.find((box) => box.id === allocation.boxId)?.balance ?? 0;
+			return amountToCents(allocation.amount) > amountToCents(balance);
+		});
+	});
+
+	// Money coming in is not spending, so a receivable's payment never carries
+	// funding — including any left behind by a direction that changed underneath.
+	$effect(() => {
+		if (!owedByUser && $form.boxFunding.length > 0) setBoxFunding([]);
+	});
+
+	const paymentCategories = $derived(
 		(data.categories as Category[])
-			.filter((c) => c.type === 'INGRESS' || c.type === 'BOTH')
+			.filter((c) => c.type === direction || c.type === 'BOTH')
 			.sort((a, b) => a.name.localeCompare(b.name)),
 	);
 
@@ -118,7 +170,12 @@
 					</h1>
 					<p class="text-sm text-muted-foreground mt-0.5">{data.debt.description}</p>
 				</div>
-				<Badge variant={statusBadgeVariant[data.debt.status]}>{debtStatusLabel(data.debt.status)}</Badge>
+				<div class="flex shrink-0 items-center gap-2">
+					<Badge variant="outline" class={owedByUser ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+						{owedByUser ? m.debts_badge_you_owe() : m.debts_badge_owes_you()}
+					</Badge>
+					<Badge variant={statusBadgeVariant[data.debt.status]}>{debtStatusLabel(data.debt.status)}</Badge>
+				</div>
 			</div>
 
 			<!-- Balance breakdown -->
@@ -135,7 +192,7 @@
 				</div>
 				<div>
 					<p class="text-muted-foreground">{m.common_remaining()}</p>
-					<p class="text-lg font-semibold text-amber-600 dark:text-amber-400">
+					<p class="text-lg font-semibold {owedByUser ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}">
 						{fmt.format(data.debt.remaining)}
 					</p>
 				</div>
@@ -255,13 +312,13 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
-								<Form.Label>{m.common_ingress_category()}</Form.Label>
+								<Form.Label>{owedByUser ? m.common_egress_category() : m.common_ingress_category()}</Form.Label>
 								<NativeSelect
 									name={fieldName}
 									value={$form.categoryId > 0 ? String($form.categoryId) : ''}
 									onValueChange={(v) => { $form.categoryId = v ? Number(v) : 0; }}
 									placeholder={m.common_select_category()}
-									items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
+									items={paymentCategories.map(c => ({ value: String(c.id), label: c.name }))}
 									{...triggerProps}
 								/>
 							{/snippet}
@@ -276,7 +333,7 @@
 							<Form.Control>
 								{#snippet children({ props })}
 									{@const { name: fieldName, ...triggerProps } = props}
-									<Form.Label>{m.debts_receiving_account()}</Form.Label>
+									<Form.Label>{owedByUser ? m.debts_paying_account() : m.debts_receiving_account()}</Form.Label>
 									<NativeSelect name={fieldName} value={$form.accountId ? String($form.accountId) : ''} onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
 								{/snippet}
 							</Form.Control>
@@ -299,12 +356,42 @@
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<p class="text-sm text-muted-foreground">{m.debts_payment_creates_income()}</p>
+					{#if owedByUser}
+						{#if availableBalance === null}
+							<SectionUnavailable
+								compact
+								title={m.section_balance_unavailable()}
+								description={m.section_box_funding_unavailable()}
+							/>
+						{:else}
+							<BoxAllocationEditor
+								kind="funding"
+								boxes={data.boxes}
+								allocations={$form.boxFunding}
+								onChange={setBoxFunding}
+								transactionAmount={$form.amount}
+								transactionDate={$form.paymentDate}
+								{today}
+								availableBefore={availableBalance.availableToSpend}
+								locale={data.preferences.locale}
+								categoryName={data.categories.find((category) => category.id === $form.categoryId)?.name ?? null}
+								disabled={isPaid}
+							/>
+						{/if}
+					{/if}
+
+					<p class="text-sm text-muted-foreground">
+						{owedByUser ? m.debts_payment_creates_expense() : m.debts_payment_creates_income()}
+					</p>
 
 					{#if recordedPayment && recordedPayment.debtId === data.debt.id}
 						<div class="rounded-md border border-money-positive/40 bg-money-positive/5 p-3 text-sm" role="status">
 							{#if recordedPayment.transactionId}
-								<p>{m.debts_payment_created_transaction({ amount: fmt.format(recordedPayment.amount) })}</p>
+								<p>
+									{owedByUser
+										? m.debts_payment_created_expense_transaction({ amount: fmt.format(recordedPayment.amount) })
+										: m.debts_payment_created_transaction({ amount: fmt.format(recordedPayment.amount) })}
+								</p>
 								<a
 									class="font-medium underline underline-offset-4"
 									href="/transactions/{recordedPayment.transactionId}"
@@ -321,7 +408,7 @@
 						</div>
 					{/if}
 
-					<Button type="submit" disabled={isPaid || $submitting || data.accountTracking.setupRequired} class="w-full sm:w-auto">
+					<Button type="submit" disabled={isPaid || $submitting || fundingInvalid || data.accountTracking.setupRequired} class="w-full sm:w-auto">
 						{$submitting ? m.common_recording() : m.common_record_payment()}
 					</Button>
 				</fieldset>

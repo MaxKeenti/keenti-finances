@@ -1,6 +1,7 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
 import com.keenti.finances.application.service.DebtService;
+import com.keenti.finances.domain.model.BoxFunding;
 import com.keenti.finances.domain.model.Contact;
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
@@ -21,6 +22,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.IntStream;
 
 @Path("/api/debts")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -65,7 +68,8 @@ public class DebtResource {
             ? request.createdAt().atStartOfDay()
             : null;
         Debt created = debtUseCase.create(new Debt(
-            null, request.contactId(), request.description(), request.totalAmount(), "ACTIVE", createdAtTs));
+            null, request.contactId(), request.directionOrDefault(), request.description(),
+            request.totalAmount(), "ACTIVE", createdAtTs));
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
@@ -86,8 +90,8 @@ public class DebtResource {
             ? request.createdAt().atStartOfDay()
             : debt.getCreatedAt();
         Debt updated = debtUseCase.update(id, new Debt(
-            id, request.contactId(), request.description(), request.totalAmount(),
-            debt.getStatus(), updatedCreatedAt));
+            id, request.contactId(), request.directionOrDefault(), request.description(),
+            request.totalAmount(), debt.getStatus(), updatedCreatedAt));
         return Response.ok(toResponse(updated)).build();
     }
 
@@ -103,7 +107,7 @@ public class DebtResource {
     public Response recordPayment(@PathParam("id") Long id, @Valid DebtPaymentRequest request) {
         DebtPayment payment = debtUseCase.recordPayment(
             id, request.amount(), request.paymentDate(), request.categoryId(), request.accountId(),
-            request.notes());
+            request.notes(), toBoxFunding(request.boxFundingOrEmpty()));
         return Response.status(Response.Status.CREATED).entity(toPaymentResponse(payment)).build();
     }
 
@@ -127,7 +131,7 @@ public class DebtResource {
                         .build()));
 
         BulkPaymentResult result = debtUseCase.bulkPayment(
-            request.contactId(), request.totalAmount(),
+            request.contactId(), request.directionOrDefault(), request.totalAmount(),
             request.paymentDate(), request.categoryId(), request.accountId(), request.notes());
 
         String contactName = contactUseCase.getById(request.contactId())
@@ -136,6 +140,7 @@ public class DebtResource {
         BulkPaymentResponse response = new BulkPaymentResponse(
             result.contactId(),
             contactName,
+            result.direction(),
             result.totalAmount(),
             result.totalApplied(),
             result.totalUnused(),
@@ -147,6 +152,13 @@ public class DebtResource {
         return Response.ok(response).build();
     }
 
+    private List<BoxFunding> toBoxFunding(List<BoxFundingRequest> funding) {
+        return IntStream.range(0, funding.size())
+            .mapToObj(index -> new BoxFunding(
+                funding.get(index).boxId(), funding.get(index).amount(), index))
+            .toList();
+    }
+
     private DebtResponse toResponse(Debt d) {
         String contactName = d.getContactId() != null
                 ? contactUseCase.getById(d.getContactId()).map(Contact::getName).orElse(null)
@@ -156,7 +168,7 @@ public class DebtResource {
                 : BigDecimal.ZERO;
         BigDecimal remaining = debtService.getRemainingBalance(d.getId());
         return new DebtResponse(
-            d.getId(), d.getContactId(), contactName, d.getDescription(),
+            d.getId(), d.getContactId(), contactName, d.getDirection(), d.getDescription(),
             d.getTotalAmount(), totalPaid, remaining, d.getStatus(), d.getCreatedAt());
     }
 

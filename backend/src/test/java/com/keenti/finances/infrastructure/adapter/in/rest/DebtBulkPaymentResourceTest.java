@@ -92,17 +92,78 @@ class DebtBulkPaymentResourceTest {
             .statusCode(404);
     }
 
+    /**
+     * The same Contact can owe the User and be owed by them. A lump sum settles
+     * the side it names and leaves the other balance untouched (ADR-0023).
+     */
+    @Test
+    void bulkPayment_settlesOnlyTheNamedDirection() {
+        String user = "test-bulk-direction-" + System.nanoTime();
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
+        int categoryId = createCategory(user, "Bulk Category " + System.nanoTime());
+        int contactId = createContact(user, "Two-sided Contact " + System.nanoTime());
+
+        createDebt(user, contactId, "INGRESS", "They owe you", "100.00", "2026-01-01");
+        createDebt(user, contactId, "EGRESS", "You owe them", "80.00", "2026-01-02");
+
+        given()
+            .header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(bulkPaymentBody(contactId, "EGRESS", "200.00", categoryId, String.valueOf(accountId)))
+            .when().post("/api/debts/bulk-payment")
+            .then()
+            .statusCode(200)
+            .body("direction", equalTo("EGRESS"))
+            .body("totalApplied", equalTo(80.00f))
+            .body("totalUnused", equalTo(120.00f))
+            .body("payments.description", contains("You owe them"));
+
+        // The receivable is untouched: it was never in the other side's queue.
+        given()
+            .header("X-WorkOS-User-Id", user)
+            .when().get("/api/debts")
+            .then()
+            .statusCode(200)
+            .body("find { it.description == 'They owe you' }.status", equalTo("ACTIVE"))
+            .body("find { it.description == 'They owe you' }.remaining", equalTo(100.00f))
+            .body("find { it.description == 'You owe them' }.status", equalTo("PAID"));
+    }
+
+    @Test
+    void bulkPayment_contactWithDebtsOnlyInTheOtherDirection_returns400() {
+        String user = "test-bulk-wrong-direction-" + System.nanoTime();
+        long accountId = AccountTrackingTestSupport.cashAccountId(user);
+        int categoryId = createCategory(user, "Bulk Category " + System.nanoTime());
+        int contactId = createContact(user, "One-sided Contact " + System.nanoTime());
+
+        createDebt(user, contactId, "INGRESS", "They owe you", "100.00", "2026-01-01");
+
+        given()
+            .header("X-WorkOS-User-Id", user)
+            .contentType(ContentType.JSON)
+            .body(bulkPaymentBody(contactId, "EGRESS", "50.00", categoryId, String.valueOf(accountId)))
+            .when().post("/api/debts/bulk-payment")
+            .then()
+            .statusCode(400);
+    }
+
     private String bulkPaymentBody(int contactId, String totalAmount, int categoryId, String accountId) {
+        return bulkPaymentBody(contactId, "INGRESS", totalAmount, categoryId, accountId);
+    }
+
+    private String bulkPaymentBody(int contactId, String direction, String totalAmount,
+                                   int categoryId, String accountId) {
         return """
                 {
                   "contactId": %d,
+                  "direction": "%s",
                   "totalAmount": %s,
                   "paymentDate": "2026-09-04",
                   "categoryId": %d,
                   "accountId": %s,
                   "notes": "Bulk settlement"
                 }
-                """.formatted(contactId, totalAmount, categoryId, accountId);
+                """.formatted(contactId, direction, totalAmount, categoryId, accountId);
     }
 
     private int createCategory(String user, String name) {
@@ -126,14 +187,20 @@ class DebtBulkPaymentResourceTest {
     }
 
     private void createDebt(String user, int contactId, String description, String totalAmount, String createdAt) {
+        createDebt(user, contactId, "INGRESS", description, totalAmount, createdAt);
+    }
+
+    private void createDebt(String user, int contactId, String direction, String description,
+                            String totalAmount, String createdAt) {
         String body = """
                 {
                   "contactId": %d,
+                  "direction": "%s",
                   "description": "%s",
                   "totalAmount": %s,
                   "createdAt": "%s"
                 }
-                """.formatted(contactId, description, totalAmount, createdAt);
+                """.formatted(contactId, direction, description, totalAmount, createdAt);
 
         given()
             .header("X-WorkOS-User-Id", user)
