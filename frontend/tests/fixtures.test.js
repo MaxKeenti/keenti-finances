@@ -108,6 +108,29 @@ describe('balance fixtures', () => {
 		expect(statement.mismatchAmount).toBe(125.5);
 		expect(statement.outstandingBalance).toBe(1_250);
 	});
+
+	test('the Phase 4 overview agrees with the manifest figures it documents', async () => {
+		// The manifest, the fixture body and the acceptance assertions all read
+		// `expected`, so none of the three can drift from the other two.
+		const backend = createFixtureBackend('FX-DASH-NEG-01');
+		const { expected } = backend.scenario;
+		const overview = await readJson(backend, '/api/dashboard/overview?year=2026');
+		const position = overview.position.data;
+		const [statement] = overview.attention.data.statements;
+
+		expect(expected.moneyHeld + expected.creditInFavor).toBe(expected.netBalance);
+		expect(expected.netBalance - expected.inBoxes).toBe(expected.availableToSpend);
+		expect(expected.creditLimit + expected.creditInFavor).toBe(expected.availableCredit);
+
+		expect(position.moneyHeld).toBe(expected.moneyHeld);
+		expect(position.creditInFavor).toBe(expected.creditInFavor);
+		expect(position.netBalance).toBe(expected.netBalance);
+		expect(position.inBoxes).toBe(expected.inBoxes);
+		expect(position.availableToSpend).toBe(expected.availableToSpend);
+		expect(position.availableCredit).toBe(expected.availableCredit);
+		// A separately identified obligation, outside every total above.
+		expect(statement.outstandingBalance).toBe(expected.outstandingStatementPayment);
+	});
 });
 
 describe('subscription and debt fixtures', () => {

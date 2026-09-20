@@ -17,7 +17,7 @@ import { load as accountsLoad, actions as accountsActions } from '../src/routes/
 import { load as accountLoad } from '../src/routes/accounts/[id]/+page.server';
 import { accountStatementPaymentStatus } from '../src/lib/obligation-status';
 import { netBalanceSource } from '../src/lib/balance-presentation';
-import { loadScenario } from './fixtures/scenarios';
+import { loadScenario, UNAVAILABLE_SECTION } from './fixtures/scenarios';
 
 function cookies(values = {}) {
 	const store = new Map(Object.entries(values));
@@ -217,36 +217,48 @@ describe('tracking mode is read, never inferred', () => {
 });
 
 describe('dashboard credit obligations', () => {
+	/** One overview body with `attention.statements` replaced. */
+	function withStatements(scenarioId, statements) {
+		const scenario = loadScenario(scenarioId);
+		const body = scenario.routes['GET /api/dashboard/overview'];
+		return {
+			'GET /api/dashboard/overview': {
+				...body,
+				attention: { ...body.attention, data: { ...body.attention.data, statements } },
+			},
+		};
+	}
+
 	test('a confirmed unpaid statement travels up with its figures', async () => {
 		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01');
 		const data = await runDashboard(backend);
 		const { expected } = backend.scenario;
+		const { position, attention } = data.overview.data;
 
-		expect(data.accountWarnings.status).toBe('ok');
-		expect(data.accountWarnings.data.partial).toBe(false);
-		const [entry] = data.accountWarnings.data.statementAccounts;
-		expect(entry.accountId).toBe(expected.accountId);
+		expect(attention.status).toBe('ok');
+		expect(attention.data.partial).toBe(false);
 
 		const { status } = accountStatementPaymentStatus({
-			statements: entry.statements,
+			statements: attention.data.statements,
 			today: '2026-09-07',
 			read: (statement) => statement,
 		});
 		expect(status.state).toBe('outstanding-upcoming');
 		expect(status.outstanding).toBe(expected.outstandingBalance);
 		// Credit in the User's favour and an unpaid statement are both true; the
-		// statement is never netted against the balance or against Net Balance.
-		expect(data.summary.data.netBalance).toBe(expected.netBalance);
+		// statement is netted against neither the balance nor Net Balance.
+		expect(position.data.creditInFavor).toBe(expected.creditInFavor);
+		expect(position.data.netBalance).toBe(expected.netBalance);
+		expect(position.data.availableCredit).toBe(expected.availableCredit);
 		expectReadOnly(backend);
 	});
 
 	test('a mismatched statement keeps its payment state and its own amount', async () => {
 		const backend = createFixtureBackend('FX-STMT-MISMATCH-01');
 		const data = await runDashboard(backend);
-		const [entry] = data.accountWarnings.data.statementAccounts;
 
 		const { status } = accountStatementPaymentStatus({
-			statements: entry.statements,
+			statements: data.overview.data.attention.data.statements,
 			today: '2026-09-07',
 			read: (statement) => statement,
 		});
@@ -256,50 +268,69 @@ describe('dashboard credit obligations', () => {
 		expect(status.outstanding).toBe(backend.scenario.expected.officialBalance);
 	});
 
-	test('an unreadable statement list contributes nothing and marks the page partial', async () => {
-		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01', {
-			failures: { 'GET /api/accounts/9112/credit-statements': { kind: 'status', status: 500 } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings.data.partial).toBe(true);
-		// Silence is not "no payment due": the account is simply absent from the
-		// list the page derives statuses from, and the page says so.
-		expect(data.accountWarnings.data.statementAccounts).toEqual([]);
-	});
-
-	test('a statement missing its due date keeps the amount it still owes', async () => {
-		// The real loader, not the standalone helper: a due date that fails
-		// validation used to fail the whole list, so a card owing 640 rendered
-		// as having nothing confirmed at all. D2 has a state for exactly this.
+	test('an unavailable attention section keeps the position figures', async () => {
+		const scenario = loadScenario('FX-CREDIT-INFAVOR-STMT-01');
 		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01', {
 			routes: {
-				'GET /api/accounts/9112/credit-statements': [
-					{
-						id: 9303,
-						periodStart: '2026-08-06',
-						periodEnd: '2026-09-05',
-						dueDate: '2026-13-45',
-						officialBalance: 640,
-						officialMinimumPayment: 150,
-						officialAvoidInterest: 640,
-						officialNote: null,
-						paidAmount: 0,
-						outstandingBalance: 640,
-						reconciliationMismatch: false,
-						mismatchAmount: 0,
-					},
-				],
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					attention: UNAVAILABLE_SECTION,
+				},
 			},
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.accountWarnings.data.partial).toBe(false);
-		const [entry] = data.accountWarnings.data.statementAccounts;
-		expect(entry.statements[0].dueDate).toBeNull();
+		// Silence is not "no payment due": the section says it could not answer,
+		// and it carries no statements a caller could read as an empty list.
+		expect(data.overview.data.attention).toEqual({ status: 'unavailable', reason: 'error' });
+		expect(data.overview.data.position.data.netBalance).toBe(1_085);
+	});
 
+	test('a partially checked attention list says so instead of implying completeness', async () => {
+		const scenario = loadScenario('FX-CREDIT-INFAVOR-STMT-01');
+		const body = scenario.routes['GET /api/dashboard/overview'];
+		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01', {
+			routes: {
+				'GET /api/dashboard/overview': {
+					...body,
+					attention: { ...body.attention, data: { ...body.attention.data, partial: true } },
+				},
+			},
+		});
+		const data = await runDashboard(backend);
+
+		expect(data.overview.data.attention.data.partial).toBe(true);
+		expect(data.overview.data.attention.data.statements).toHaveLength(1);
+	});
+
+	test('a statement missing its due date keeps the amount it still owes', async () => {
+		// D2 has a state for exactly this. Failing the row would discard a real
+		// 640 owed over an unusable date and leave the card looking settled.
+		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01', {
+			routes: withStatements('FX-CREDIT-INFAVOR-STMT-01', [
+				{
+					accountId: 9112,
+					accountName: 'Tarjeta sintética a favor',
+					statementId: 9303,
+					periodStart: '2026-08-06',
+					periodEnd: '2026-09-05',
+					dueDate: '2026-13-45',
+					officialBalance: 640,
+					paidAmount: 0,
+					outstandingBalance: 640,
+					officialMinimumPayment: 150,
+					officialAvoidInterest: 640,
+					reconciliationMismatch: false,
+					mismatchAmount: 0,
+				},
+			]),
+		});
+		const data = await runDashboard(backend);
+		const statements = data.overview.data.attention.data.statements;
+
+		expect(statements[0].dueDate).toBeNull();
 		const { status } = accountStatementPaymentStatus({
-			statements: entry.statements,
+			statements,
 			today: '2026-09-07',
 			read: (statement) => statement,
 		});
@@ -308,25 +339,22 @@ describe('dashboard credit obligations', () => {
 	});
 
 	test('a mismatch on a covered statement still reaches the page', async () => {
-		// Fully paid, so it is not an outstanding obligation — but the recorded
-		// activity and the bank's snapshot still disagree, and that notice is
-		// independent of the payment state.
+		// Fully paid, so not an outstanding obligation — but recorded activity
+		// and the bank's snapshot still disagree, and that notice is independent.
 		const backend = createFixtureBackend('FX-STMT-MISMATCH-01', {
-			routes: {
-				'GET /api/accounts/9108/credit-statements': [
-					{
-						...loadScenario('FX-STMT-MISMATCH-01').routes['GET /api/accounts/9108/credit-statements'][0],
-						paidAmount: 1_250,
-						outstandingBalance: 0,
-					},
-				],
-			},
+			routes: withStatements('FX-STMT-MISMATCH-01', [
+				{
+					...loadScenario('FX-STMT-MISMATCH-01').routes['GET /api/dashboard/overview'].attention
+						.data.statements[0],
+					paidAmount: 1_250,
+					outstandingBalance: 0,
+				},
+			]),
 		});
 		const data = await runDashboard(backend);
-		const [entry] = data.accountWarnings.data.statementAccounts;
 
 		const { status, mismatches } = accountStatementPaymentStatus({
-			statements: entry.statements,
+			statements: data.overview.data.attention.data.statements,
 			today: '2026-09-07',
 			read: (statement) => statement,
 		});
@@ -336,29 +364,29 @@ describe('dashboard credit obligations', () => {
 	});
 
 	test('a statement missing its mismatch flag fails the section rather than defaulting', async () => {
+		// Absent is not the same claim as `false`: defaulting would silently
+		// retract a review notice the User might otherwise have been given.
 		const backend = createFixtureBackend('FX-CREDIT-INFAVOR-STMT-01', {
-			routes: {
-				'GET /api/accounts/9112/credit-statements': [
-					{
-						id: 9303,
-						periodStart: '2026-08-06',
-						periodEnd: '2026-09-05',
-						dueDate: '2026-09-20',
-						officialBalance: 640,
-						officialMinimumPayment: 150,
-						officialAvoidInterest: 640,
-						officialNote: null,
-						paidAmount: 0,
-						outstandingBalance: 640,
-						mismatchAmount: 0,
-					},
-				],
-			},
+			routes: withStatements('FX-CREDIT-INFAVOR-STMT-01', [
+				{
+					accountId: 9112,
+					accountName: 'Tarjeta sintética a favor',
+					statementId: 9303,
+					periodStart: '2026-08-06',
+					periodEnd: '2026-09-05',
+					dueDate: '2026-09-20',
+					officialBalance: 640,
+					paidAmount: 0,
+					outstandingBalance: 640,
+					officialMinimumPayment: 150,
+					officialAvoidInterest: 640,
+					mismatchAmount: 0,
+				},
+			]),
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.accountWarnings.data.partial).toBe(true);
-		expect(data.accountWarnings.data.statementAccounts).toEqual([]);
+		expect(data.overview.data.attention).toEqual({ status: 'unavailable', reason: 'invalid' });
 	});
 });
 

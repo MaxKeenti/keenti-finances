@@ -157,6 +157,9 @@ public class PanacheBoxRepository implements BoxRepository {
     public List<Box> findAll(boolean archived) {
         return BoxEntity.<BoxEntity>find(
                 "archived = ?1 ORDER BY displayOrder, id", archived)
+            // Materialize before toDomain queries each balance; a second query
+            // can close a streaming result outside a surrounding transaction.
+            .list()
             .stream()
             .map(this::toDomain)
             .toList();

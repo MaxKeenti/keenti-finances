@@ -78,6 +78,23 @@ Prerequisites for 2A/2B, 3A/3B, and Phase 4.
 
 Arithmetic the fixture asserts: `4,120.50 + 55.50 = 4,176.00`; `4,176.00 − 5,300.00 = −1,124.00`; `9,000.00 + 55.50 = 9,055.50`. The 310.25 confirmed statement payment is a separately identified obligation and is never subtracted from Net Balance. Available credit is limit-derived capacity and never enters money held, Net Balance, In Boxes, or Available to Spend. Its figures are deliberately distinct from `FX-BAL-OVERRESERVED-01`, which does not substitute for it.
 
+It also carries the Phase 4 attention, plans and expected-money rows: the 310.25 statement, one overdue generation cursor (subscription 9430), a Spending Budget on Box 9216 with a 500.00 suggested top-up, a Saving Goal on Box 9217 at 1,800.00 of 6,000.00, an outstanding 900.00 Debt (9909) and one 150.00 PENDING Member contribution (payment record 9428). The expected 1,050.00 is not received and changes none of the totals above.
+
+## `GET /api/dashboard/overview`
+
+Phase 4's composed read model. Every scenario that declares `GET /api/dashboard/summary` also declares the overview, built by the `overview()` helper in `scenarios.ts` from the same figures, so a fixture cannot describe a Net Balance the rest of itself disagrees with.
+
+Its body is five `{status, reason, data}` sections — `position`, `attention`, `plans`, `expected`, `history`. `UNAVAILABLE_SECTION`, exported from `scenarios.ts`, is the shape a failed section takes: `status: 'unavailable'` with `data: null` and no figures attached. Spread one over a scenario's overview body to verify that a failing section leaves the others intact:
+
+```ts
+const body = loadScenario('FX-DASH-NEG-01').routes['GET /api/dashboard/overview'];
+const backend = createFixtureBackend('FX-DASH-NEG-01', {
+  routes: { 'GET /api/dashboard/overview': { ...body, plans: UNAVAILABLE_SECTION } },
+});
+```
+
+Because the dashboard now reads one route, `FIXTURE_FAIL='GET /api/dashboard/overview=500'` is how the browser shows the whole-page unavailable state; a single unavailable *section* is reached through the `routes` override above, in a test. `FX-TRACK-INACTIVE-01` is the empty new-User shape (tracking off, setup offered) and `FX-BAL-ZERO-01` the legitimate zero, which must stay visibly different from either failure.
+
 ### Subscriptions overview verification
 
 `FX-SUB-LIST-01` serves the overview's three reads (`/api/subscriptions`,

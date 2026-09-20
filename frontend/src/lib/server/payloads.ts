@@ -14,6 +14,7 @@
 
 import type { BalanceSummary } from '$lib/types/boxes';
 import type { BoxPlanStatus, BoxPlanSummary, BoxPlanType } from '$lib/types/box-plans';
+import { sectionOk, sectionUnavailable, type Section } from '$lib/types/section';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -95,16 +96,6 @@ function parseList<T>(value: unknown, parse: (item: unknown) => T | null): T[] |
 
 export type MonthSummary = { month: number; ingress: number; egress: number };
 
-export type DashboardSummary = {
-	year: number;
-	netBalance: number;
-	inBoxes: number;
-	availableToSpend: number;
-	totalIngress: number;
-	totalEgress: number;
-	monthly: MonthSummary[];
-};
-
 export function parseBalanceSummary(value: unknown): BalanceSummary | null {
 	if (!isRecord(value)) return null;
 	const netBalance = num(value.netBalance);
@@ -121,37 +112,6 @@ function parseMonth(value: unknown): MonthSummary | null {
 	const egress = num(value.egress);
 	if (month === null || ingress === null || egress === null) return null;
 	return { month, ingress, egress };
-}
-
-export function parseDashboardSummary(value: unknown): DashboardSummary | null {
-	if (!isRecord(value)) return null;
-	const netBalance = num(value.netBalance);
-	const inBoxes = num(value.inBoxes);
-	const availableToSpend = num(value.availableToSpend);
-	const totalIngress = num(value.totalIngress);
-	const totalEgress = num(value.totalEgress);
-	const monthly = parseList(value.monthly, parseMonth);
-	if (
-		netBalance === null ||
-		inBoxes === null ||
-		availableToSpend === null ||
-		totalIngress === null ||
-		totalEgress === null ||
-		monthly === null
-	) {
-		return null;
-	}
-	// `year` is echoed by the backend but the loader already knows which year it
-	// asked for, so an absent year is not a reason to discard real balances.
-	return {
-		year: num(value.year) ?? 0,
-		netBalance,
-		inBoxes,
-		availableToSpend,
-		totalIngress,
-		totalEgress,
-		monthly,
-	};
 }
 
 export type AccountSummary = { id: number; name: string; kind: string; balance: number };
@@ -592,6 +552,505 @@ export function parseTransactions(value: unknown): TransactionResponse[] | null 
 			subscriptionId,
 		};
 	});
+}
+
+/* -------------------------------------------------------------------------
+ * The composed dashboard read model (Phase 4)
+ *
+ * `GET /api/dashboard/overview` answers with five independently available
+ * sections. Each one is validated on its own here, so a malformed plans section
+ * cannot take the position figures down with it — and, as everywhere else in
+ * this module, an unreadable money field fails its section rather than becoming
+ * a zero that would read as a statement about the User's money.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * A money field that may legitimately be absent.
+ *
+ * `null` is a real answer here — "no Credit Financial Account has a configured
+ * limit", "tracking is off so there is no account breakdown" — and is kept
+ * apart from an unreadable value, which returns `undefined` and fails its
+ * section.
+ */
+function optionalNum(value: unknown): number | null | undefined {
+	if (value === undefined || value === null) return null;
+	return num(value) ?? undefined;
+}
+
+function optionalIsoDate(value: unknown): string | null | undefined {
+	if (value === undefined || value === null) return null;
+	return isoDate(value) ?? undefined;
+}
+
+export type OverviewPositionAccount = {
+	id: number;
+	name: string;
+	kind: string;
+	balance: number;
+	creditLimit: number | null;
+	availableCredit: number | null;
+};
+
+export type OverviewPosition = {
+	trackingActive: boolean;
+	setupRequired: boolean;
+	/** `null` while tracking is off: there are no signed account balances to split. */
+	moneyHeld: number | null;
+	/** Credit owed, as a positive magnitude. */
+	creditDebt: number | null;
+	creditInFavor: number | null;
+	netBalance: number;
+	inBoxes: number;
+	availableToSpend: number;
+	/** Limit-derived capacity, outside every total above. `null` when no limit exists. */
+	availableCredit: number | null;
+	/** A card's credit settings could not be read, so capacity is incomplete. */
+	creditLimitsPartial: boolean;
+	accounts: OverviewPositionAccount[];
+};
+
+export type OverviewStatement = {
+	accountId: number;
+	accountName: string;
+	statementId: number;
+	periodStart: string;
+	periodEnd: string;
+	dueDate: string | null;
+	officialBalance: number;
+	paidAmount: number;
+	outstandingBalance: number;
+	officialMinimumPayment: number;
+	officialAvoidInterest: number;
+	reconciliationMismatch: boolean;
+	mismatchAmount: number;
+};
+
+export type OverviewBillingCursor = {
+	subscriptionId: number;
+	name: string;
+	subscriptionType: string;
+	/** The generation cursor, or `null` when unreadable. Never a substituted date. */
+	nextBillingDate: string | null;
+};
+
+export type OverviewAttention = {
+	statements: OverviewStatement[];
+	statementsTruncated: boolean;
+	billing: OverviewBillingCursor[];
+	/** The cursor list is capped; some Subscriptions are not represented here. */
+	billingTruncated: boolean;
+	/** Some card's statements could not be read; the list is not a complete one. */
+	partial: boolean;
+};
+
+export type OverviewPlan = {
+	boxId: number;
+	boxName: string;
+	boxBalance: number;
+	planId: number;
+	type: BoxPlanType;
+	status: BoxPlanStatus;
+	targetAmount: number | null;
+	targetDate: string | null;
+	remainingAmount: number | null;
+	progressPercent: number | null;
+	currentCommitment: number | null;
+	arrears: number | null;
+	/** Saving Goal: min(commitment, remaining) — never more than the Goal needs. */
+	suggestedContribution: number | null;
+	desiredBalance: number | null;
+	suggestedTopUp: number | null;
+};
+
+export type OverviewPlans = {
+	inBoxes: number;
+	reservedInPlannedBoxes: number;
+	items: OverviewPlan[];
+	boxesWithoutActivePlan: number;
+	partial: boolean;
+};
+
+export type OverviewExpectedDebt = {
+	debtId: number;
+	description: string;
+	contactId: number | null;
+	contactName: string | null;
+	totalAmount: number;
+	totalPaid: number;
+	remaining: number;
+};
+
+export type OverviewExpectedContribution = {
+	paymentRecordId: number;
+	subscriptionId: number;
+	subscriptionName: string;
+	memberId: number;
+	contactId: number | null;
+	contactName: string | null;
+	amount: number;
+	billingDate: string | null;
+};
+
+export type OverviewExpected = {
+	debtsOutstanding: number;
+	debtCount: number;
+	debtsTruncated: boolean;
+	debts: OverviewExpectedDebt[];
+	/** False when the contribution read failed: the totals below say nothing. */
+	contributionsAvailable: boolean;
+	/** `null` when `contributionsAvailable` is false. Never a stand-in zero. */
+	contributionsOutstanding: number | null;
+	contributionCount: number;
+	contributionsTruncated: boolean;
+	contributions: OverviewExpectedContribution[];
+	partial: boolean;
+};
+
+export type OverviewHistory = {
+	year: number;
+	totalIngress: number;
+	totalEgress: number;
+	monthly: MonthSummary[];
+};
+
+export type DashboardOverview = {
+	/** The User's calendar day as the backend resolved it, for provenance only. */
+	today: string | null;
+	timeZone: string | null;
+	position: Section<OverviewPosition>;
+	attention: Section<OverviewAttention>;
+	plans: Section<OverviewPlans>;
+	expected: Section<OverviewExpected>;
+	history: Section<OverviewHistory>;
+};
+
+/**
+ * Unwraps one `{status, reason, data}` envelope.
+ *
+ * An explicitly unavailable section and one whose body fails validation are
+ * both unavailable — the difference is only why — and neither produces data.
+ */
+function parseSection<T>(value: unknown, parse: (value: unknown) => T | null): Section<T> {
+	if (!isRecord(value)) return sectionUnavailable('invalid');
+	if (value.status !== 'ok') return sectionUnavailable('error');
+	const parsed = parse(value.data);
+	return parsed === null ? sectionUnavailable('invalid') : sectionOk(parsed);
+}
+
+function parsePosition(value: unknown): OverviewPosition | null {
+	if (!isRecord(value)) return null;
+	if (
+		typeof value.trackingActive !== 'boolean' ||
+		typeof value.setupRequired !== 'boolean' ||
+		typeof value.creditLimitsPartial !== 'boolean'
+	) {
+		return null;
+	}
+	const netBalance = num(value.netBalance);
+	const inBoxes = num(value.inBoxes);
+	const availableToSpend = num(value.availableToSpend);
+	const moneyHeld = optionalNum(value.moneyHeld);
+	const creditDebt = optionalNum(value.creditDebt);
+	const creditInFavor = optionalNum(value.creditInFavor);
+	const availableCredit = optionalNum(value.availableCredit);
+	const accounts = parseList(value.accounts, (item) => {
+		if (!isRecord(item)) return null;
+		const id = num(item.id);
+		const name = str(item.name);
+		const kind = str(item.kind);
+		const balance = num(item.balance);
+		const creditLimit = optionalNum(item.creditLimit);
+		const accountCapacity = optionalNum(item.availableCredit);
+		if (id === null || name === null || kind === null || balance === null) return null;
+		if (creditLimit === undefined || accountCapacity === undefined) return null;
+		return { id, name, kind, balance, creditLimit, availableCredit: accountCapacity };
+	});
+	if (netBalance === null || inBoxes === null || availableToSpend === null) return null;
+	if (
+		moneyHeld === undefined ||
+		creditDebt === undefined ||
+		creditInFavor === undefined ||
+		availableCredit === undefined ||
+		accounts === null
+	) {
+		return null;
+	}
+	if (value.trackingActive && (moneyHeld === null || creditDebt === null || creditInFavor === null)) return null;
+	return {
+		trackingActive: value.trackingActive,
+		setupRequired: value.setupRequired,
+		moneyHeld,
+		creditDebt,
+		creditInFavor,
+		netBalance,
+		inBoxes,
+		availableToSpend,
+		availableCredit,
+		creditLimitsPartial: value.creditLimitsPartial,
+		accounts,
+	};
+}
+
+function parseAttention(value: unknown): OverviewAttention | null {
+	if (!isRecord(value)) return null;
+	const statements = parseList(value.statements, (item) => {
+		if (!isRecord(item)) return null;
+		const accountId = num(item.accountId);
+		const accountName = str(item.accountName);
+		const statementId = num(item.statementId);
+		const periodStart = isoDate(item.periodStart);
+		const periodEnd = isoDate(item.periodEnd);
+		// D2 keeps an outstanding balance whose due date is unusable, and labels
+		// it due-date-unknown; failing the row would hide real money owed.
+		const dueDate = isoDate(item.dueDate);
+		const officialBalance = num(item.officialBalance);
+		const paidAmount = num(item.paidAmount);
+		const outstandingBalance = num(item.outstandingBalance);
+		const officialMinimumPayment = num(item.officialMinimumPayment);
+		const officialAvoidInterest = num(item.officialAvoidInterest);
+		const mismatchAmount = num(item.mismatchAmount);
+		if (
+			accountId === null ||
+			accountName === null ||
+			statementId === null ||
+			periodStart === null ||
+			periodEnd === null ||
+			officialBalance === null ||
+			paidAmount === null ||
+			outstandingBalance === null ||
+			officialMinimumPayment === null ||
+			officialAvoidInterest === null ||
+			mismatchAmount === null ||
+			typeof item.reconciliationMismatch !== 'boolean'
+		) {
+			return null;
+		}
+		return {
+			accountId,
+			accountName,
+			statementId,
+			periodStart,
+			periodEnd,
+			dueDate,
+			officialBalance,
+			paidAmount,
+			outstandingBalance,
+			officialMinimumPayment,
+			officialAvoidInterest,
+			reconciliationMismatch: item.reconciliationMismatch,
+			mismatchAmount,
+		};
+	});
+	const billing = parseList(value.billing, (item) => {
+		if (!isRecord(item)) return null;
+		const subscriptionId = num(item.subscriptionId);
+		const name = str(item.name);
+		if (subscriptionId === null || name === null) return null;
+		return {
+			subscriptionId,
+			name,
+			subscriptionType: str(item.subscriptionType) ?? '',
+			// An unreadable cursor is reported as unknown by the shared derivation
+			// rather than dropping the Subscription from the section entirely.
+			nextBillingDate: isoDate(item.nextBillingDate),
+		};
+	});
+	if (statements === null || billing === null) return null;
+	if (
+		typeof value.partial !== 'boolean' ||
+		typeof value.statementsTruncated !== 'boolean' ||
+		typeof value.billingTruncated !== 'boolean'
+	) {
+		return null;
+	}
+	return {
+		statements,
+		statementsTruncated: value.statementsTruncated,
+		billing,
+		billingTruncated: value.billingTruncated,
+		partial: value.partial,
+	};
+}
+
+function parsePlans(value: unknown): OverviewPlans | null {
+	if (!isRecord(value)) return null;
+	const inBoxes = num(value.inBoxes);
+	const reservedInPlannedBoxes = num(value.reservedInPlannedBoxes);
+	const boxesWithoutActivePlan = num(value.boxesWithoutActivePlan);
+	const items = parseList(value.items, (item) => {
+		if (!isRecord(item)) return null;
+		const boxId = num(item.boxId);
+		const boxName = str(item.boxName);
+		const boxBalance = num(item.boxBalance);
+		const planId = num(item.planId);
+		const type = str(item.type);
+		const status = str(item.status);
+		const targetAmount = optionalNum(item.targetAmount);
+		const targetDate = optionalIsoDate(item.targetDate);
+		const remainingAmount = optionalNum(item.remainingAmount);
+		const progressPercent = optionalNum(item.progressPercent);
+		const currentCommitment = optionalNum(item.currentCommitment);
+		const arrears = optionalNum(item.arrears);
+		const suggestedContribution = optionalNum(item.suggestedContribution);
+		const desiredBalance = optionalNum(item.desiredBalance);
+		const suggestedTopUp = optionalNum(item.suggestedTopUp);
+		if (boxId === null || boxName === null || boxBalance === null || planId === null) return null;
+		// An unrecognized Plan Type or status is not an unplanned Box: describing
+		// it as one would offer to create a plan that already exists.
+		if (type === null || !BOX_PLAN_TYPES.has(type as BoxPlanType)) return null;
+		if (status === null || !BOX_PLAN_STATUSES.has(status as BoxPlanStatus)) return null;
+		if (
+			targetAmount === undefined ||
+			targetDate === undefined ||
+			remainingAmount === undefined ||
+			progressPercent === undefined ||
+			currentCommitment === undefined ||
+			arrears === undefined ||
+			suggestedContribution === undefined ||
+			desiredBalance === undefined ||
+			suggestedTopUp === undefined
+		) {
+			return null;
+		}
+		return {
+			boxId,
+			boxName,
+			boxBalance,
+			planId,
+			type: type as BoxPlanType,
+			status: status as BoxPlanStatus,
+			targetAmount,
+			targetDate,
+			remainingAmount,
+			progressPercent,
+			currentCommitment,
+			arrears,
+			suggestedContribution,
+			desiredBalance,
+			suggestedTopUp,
+		};
+	});
+	if (inBoxes === null || reservedInPlannedBoxes === null || boxesWithoutActivePlan === null) {
+		return null;
+	}
+	if (items === null || typeof value.partial !== 'boolean') return null;
+	return {
+		inBoxes,
+		reservedInPlannedBoxes,
+		items,
+		boxesWithoutActivePlan,
+		partial: value.partial,
+	};
+}
+
+function parseExpected(value: unknown): OverviewExpected | null {
+	if (!isRecord(value)) return null;
+	const debtsOutstanding = num(value.debtsOutstanding);
+	const debtCount = num(value.debtCount);
+	// `null` is the backend saying the contribution read failed, and it must
+	// survive as `null`: a zero here would claim nobody owes this User anything.
+	const contributionsAvailable = value.contributionsAvailable;
+	const contributionsOutstanding = optionalNum(value.contributionsOutstanding);
+	const contributionCount = num(value.contributionCount);
+	const debts = parseList(value.debts, (item) => {
+		if (!isRecord(item)) return null;
+		const debtId = num(item.debtId);
+		const totalAmount = num(item.totalAmount);
+		const totalPaid = num(item.totalPaid);
+		const remaining = num(item.remaining);
+		const contactId = optionalNum(item.contactId);
+		const contactName = nullableStr(item.contactName);
+		if (debtId === null || totalAmount === null || totalPaid === null || remaining === null) {
+			return null;
+		}
+		if (contactId === undefined || contactName === undefined) return null;
+		return {
+			debtId,
+			description: str(item.description) ?? '',
+			contactId,
+			contactName,
+			totalAmount,
+			totalPaid,
+			remaining,
+		};
+	});
+	const contributions = parseList(value.contributions, (item) => {
+		if (!isRecord(item)) return null;
+		const paymentRecordId = num(item.paymentRecordId);
+		const subscriptionId = num(item.subscriptionId);
+		const memberId = num(item.memberId);
+		const amount = num(item.amount);
+		const contactId = optionalNum(item.contactId);
+		const contactName = nullableStr(item.contactName);
+		if (paymentRecordId === null || subscriptionId === null || memberId === null) return null;
+		if (amount === null || contactId === undefined || contactName === undefined) return null;
+		return {
+			paymentRecordId,
+			subscriptionId,
+			subscriptionName: str(item.subscriptionName) ?? '',
+			memberId,
+			contactId,
+			contactName,
+			amount,
+			billingDate: isoDate(item.billingDate),
+		};
+	});
+	if (debtsOutstanding === null || typeof contributionsAvailable !== 'boolean') return null;
+	if (contributionsOutstanding === undefined) return null;
+	// Available means a real total arrived; unavailable means none did. Anything
+	// else is a body that cannot be trusted about either.
+	if (contributionsAvailable === (contributionsOutstanding === null)) return null;
+	if (debtCount === null || contributionCount === null) return null;
+	if (debts === null || contributions === null) return null;
+	if (
+		typeof value.partial !== 'boolean' ||
+		typeof value.debtsTruncated !== 'boolean' ||
+		typeof value.contributionsTruncated !== 'boolean'
+	) {
+		return null;
+	}
+	return {
+		debtsOutstanding,
+		debtCount,
+		debtsTruncated: value.debtsTruncated,
+		debts,
+		contributionsAvailable,
+		contributionsOutstanding,
+		contributionCount,
+		contributionsTruncated: value.contributionsTruncated,
+		contributions,
+		partial: value.partial,
+	};
+}
+
+function parseHistory(value: unknown): OverviewHistory | null {
+	if (!isRecord(value)) return null;
+	const totalIngress = num(value.totalIngress);
+	const totalEgress = num(value.totalEgress);
+	const monthly = parseList(value.monthly, parseMonth);
+	if (totalIngress === null || totalEgress === null || monthly === null) return null;
+	const year = num(value.year);
+	if (year === null || !Number.isInteger(year) || year < 1900 || year > 9999) return null;
+	return { year, totalIngress, totalEgress, monthly };
+}
+
+/**
+ * The whole overview.
+ *
+ * A body that is not an object at all fails outright; anything else resolves
+ * per section, so one unreadable section never discards the four that arrived.
+ */
+export function parseDashboardOverview(value: unknown): DashboardOverview | null {
+	if (!isRecord(value)) return null;
+	return {
+		today: isoDate(value.today),
+		timeZone: str(value.timeZone),
+		position: parseSection(value.position, parsePosition),
+		attention: parseSection(value.attention, parseAttention),
+		plans: parseSection(value.plans, parsePlans),
+		expected: parseSection(value.expected, parseExpected),
+		history: parseSection(value.history, parseHistory),
+	};
 }
 
 /** Current estimate must contain a real amount and calendar period before display. */
