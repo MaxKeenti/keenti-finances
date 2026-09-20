@@ -30,8 +30,39 @@ export type Scenario = {
 
 const YEAR = 2026;
 
-function monthly(): Array<{ month: number; ingress: number; egress: number }> {
-	return Array.from({ length: 12 }, (_, index) => ({ month: index + 1, ingress: 0, egress: 0 }));
+/**
+ * Twelve months whose ingress and egress add up to exactly the annual totals
+ * they were built from.
+ *
+ * A flat zero series under a non-zero annual total is an incoherent fixture: it
+ * renders a year with 18,400.00 of income above two charts that both say there
+ * are no transactions yet, so a chart assertion written against it proves
+ * nothing. The weights are deliberately uneven — a flat twelfth each would hide
+ * an axis or ordering bug — and the rounding remainder lands on December so the
+ * months sum to the total to the cent.
+ */
+const MONTH_WEIGHTS = [3, 5, 8, 6, 9, 7, 11, 4, 10, 6, 8, 13];
+
+function spread(total: number): number[] {
+	const totalCents = Math.round(total * 100);
+	const weightSum = MONTH_WEIGHTS.reduce((sum, weight) => sum + weight, 0);
+	const cents = MONTH_WEIGHTS.map((weight) => Math.floor((totalCents * weight) / weightSum));
+	const allocated = cents.reduce((sum, value) => sum + value, 0);
+	cents[cents.length - 1] += totalCents - allocated;
+	return cents.map((value) => value / 100);
+}
+
+function monthly(
+	totalIngress = 0,
+	totalEgress = 0,
+): Array<{ month: number; ingress: number; egress: number }> {
+	const ingress = spread(totalIngress);
+	const egress = spread(totalEgress);
+	return Array.from({ length: 12 }, (_, index) => ({
+		month: index + 1,
+		ingress: ingress[index],
+		egress: egress[index],
+	}));
 }
 
 function summary(values: {
@@ -48,12 +79,198 @@ function summary(values: {
 		availableToSpend: values.availableToSpend,
 		totalIngress: values.totalIngress ?? 0,
 		totalEgress: values.totalEgress ?? 0,
-		monthly: monthly(),
+		monthly: monthly(values.totalIngress ?? 0, values.totalEgress ?? 0),
 	};
 }
 
 function boxSummary(values: { netBalance: number; inBoxes: number; availableToSpend: number }) {
 	return values;
+}
+
+/* -------------------------------------------------------------------------
+ * The composed dashboard read model (Phase 4)
+ *
+ * `GET /api/dashboard/overview` answers with five independently available
+ * sections. The builders below spell one out from the same figures a scenario
+ * already declares elsewhere, so the fixture cannot describe a Net Balance the
+ * rest of the scenario disagrees with. Amounts remain invented; nothing here
+ * reads a real account.
+ * ---------------------------------------------------------------------- */
+
+type OverviewSection<T> = { status: 'ok'; reason: null; data: T };
+
+function okSection<T>(data: T): OverviewSection<T> {
+	return { status: 'ok', reason: null, data };
+}
+
+/** An unavailable section carries no data at all — never a zero. */
+export const UNAVAILABLE_SECTION = { status: 'unavailable', reason: 'error', data: null };
+
+function overviewAccount(values: {
+	id: number;
+	name: string;
+	kind: string;
+	balance: number;
+	creditLimit?: number | null;
+}) {
+	const creditLimit = values.creditLimit ?? null;
+	return {
+		id: values.id,
+		name: values.name,
+		kind: values.kind,
+		balance: values.balance,
+		creditLimit,
+		// Limit-derived capacity, floored at zero and outside every total.
+		availableCredit: creditLimit === null ? null : Math.max(creditLimit + values.balance, 0),
+	};
+}
+
+function overviewStatement(values: {
+	accountId: number;
+	accountName: string;
+	statementId: number;
+	dueDate: string | null;
+	officialBalance: number;
+	paidAmount?: number;
+	minimumPayment?: number;
+	avoidInterest?: number;
+	mismatchAmount?: number;
+	periodStart?: string;
+	periodEnd?: string;
+}) {
+	const paidAmount = values.paidAmount ?? 0;
+	const mismatchAmount = values.mismatchAmount ?? 0;
+	return {
+		accountId: values.accountId,
+		accountName: values.accountName,
+		statementId: values.statementId,
+		periodStart: values.periodStart ?? '2026-08-06',
+		periodEnd: values.periodEnd ?? '2026-09-05',
+		dueDate: values.dueDate,
+		officialBalance: values.officialBalance,
+		paidAmount,
+		outstandingBalance: values.officialBalance - paidAmount,
+		officialMinimumPayment: values.minimumPayment ?? 0,
+		officialAvoidInterest: values.avoidInterest ?? values.officialBalance,
+		reconciliationMismatch: mismatchAmount !== 0,
+		mismatchAmount,
+	};
+}
+
+function overviewBilling(values: {
+	subscriptionId: number;
+	name: string;
+	subscriptionType?: string;
+	nextBillingDate: string | null;
+}) {
+	return {
+		subscriptionId: values.subscriptionId,
+		name: values.name,
+		subscriptionType: values.subscriptionType ?? 'PERSONAL',
+		nextBillingDate: values.nextBillingDate,
+	};
+}
+
+function overview(values: {
+	today?: string | null;
+	timeZone?: string | null;
+	trackingActive?: boolean;
+	setupRequired?: boolean;
+	moneyHeld?: number | null;
+	creditDebt?: number | null;
+	creditInFavor?: number | null;
+	netBalance: number;
+	inBoxes: number;
+	availableToSpend: number;
+	availableCredit?: number | null;
+	creditLimitsPartial?: boolean;
+	accounts?: ReturnType<typeof overviewAccount>[];
+	statements?: ReturnType<typeof overviewStatement>[];
+	billing?: ReturnType<typeof overviewBilling>[];
+	plans?: {
+		items?: unknown[];
+		reservedInPlannedBoxes?: number;
+		boxesWithoutActivePlan?: number;
+		partial?: boolean;
+	};
+	expected?: {
+		debts?: unknown[];
+		debtsOutstanding?: number;
+		contributions?: unknown[];
+		contributionsAvailable?: boolean;
+		contributionsOutstanding?: number;
+		partial?: boolean;
+	};
+	totalIngress?: number;
+	totalEgress?: number;
+	attentionPartial?: boolean;
+}) {
+	const trackingActive = values.trackingActive ?? true;
+	const plans = values.plans ?? {};
+	const expected = values.expected ?? {};
+	const debts = expected.debts ?? [];
+	const contributions = expected.contributions ?? [];
+	return {
+		today: values.today ?? '2026-09-07',
+		timeZone: values.timeZone ?? 'America/Mexico_City',
+		position: okSection({
+			trackingActive,
+			setupRequired: values.setupRequired ?? false,
+			netBalanceSource: trackingActive ? 'accounts' : 'transactions',
+			// Before tracking is activated there are no signed account balances to
+			// split, so the breakdown is absent rather than zeroed (decision D1).
+			moneyHeld: trackingActive ? (values.moneyHeld ?? values.netBalance) : null,
+			creditDebt: trackingActive ? (values.creditDebt ?? 0) : null,
+			creditInFavor: trackingActive ? (values.creditInFavor ?? 0) : null,
+			netBalance: values.netBalance,
+			inBoxes: values.inBoxes,
+			availableToSpend: values.availableToSpend,
+			availableCredit: trackingActive ? (values.availableCredit ?? null) : null,
+			// Capacity read in full unless a scenario says otherwise. The balances
+			// above are unaffected either way.
+			creditLimitsPartial: values.creditLimitsPartial ?? false,
+			accounts: values.accounts ?? [],
+		}),
+		attention: okSection({
+			statements: values.statements ?? [],
+			statementsTruncated: false,
+			billing: values.billing ?? [],
+			billingTruncated: false,
+			partial: values.attentionPartial ?? false,
+		}),
+		plans: okSection({
+			inBoxes: values.inBoxes,
+			reservedInPlannedBoxes: plans.reservedInPlannedBoxes ?? 0,
+			items: plans.items ?? [],
+			boxesWithoutActivePlan: plans.boxesWithoutActivePlan ?? 0,
+			partial: plans.partial ?? false,
+		}),
+		expected: okSection({
+			debtsOutstanding: expected.debtsOutstanding ?? 0,
+			debtCount: debts.length,
+			debtsTruncated: false,
+			debts,
+			// A scenario that withholds the contribution read reports no total at
+			// all: `contributionsAvailable: false` with a `null` outstanding, which
+			// is what the backend sends and what the parser insists on. A zero
+			// beside `false` would be the stand-in the contract forbids.
+			contributionsAvailable: expected.contributionsAvailable ?? true,
+			contributionsOutstanding:
+				(expected.contributionsAvailable ?? true) === false
+					? null
+					: (expected.contributionsOutstanding ?? 0),
+			contributionCount: contributions.length,
+			contributionsTruncated: false,
+			contributions,
+			partial: expected.partial ?? false,
+		}),
+		history: okSection({
+			year: YEAR,
+			totalIngress: values.totalIngress ?? 0,
+			totalEgress: values.totalEgress ?? 0,
+			monthly: monthly(values.totalIngress ?? 0, values.totalEgress ?? 0),
+		}),
+	};
 }
 
 function box(values: {
@@ -124,6 +341,15 @@ const trackingInactive: Scenario = {
 		'GET /api/boxes': [],
 		'GET /api/boxes/summary': boxSummary({ netBalance: 0, inBoxes: 0, availableToSpend: 0 }),
 		'GET /api/dashboard/summary': summary({ netBalance: 0, inBoxes: 0, availableToSpend: 0 }),
+		// The new-User shape: tracking off, nothing recorded, no obligations. The
+		// dashboard must offer setup here rather than describe an empty position.
+		'GET /api/dashboard/overview': overview({
+			trackingActive: false,
+			setupRequired: true,
+			netBalance: 0,
+			inBoxes: 0,
+			availableToSpend: 0,
+		}),
 	},
 };
 
@@ -163,6 +389,18 @@ const trackingActive: Scenario = {
 			totalIngress: 6_000,
 			totalEgress: 3_499.25,
 		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: 2_500.75,
+			inBoxes: 500,
+			availableToSpend: 2_000.75,
+			moneyHeld: 2_500.75,
+			totalIngress: 6_000,
+			totalEgress: 3_499.25,
+			accounts: [
+				overviewAccount({ id: 9101, name: 'Cuenta sintética A', kind: 'DEBIT', balance: 2_500.75 }),
+			],
+			plans: { boxesWithoutActivePlan: 1 },
+		}),
 	},
 };
 
@@ -189,6 +427,17 @@ const legitimateZero: Scenario = {
 		'GET /api/boxes': [],
 		'GET /api/boxes/summary': boxSummary({ netBalance: 0, inBoxes: 0, availableToSpend: 0 }),
 		'GET /api/dashboard/summary': summary({ netBalance: 0, inBoxes: 0, availableToSpend: 0 }),
+		// Every total really is zero. The dashboard must show these figures, not
+		// an unavailable section: a legitimate zero is a fact about the money.
+		'GET /api/dashboard/overview': overview({
+			netBalance: 0,
+			inBoxes: 0,
+			availableToSpend: 0,
+			moneyHeld: 0,
+			accounts: [
+				overviewAccount({ id: 9102, name: 'Cuenta sintética vacía', kind: 'DEBIT', balance: 0 }),
+			],
+		}),
 	},
 };
 
@@ -241,6 +490,25 @@ const excessiveReservations: Scenario = {
 			inBoxes: 4_000,
 			availableToSpend: -760,
 		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: 3_240,
+			inBoxes: 4_000,
+			availableToSpend: -760,
+			moneyHeld: 3_200,
+			creditInFavor: 40,
+			availableCredit: 8_040,
+			accounts: [
+				overviewAccount({ id: 9103, name: 'Cuenta sintética B', kind: 'DEBIT', balance: 3_200 }),
+				overviewAccount({
+					id: 9104,
+					name: 'Tarjeta sintética B',
+					kind: 'CREDIT',
+					balance: 40,
+					creditLimit: 8_000,
+				}),
+			],
+			plans: { boxesWithoutActivePlan: 2 },
+		}),
 	},
 };
 
@@ -281,6 +549,24 @@ const negativeNetBalance: Scenario = {
 			availableToSpend: -750,
 		}),
 		'GET /api/dashboard/summary': summary({ netBalance: -750, inBoxes: 0, availableToSpend: -750 }),
+		'GET /api/dashboard/overview': overview({
+			netBalance: -750,
+			inBoxes: 0,
+			availableToSpend: -750,
+			moneyHeld: 150,
+			creditDebt: 900,
+			availableCredit: 4_100,
+			accounts: [
+				overviewAccount({ id: 9105, name: 'Cuenta sintética C', kind: 'DEBIT', balance: 150 }),
+				overviewAccount({
+					id: 9106,
+					name: 'Tarjeta sintética C',
+					kind: 'CREDIT',
+					balance: -900,
+					creditLimit: 5_000,
+				}),
+			],
+		}),
 	},
 };
 
@@ -329,6 +615,16 @@ const emptyBoxNegativeAvailable: Scenario = {
 			netBalance: 1_900,
 			inBoxes: 2_600,
 			availableToSpend: -700,
+		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: 1_900,
+			inBoxes: 2_600,
+			availableToSpend: -700,
+			moneyHeld: 1_900,
+			accounts: [
+				overviewAccount({ id: 9107, name: 'Cuenta sintética D', kind: 'DEBIT', balance: 1_900 }),
+			],
+			plans: { boxesWithoutActivePlan: 2 },
 		}),
 	},
 };
@@ -390,6 +686,34 @@ const statementMismatch: Scenario = {
 			netBalance: -1_124.5,
 			inBoxes: 0,
 			availableToSpend: -1_124.5,
+		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: -1_124.5,
+			inBoxes: 0,
+			availableToSpend: -1_124.5,
+			moneyHeld: 0,
+			creditDebt: 1_124.5,
+			availableCredit: 8_875.5,
+			accounts: [
+				overviewAccount({
+					id: 9108,
+					name: 'Tarjeta sintética E',
+					kind: 'CREDIT',
+					balance: -1_124.5,
+					creditLimit: 10_000,
+				}),
+			],
+			statements: [
+				overviewStatement({
+					accountId: 9108,
+					accountName: 'Tarjeta sintética E',
+					statementId: 9301,
+					dueDate: '2026-09-20',
+					officialBalance: 1_250,
+					minimumPayment: 300,
+					mismatchAmount: 125.5,
+				}),
+			],
 		}),
 	},
 };
@@ -838,6 +1162,44 @@ const dateBoundaries: Scenario = {
 				createdAt: '2026-01-10T12:00:00Z',
 			},
 		],
+		// The same yesterday/today/tomorrow inputs through Phase 4's composed
+		// read model. The backend reports its own resolved day, but the page
+		// labels these against the captured `obligationToday`, which is the only
+		// thing that keeps the dashboard and the account page agreeing.
+		'GET /api/dashboard/overview': overview({
+			today: '2026-09-07',
+			netBalance: 2_000,
+			inBoxes: 0,
+			availableToSpend: 2_000,
+			moneyHeld: 2_500,
+			creditDebt: 500,
+			availableCredit: 6_500,
+			accounts: [
+				overviewAccount({ id: 9116, name: 'Cuenta sintética G', kind: 'DEBIT', balance: 2_500 }),
+				overviewAccount({
+					id: 9110,
+					name: 'Tarjeta sintética G',
+					kind: 'CREDIT',
+					balance: -500,
+					creditLimit: 7_000,
+				}),
+			],
+			statements: [
+				overviewStatement({
+					accountId: 9110,
+					accountName: 'Tarjeta sintética G',
+					statementId: 9302,
+					dueDate: '2026-09-06',
+					officialBalance: 500,
+					minimumPayment: 100,
+				}),
+			],
+			billing: [
+				overviewBilling({ subscriptionId: 9403, name: 'Suscripción de ayer', nextBillingDate: '2026-09-06' }),
+				overviewBilling({ subscriptionId: 9404, name: 'Suscripción de hoy', nextBillingDate: '2026-09-07' }),
+				overviewBilling({ subscriptionId: 9405, name: 'Suscripción de mañana', nextBillingDate: '2026-09-08' }),
+			],
+		}),
 	},
 };
 
@@ -1733,6 +2095,36 @@ const creditInFavorUnpaidStatement: Scenario = {
 			inBoxes: 0,
 			availableToSpend: 1_085,
 		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: 1_085,
+			inBoxes: 0,
+			availableToSpend: 1_085,
+			moneyHeld: 1_000,
+			creditInFavor: 85,
+			availableCredit: 12_085,
+			accounts: [
+				overviewAccount({ id: 9113, name: 'Cuenta sintética H', kind: 'DEBIT', balance: 1_000 }),
+				overviewAccount({
+					id: 9112,
+					name: 'Tarjeta sintética a favor',
+					kind: 'CREDIT',
+					balance: 85,
+					creditLimit: 12_000,
+				}),
+			],
+			// Credit in the User's favour and an unpaid confirmed statement are
+			// both true at once; neither is netted against the other.
+			statements: [
+				overviewStatement({
+					accountId: 9112,
+					accountName: 'Tarjeta sintética a favor',
+					statementId: 9303,
+					dueDate: '2026-09-20',
+					officialBalance: 640,
+					minimumPayment: 150,
+				}),
+			],
+		}),
 	},
 };
 
@@ -1813,6 +2205,115 @@ const dashboardNegativeAvailable: Scenario = {
 			inBoxes: 5_300,
 			availableToSpend: -1_124,
 		}),
+		// Phase 4's composed read model for the same figures. The statement is a
+		// separately identified obligation: it appears in the attention section
+		// and is subtracted from nothing above it.
+		'GET /api/dashboard/overview': overview({
+			netBalance: 4_176,
+			inBoxes: 5_300,
+			availableToSpend: -1_124,
+			moneyHeld: 4_120.5,
+			creditInFavor: 55.5,
+			availableCredit: 9_055.5,
+			accounts: [
+				overviewAccount({ id: 9114, name: 'Cuenta sintética P4', kind: 'DEBIT', balance: 4_120.5 }),
+				overviewAccount({
+					id: 9115,
+					name: 'Tarjeta sintética P4',
+					kind: 'CREDIT',
+					balance: 55.5,
+					creditLimit: 9_000,
+				}),
+			],
+			statements: [
+				overviewStatement({
+					accountId: 9115,
+					accountName: 'Tarjeta sintética P4',
+					statementId: 9304,
+					dueDate: '2026-09-20',
+					officialBalance: 310.25,
+					minimumPayment: 80,
+				}),
+			],
+			billing: [
+				overviewBilling({
+					subscriptionId: 9430,
+					name: 'Suscripción sintética P4',
+					nextBillingDate: '2026-09-05',
+				}),
+			],
+			plans: {
+				reservedInPlannedBoxes: 5_300,
+				items: [
+					{
+						boxId: 9216,
+						boxName: 'Renta sintética P4',
+						boxBalance: 3_500,
+						planId: 9255,
+						type: 'SPENDING_BUDGET',
+						status: 'ACTIVE',
+						targetAmount: null,
+						targetDate: null,
+						remainingAmount: null,
+						progressPercent: null,
+						currentCommitment: null,
+						arrears: null,
+						desiredBalance: 4_000,
+						suggestedTopUp: 500,
+					},
+					{
+						boxId: 9217,
+						boxName: 'Colegiatura sintética P4',
+						boxBalance: 1_800,
+						planId: 9256,
+						type: 'SAVING_GOAL',
+						status: 'ACTIVE',
+						targetAmount: 6_000,
+						targetDate: '2026-12-31',
+						remainingAmount: 4_200,
+						progressPercent: 30,
+						currentCommitment: 1_400,
+						suggestedContribution: 1_400,
+						arrears: 0,
+						// min(currentCommitment, remainingAmount): the Saving Goal's
+						// counterpart to suggestedTopUp, so a goal near its target is
+						// never asked for more than it still needs.
+						suggestedContribution: 1_400,
+						desiredBalance: null,
+						suggestedTopUp: null,
+					},
+				],
+			},
+			expected: {
+				debtsOutstanding: 900,
+				debts: [
+					{
+						debtId: 9909,
+						description: 'Préstamo sintético P4',
+						contactId: 9511,
+						contactName: 'Contacto sintético P4',
+						totalAmount: 1_200,
+						totalPaid: 300,
+						remaining: 900,
+					},
+				],
+				contributionsOutstanding: 150,
+				contributions: [
+					{
+						paymentRecordId: 9428,
+						subscriptionId: 9430,
+						subscriptionName: 'Suscripción sintética P4',
+						memberId: 9419,
+						contactId: 9512,
+						contactName: 'Contacto sintético P4b',
+						amount: 150,
+						billingDate: '2026-09-01',
+					},
+				],
+			},
+			totalIngress: 18_400,
+			totalEgress: 14_224,
+		}),
 	},
 };
 
@@ -1846,6 +2347,15 @@ const longNames: Scenario = {
 			netBalance: -1_234.56,
 			inBoxes: 0,
 			availableToSpend: -1_234.56,
+		}),
+		'GET /api/dashboard/overview': overview({
+			netBalance: -1_234.56,
+			inBoxes: 0,
+			availableToSpend: -1_234.56,
+			moneyHeld: -1_234.56,
+			accounts: [
+				overviewAccount({ id: 9111, name: LONG_ACCOUNT_NAME, kind: 'DEBIT', balance: -1_234.56 }),
+			],
 		}),
 	},
 };

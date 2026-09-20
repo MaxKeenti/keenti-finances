@@ -13,6 +13,7 @@ import { HARNESS_ROUTES } from './fixtures/harness-routes';
 import { load as dashboardLoad } from '../src/routes/+page.server';
 import { load as layoutLoad } from '../src/routes/+layout.server';
 import { load as subscriptionLoad } from '../src/routes/subscriptions/[id]/+page.server';
+import { loadScenario, UNAVAILABLE_SECTION } from './fixtures/scenarios';
 
 function cookies(values = {}) {
 	const store = new Map(Object.entries(values));
@@ -70,170 +71,175 @@ function expectReadOnly(backend) {
 }
 
 describe('dashboard loader sections', () => {
-	test('a successful load reports the fixture figures', async () => {
+	test('a successful load reports the fixture figures in composed sections', async () => {
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01');
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toMatchObject({
+		expect(data.overview.status).toBe('ok');
+		expect(data.overview.data.position).toMatchObject({
 			status: 'ok',
 			data: { netBalance: 2_500.75, inBoxes: 500, availableToSpend: 2_000.75 },
 		});
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: false } });
+		expect(data.overview.data.history).toMatchObject({
+			status: 'ok',
+			data: { totalIngress: 6_000, totalEgress: 3_499.25 },
+		});
 		expectReadOnly(backend);
+	});
+
+	test('the whole dashboard is one request, not a fan-out per account', async () => {
+		// The page used to read the account list and then a credit-settings and a
+		// confirmed-statement route per Credit Financial Account. Composing
+		// server-side is what keeps the page's cost flat as cards are added.
+		const backend = createFixtureBackend('FX-DASH-NEG-01');
+		await runDashboard(backend);
+
+		expect(backend.requests.map((request) => request.key)).toEqual([
+			'GET /api/dashboard/overview',
+		]);
 	});
 
 	test('a genuine zero stays an ok section, not an unavailable one', async () => {
 		const backend = createFixtureBackend('FX-BAL-ZERO-01');
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toMatchObject({
+		expect(data.overview.data.position).toMatchObject({
 			status: 'ok',
 			data: { netBalance: 0, inBoxes: 0, availableToSpend: 0 },
 		});
 	});
 
-	test('a non-OK summary is unavailable and keeps the warnings section', async () => {
+	test('a non-OK overview is unavailable rather than an empty dashboard', async () => {
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
-			failures: { 'GET /api/dashboard/summary': { kind: 'status', status: 500 } },
+			failures: { 'GET /api/dashboard/overview': { kind: 'status', status: 500 } },
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toEqual({ status: 'unavailable', reason: 'error' });
-		expect(data.accountWarnings.status).toBe('ok');
+		expect(data.overview).toEqual({ status: 'unavailable', reason: 'error' });
 	});
 
-	test('a rejected summary request does not discard the successful section', async () => {
+	test('a rejected overview request never becomes a zero balance', async () => {
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
-			failures: { 'GET /api/dashboard/summary': { kind: 'unreachable' } },
+			failures: { 'GET /api/dashboard/overview': { kind: 'unreachable' } },
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toEqual({ status: 'unavailable', reason: 'unreachable' });
-		expect(data.accountWarnings.status).toBe('ok');
-		expect(backend.requests.some((request) => request.key === 'GET /api/accounts')).toBe(true);
+		expect(data.overview).toEqual({ status: 'unavailable', reason: 'unreachable' });
+		expect(JSON.stringify(data.overview)).not.toContain('netBalance');
 	});
 
-	test('a partial but successful payload cannot manufacture a zero balance', async () => {
-		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
-			// HTTP 200 with the money fields missing: the pre-1A loader spread this
-			// over a zero-filled default and presented 0.00 as the Net Balance.
-			routes: { 'GET /api/dashboard/summary': { year: 2026, monthly: [] } },
+	test('one unavailable section leaves the others with their figures', async () => {
+		// The backend reports per-section availability; a plans section that
+		// could not be computed must not take the position figures down with it.
+		const scenario = loadScenario('FX-DASH-NEG-01');
+		const backend = createFixtureBackend('FX-DASH-NEG-01', {
+			routes: {
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					plans: UNAVAILABLE_SECTION,
+				},
+			},
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toEqual({ status: 'unavailable', reason: 'invalid' });
-		expect(JSON.stringify(data.summary)).not.toContain('netBalance');
+		expect(data.overview.data.plans).toEqual({ status: 'unavailable', reason: 'error' });
+		expect(data.overview.data.position.data.netBalance).toBe(4_176);
+		expect(data.overview.data.expected.status).toBe('ok');
+	});
+
+	test('a partial but successful position cannot manufacture a zero balance', async () => {
+		const scenario = loadScenario('FX-TRACK-ACTIVE-01');
+		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
+			// HTTP 200 with the money fields missing. A loader that spread this
+			// over a zero-filled default would present 0.00 as the Net Balance.
+			routes: {
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					position: { status: 'ok', reason: null, data: { trackingActive: true, setupRequired: false } },
+				},
+			},
+		});
+		const data = await runDashboard(backend);
+
+		expect(data.overview.data.position).toEqual({ status: 'unavailable', reason: 'invalid' });
+		expect(JSON.stringify(data.overview.data.position)).not.toContain('netBalance');
 	});
 
 	test('a non-numeric money field is rejected rather than coerced', async () => {
+		const scenario = loadScenario('FX-TRACK-ACTIVE-01');
+		const position = scenario.routes['GET /api/dashboard/overview'].position;
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
 			routes: {
-				'GET /api/dashboard/summary': {
-					year: 2026,
-					netBalance: '2500.75',
-					inBoxes: 500,
-					availableToSpend: 2_000.75,
-					totalIngress: 0,
-					totalEgress: 0,
-					monthly: [],
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					position: { ...position, data: { ...position.data, netBalance: '2500.75' } },
 				},
 			},
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.summary).toEqual({ status: 'unavailable', reason: 'invalid' });
+		expect(data.overview.data.position).toEqual({ status: 'unavailable', reason: 'invalid' });
 	});
 
-	test('one unreadable credit card marks the warnings partial and keeps the rest', async () => {
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
-			failures: { 'GET /api/accounts/9104/credit-statements': { kind: 'status', status: 503 } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: true } });
-		expect(data.summary.status).toBe('ok');
-	});
-
-	test('a credit account with no credit settings configured is not a service failure', async () => {
-		// The backend answers 404 for "no Credit settings saved yet", which is the
-		// normal state of a Credit Financial Account the User has not configured.
-		// Reporting it as partial would leave a permanent "may be incomplete"
-		// notice on a dashboard where nothing is actually wrong.
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
-			failures: {
-				'GET /api/accounts/9104/credit-settings': {
-					kind: 'status',
-					status: 404,
-					body: { error: 'Credit settings not configured' },
+	test('an unreadable tracking flag is not silently treated as inactive', async () => {
+		// Decision D1: the tracking mode decides how the Net Balance is
+		// explained, so a missing boolean fails the section instead of arriving
+		// as a defaulted `false`, which is the forbidden inference in disguise.
+		const scenario = loadScenario('FX-TRACK-ACTIVE-01');
+		const position = scenario.routes['GET /api/dashboard/overview'].position;
+		const { trackingActive: _dropped, ...withoutTracking } = position.data;
+		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
+			routes: {
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					position: { ...position, data: withoutTracking },
 				},
 			},
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { items: [], partial: false } });
+		expect(data.overview.data.position.status).toBe('unavailable');
 	});
 
-	test('a genuine credit-settings failure is still reported as partial', async () => {
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
-			failures: { 'GET /api/accounts/9104/credit-settings': { kind: 'status', status: 500 } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: true } });
-	});
-
-	test('an unreachable credit-settings request is still reported as partial', async () => {
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
-			failures: { 'GET /api/accounts/9104/credit-settings': { kind: 'unreachable' } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: true } });
-	});
-
-	test('a malformed credit-settings body is partial, not a missing limit', async () => {
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
-			routes: { 'GET /api/accounts/9104/credit-settings': { creditLimit: 'ocho mil' } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: true } });
-	});
-
-	test('an unparseable statement due date fails that section instead of the render', async () => {
-		const backend = createFixtureBackend('FX-BAL-OVERRESERVED-01', {
+	test('a malformed plan status fails its section instead of reading as unplanned', async () => {
+		const scenario = loadScenario('FX-DASH-NEG-01');
+		const plans = scenario.routes['GET /api/dashboard/overview'].plans;
+		const backend = createFixtureBackend('FX-DASH-NEG-01', {
 			routes: {
-				'GET /api/accounts/9104/credit-statements': [
-					{ dueDate: 'next Tuesday', outstandingBalance: 1_200 },
-				],
+				'GET /api/dashboard/overview': {
+					...scenario.routes['GET /api/dashboard/overview'],
+					plans: {
+						...plans,
+						data: {
+							...plans.data,
+							items: [{ ...plans.data.items[0], status: 'PROBABLY_FINE' }],
+						},
+					},
+				},
 			},
 		});
 		const data = await runDashboard(backend);
 
-		expect(data.accountWarnings).toMatchObject({ status: 'ok', data: { partial: true } });
-		expect(data.accountWarnings.data.items).toEqual([]);
-	});
-
-	test('an unreadable account list makes the warnings unavailable, not empty', async () => {
-		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
-			failures: { 'GET /api/accounts': { kind: 'unreachable' } },
-		});
-		const data = await runDashboard(backend);
-
-		expect(data.accountWarnings).toEqual({ status: 'unavailable', reason: 'unreachable' });
+		expect(data.overview.data.plans).toEqual({ status: 'unavailable', reason: 'invalid' });
+		// "No plan" invites creating one, which is the wrong offer for a Box
+		// whose plan we simply failed to understand.
+		expect(JSON.stringify(data.overview.data.plans)).not.toContain('boxesWithoutActivePlan');
 	});
 
 	test('retrying after the backend recovers returns the real figures', async () => {
 		const backend = createFixtureBackend('FX-TRACK-ACTIVE-01', {
-			failures: { 'GET /api/dashboard/summary': { kind: 'status', status: 500 } },
+			failures: { 'GET /api/dashboard/overview': { kind: 'status', status: 500 } },
 		});
 		const failed = await runDashboard(backend);
-		expect(failed.summary.status).toBe('unavailable');
+		expect(failed.overview.status).toBe('unavailable');
 
-		backend.healRoute('GET /api/dashboard/summary');
+		backend.healRoute('GET /api/dashboard/overview');
 		const recovered = await runDashboard(backend);
 
-		expect(recovered.summary).toMatchObject({ status: 'ok', data: { netBalance: 2_500.75 } });
+		expect(recovered.overview.data.position).toMatchObject({
+			status: 'ok',
+			data: { netBalance: 2_500.75 },
+		});
 		expectReadOnly(backend);
 	});
 });
