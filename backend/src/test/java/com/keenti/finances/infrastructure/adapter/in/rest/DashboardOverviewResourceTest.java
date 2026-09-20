@@ -610,7 +610,7 @@ class DashboardOverviewResourceTest {
     }
 
     private static ValidatableResponse generateBilling(String user, long subscriptionId) {
-        return given().header("X-WorkOS-User-Id", user)
+        return given().header("X-WorkOS-User-Id", user).contentType(ContentType.JSON)
             .when().post("/api/subscriptions/{id}/generate-billing", subscriptionId)
             .then();
     }
