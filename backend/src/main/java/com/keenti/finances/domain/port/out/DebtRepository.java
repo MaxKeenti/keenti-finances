@@ -8,7 +8,7 @@ import java.util.Optional;
 public interface DebtRepository {
     List<Debt> findAll();
     Optional<Debt> findById(Long id);
-    List<Debt> findActiveByContactIdOrderByCreatedAt(Long contactId);
+    List<Debt> findActiveByContactIdOrderByCreatedAt(Long contactId, String direction);
     Debt save(Debt debt);
     Debt update(Debt debt);
     void deleteById(Long id);

@@ -33,6 +33,8 @@ Seeded from `docs/archive/gsd-snapshot/REQUIREMENTS.md` (M001–M003 GSD registe
 
 - **Debt with partial Debt Payments, auto-PAID when settled** — *Shipped (M001).*
 - **Debt Payment auto-creates an INGRESS Transaction** — see ADR-0005. *Shipped (M001).*
+- **Debt Payments funded from Boxes** — a payment on a Debt the User owes accepts Box Funding like any other spending; the remainder comes from Available to Spend. Bulk payments do not (see ADR-0023). *Shipped.*
+- **Bidirectional Debts** — a Debt carries a Direction: `INGRESS` when a Contact owes the User, `EGRESS` when the User owes them. Its Debt Payments create a Transaction in that same Direction, so settling what the User owes lowers Net Balance. The two sides are totalled separately and never netted, and one Contact may appear on both. See ADR-0023. *Shipped.*
 
 ## Multi-user & identity
 

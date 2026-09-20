@@ -6,6 +6,7 @@ import java.util.List;
 public record BulkPaymentResponse(
     Long contactId,
     String contactName,
+    String direction,
     BigDecimal totalAmount,
     BigDecimal totalApplied,
     BigDecimal totalUnused,

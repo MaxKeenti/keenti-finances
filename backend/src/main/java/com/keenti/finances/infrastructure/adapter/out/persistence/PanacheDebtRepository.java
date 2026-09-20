@@ -38,9 +38,10 @@ public class PanacheDebtRepository implements DebtRepository {
     }
 
     @Override
-    public List<Debt> findActiveByContactIdOrderByCreatedAt(Long contactId) {
+    public List<Debt> findActiveByContactIdOrderByCreatedAt(Long contactId, String direction) {
         return DebtEntity.<DebtEntity>find(
-                "contact.id = ?1 AND status = 'ACTIVE' ORDER BY createdAt ASC", contactId)
+                "contact.id = ?1 AND direction = ?2 AND status = 'ACTIVE' ORDER BY createdAt ASC",
+                contactId, direction)
                 .stream()
                 .map(this::toDomain)
                 .toList();
@@ -57,6 +58,7 @@ public class PanacheDebtRepository implements DebtRepository {
     public Debt update(Debt debt) {
         DebtEntity entity = DebtEntity.findById(debt.getId());
         entity.contact = ContactEntity.findById(debt.getContactId());
+        entity.direction = debt.getDirection();
         entity.description = debt.getDescription();
         entity.totalAmount = debt.getTotalAmount();
         entity.status = debt.getStatus();
@@ -124,6 +126,7 @@ public class PanacheDebtRepository implements DebtRepository {
     private DebtEntity toEntity(Debt d) {
         DebtEntity e = new DebtEntity();
         e.contact = ContactEntity.findById(d.getContactId());
+        e.direction = d.getDirection();
         e.description = d.getDescription();
         e.totalAmount = d.getTotalAmount();
         e.status = d.getStatus() != null ? d.getStatus() : "ACTIVE";
@@ -136,6 +139,7 @@ public class PanacheDebtRepository implements DebtRepository {
         return new Debt(
             e.id,
             e.contact != null ? e.contact.id : null,
+            e.direction,
             e.description,
             e.totalAmount,
             e.status,

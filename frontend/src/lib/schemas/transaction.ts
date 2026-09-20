@@ -4,7 +4,11 @@ import { allocationTotal, hasAtMostTwoDecimalPlaces } from '$lib/types/transacti
 
 const MAX_AMOUNT = 9_999_999_999.99;
 
-const boxAllocationSchema = z.object({
+/**
+ * One Box allocation line. Shared with the Debt Payment form, whose payment on
+ * a Debt the User owes funds its EGRESS Transaction the same way spending does.
+ */
+export const boxAllocationSchema = z.object({
 	boxId: z.coerce.number().int().positive(m.transactions_box_required()),
 	amount: z.coerce
 		.number()

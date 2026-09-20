@@ -6,11 +6,12 @@ import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import type { Actions, PageServerLoad } from './$types';
 import { dateInTimeZone } from '$lib/formatting';
-import { summarizeReceivables } from '$lib/receivables';
+import { parseDirectionFilter, summarizeDebts } from '$lib/debts';
 
 const debtSchema = z.object({
 	id: z.coerce.number().optional(),
 	contactId: z.coerce.number().positive(m.validation_contact_required()),
+	direction: z.enum(['INGRESS', 'EGRESS']),
 	description: z.string().min(1, m.validation_description_required()),
 	totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
 	createdAt: z.string().min(1, m.validation_date_required()),
@@ -18,6 +19,7 @@ const debtSchema = z.object({
 
 const bulkPaymentSchema = z.object({
 	contactId: z.coerce.number().positive(m.validation_contact_required()),
+	direction: z.enum(['INGRESS', 'EGRESS']),
 	totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
 	paymentDate: z.string().min(1, m.validation_payment_date_required()),
 	categoryId: z.coerce.number().positive(m.validation_category_required()),
@@ -32,6 +34,7 @@ type Debt = {
 	id: number;
 	contactId: number | null;
 	contactName: string | null;
+	direction: string;
 	description: string;
 	totalAmount: number;
 	totalPaid: number;
@@ -90,21 +93,37 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent, url }) => {
 	const { preferences } = await parent();
 	const today = dateInTimeZone(preferences.timeZone);
 	const [form, bulkForm] = await Promise.all([
-		superValidate({ contactId: 0, description: '', totalAmount: 0, createdAt: today }, zod4(debtSchema)),
 		superValidate(
-			{ contactId: 0, totalAmount: 0, paymentDate: today, categoryId: 0, accountId: '' as '', notes: '' },
+			{ contactId: 0, direction: 'INGRESS' as const, description: '', totalAmount: 0, createdAt: today },
+			zod4(debtSchema),
+		),
+		superValidate(
+			{
+				contactId: 0,
+				direction: 'INGRESS' as const,
+				totalAmount: 0,
+				paymentDate: today,
+				categoryId: 0,
+				accountId: '' as '',
+				notes: '',
+			},
 			zod4(bulkPaymentSchema),
 		),
 	]);
 
-	const receivables = summarizeReceivables(debts, (debt) =>
+	const summary = summarizeDebts(debts, (debt) =>
 		debt.contactName ?? m.contact_number({ id: debt.contactId ?? debt.id }),
 	);
 	// An unknown key is treated as no drill-down rather than an empty page: the
-	// debtor may have been paid off or deleted since the link was made.
-	const requested = url.searchParams.get('debtor');
-	const debtorFilter =
-		requested && receivables.debtors.some((debtor) => debtor.key === requested) ? requested : null;
+	// counterpart may have been settled or deleted since the link was made.
+	const requested = url.searchParams.get('counterpart');
+	const counterparts = [...summary.owedToYou.counterparts, ...summary.youOwe.counterparts];
+	const opened = counterparts.find((counterpart) => counterpart.key === requested) ?? null;
+	// An opened counterpart sits on one side, so it decides the Direction shown
+	// and the explicit `?direction=` cannot contradict it.
+	const directionFilter = opened
+		? opened.direction
+		: parseDirectionFilter(url.searchParams.get('direction'));
 
 	return {
 		debts,
@@ -112,8 +131,9 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent, url }) => {
 		categories,
 		accounts,
 		accountTracking,
-		receivables,
-		debtorFilter,
+		summary,
+		counterpartFilter: opened?.key ?? null,
+		directionFilter,
 		form,
 		bulkForm,
 	};
@@ -137,6 +157,7 @@ export const actions: Actions = {
 				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					contactId: form.data.contactId,
+					direction: form.data.direction,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
 					createdAt: form.data.createdAt || null,
@@ -160,7 +181,7 @@ export const actions: Actions = {
 		}
 
 		console.log(
-			`[debts] create: success — contactId: ${form.data.contactId} amount: ${form.data.totalAmount}`,
+			`[debts] create: success — contactId: ${form.data.contactId} direction: ${form.data.direction} amount: ${form.data.totalAmount}`,
 		);
 		return { form };
 	},
@@ -185,6 +206,7 @@ export const actions: Actions = {
 				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					contactId: form.data.contactId,
+					direction: form.data.direction,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
 					createdAt: form.data.createdAt || null,
@@ -205,7 +227,9 @@ export const actions: Actions = {
 			return fail(502, { form: { ...form, message: m.error_unexpected_update_debt() } });
 		}
 
-		console.log(`[debts] update: success — id: ${id} contactId: ${form.data.contactId}`);
+		console.log(
+			`[debts] update: success — id: ${id} contactId: ${form.data.contactId} direction: ${form.data.direction}`,
+		);
 		return { form };
 	},
 
@@ -227,6 +251,7 @@ export const actions: Actions = {
 				headers: { 'content-type': 'application/json', ...authHeaders },
 				body: JSON.stringify({
 					contactId: form.data.contactId,
+					direction: form.data.direction,
 					totalAmount: form.data.totalAmount,
 					paymentDate: form.data.paymentDate,
 					categoryId: form.data.categoryId,
@@ -255,7 +280,7 @@ export const actions: Actions = {
 
 		const result = await res.json();
 		console.log(
-			`[debts] bulkPayment: success — contactId: ${form.data.contactId} applied: ${result.totalApplied} unused: ${result.totalUnused} debts: ${result.payments?.length}`,
+			`[debts] bulkPayment: success — contactId: ${form.data.contactId} direction: ${form.data.direction} applied: ${result.totalApplied} unused: ${result.totalUnused} debts: ${result.payments?.length}`,
 		);
 		return { bulkForm: form, bulkResult: result };
 	},

@@ -7,6 +7,7 @@ public record DebtResponse(
     Long id,
     Long contactId,
     String contactName,
+    String direction,
     String description,
     BigDecimal totalAmount,
     BigDecimal totalPaid,

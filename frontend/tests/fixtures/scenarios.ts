@@ -530,15 +530,18 @@ function debtScenario(values: {
 	debtId: number;
 	totalPaid: number;
 	percent: number;
+	direction?: 'INGRESS' | 'EGRESS';
 }): Scenario {
 	const totalAmount = 1_000;
 	const remaining = totalAmount - values.totalPaid;
+	const direction = values.direction ?? 'INGRESS';
 	return {
 		id: values.id,
-		description: `Debt ${values.debtId} at ${values.percent}% progress.`,
+		description: `Debt ${values.debtId} at ${values.percent}% progress, ${direction}.`,
 		clock: MEXICO_CITY_MIDDAY,
 		expected: {
 			debtId: values.debtId,
+			direction,
 			totalAmount,
 			totalPaid: values.totalPaid,
 			remaining,
@@ -549,6 +552,7 @@ function debtScenario(values: {
 				id: values.debtId,
 				contactId: 9503,
 				contactName: 'Contacto sintético 3',
+				direction,
 				description: 'Préstamo sintético',
 				totalAmount,
 				totalPaid: values.totalPaid,
@@ -570,7 +574,11 @@ function debtScenario(values: {
 								createdAt: '2026-09-01T12:00:00Z',
 							},
 						],
-			'GET /api/categories': [{ id: 9801, name: 'Categoría sintética', type: 'INGRESS' }],
+			'GET /api/categories': [
+				{ id: 9801, name: 'Categoría sintética', type: 'INGRESS' },
+				{ id: 9802, name: 'Categoría sintética de egreso', type: 'EGRESS' },
+			],
+			'GET /api/boxes': [],
 			'GET /api/accounts': [
 				account({ id: 9109, name: 'Cuenta sintética F', kind: 'DEBIT', balance: 1_000 }),
 			],
@@ -594,19 +602,21 @@ const debtComplete = debtScenario({
 	percent: 100,
 });
 
-function receivable(values: {
+function debtRecord(values: {
 	id: number;
 	contactId: number | null;
 	contactName: string | null;
 	totalAmount: number;
 	totalPaid: number;
 	createdAt: string;
+	direction?: 'INGRESS' | 'EGRESS';
 }) {
 	const remaining = values.totalAmount - values.totalPaid;
 	return {
 		id: values.id,
 		contactId: values.contactId,
 		contactName: values.contactName,
+		direction: values.direction ?? 'INGRESS',
 		description: `Deuda sintética ${values.id}`,
 		totalAmount: values.totalAmount,
 		totalPaid: values.totalPaid,
@@ -631,11 +641,11 @@ const receivablesByDebtor: Scenario = {
 		totalOutstanding: 2_050,
 		outstandingDebtCount: 4,
 		debtorCount: 3,
-		topDebtorKey: 'contact-9504',
+		topDebtorKey: 'in-contact-9504',
 		topDebtorOutstanding: 1_200,
-		groupedDebtorKey: 'contact-9503',
+		groupedDebtorKey: 'in-contact-9503',
 		groupedDebtorOutstanding: 750,
-		unlinkedDebtorKey: 'debt-9907',
+		unlinkedDebtorKey: 'in-debt-9907',
 		settledDebtId: 9906,
 	},
 	routes: {
@@ -645,21 +655,89 @@ const receivablesByDebtor: Scenario = {
 		'GET /api/trash': [
 			{ id: 9590, entityType: 'contact', label: 'Contacto sintético con nombre largo para verificar recuperación', deletedAt: '2026-09-07T18:00:00Z' },
 		],
-		'GET /api/debts/9904': receivable({ id: 9904, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 600, totalPaid: 200, createdAt: '2026-03-01T12:00:00Z' }),
+		'GET /api/debts/9904': debtRecord({ id: 9904, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 600, totalPaid: 200, createdAt: '2026-03-01T12:00:00Z' }),
 		'GET /api/debts/9904/payments': [{ id: 9708, debtId: 9904, amount: 200, paymentDate: '2026-09-07', transactionId: 9612, notes: null, createdAt: '2026-09-07T18:00:00Z' }],
 		'GET /api/transactions/9612': { id: 9612, amount: 200, direction: 'INGRESS', description: 'Pago sintético de deuda', transactionDate: '2026-09-07', categoryId: 9801, categoryName: 'Categoría sintética', contactId: 9503, contactName: 'Contacto sintético 3', boxFunding: [], boxDistributions: [], availableToSpendAmount: 200 },
 		'GET /api/debts': [
-			receivable({ id: 9904, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 600, totalPaid: 200, createdAt: '2026-03-01T12:00:00Z' }),
-			receivable({ id: 9905, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 350, totalPaid: 0, createdAt: '2026-04-01T12:00:00Z' }),
-			receivable({ id: 9906, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 500, totalPaid: 500, createdAt: '2026-02-01T12:00:00Z' }),
-			receivable({ id: 9907, contactId: null, contactName: null, totalAmount: 100, totalPaid: 0, createdAt: '2026-05-01T12:00:00Z' }),
-			receivable({ id: 9908, contactId: 9504, contactName: 'Contacto sintético 4', totalAmount: 1_500, totalPaid: 300, createdAt: '2026-06-01T12:00:00Z' }),
+			debtRecord({ id: 9904, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 600, totalPaid: 200, createdAt: '2026-03-01T12:00:00Z' }),
+			debtRecord({ id: 9905, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 350, totalPaid: 0, createdAt: '2026-04-01T12:00:00Z' }),
+			debtRecord({ id: 9906, contactId: 9503, contactName: 'Contacto sintético 3', totalAmount: 500, totalPaid: 500, createdAt: '2026-02-01T12:00:00Z' }),
+			debtRecord({ id: 9907, contactId: null, contactName: null, totalAmount: 100, totalPaid: 0, createdAt: '2026-05-01T12:00:00Z' }),
+			debtRecord({ id: 9908, contactId: 9504, contactName: 'Contacto sintético 4', totalAmount: 1_500, totalPaid: 300, createdAt: '2026-06-01T12:00:00Z' }),
 		],
 		'GET /api/contacts': [
 			{ id: 9503, name: 'Contacto sintético 3', phone: null, email: null },
 			{ id: 9504, name: 'Contacto sintético 4', phone: '555-0104', email: null },
 		],
 		'GET /api/categories': [{ id: 9801, name: 'Categoría sintética', type: 'INGRESS' }],
+		'GET /api/accounts': [
+			account({ id: 9109, name: 'Cuenta sintética F', kind: 'DEBIT', balance: 1_000 }),
+		],
+		'GET /api/accounts/status': trackingStatus({
+			active: true,
+			setupRequired: false,
+			activatedAt: '2026-01-15',
+			transactionNetBalance: 1_000,
+			accountNetBalance: 1_000,
+		}),
+	},
+};
+
+/**
+ * Both directions at once, for the bidirectional Debt totals.
+ *
+ * The point of the scenario is that one Contact sits on both sides: Contacto
+ * sintético 3 owes the User on one Debt and is owed on another. Those are two
+ * balances, never netted (ADR-0023). It also carries a settled Debt that must
+ * not be counted and a Debt the User owes with no Contact, which cannot be
+ * grouped with anything and stands alone.
+ */
+const debtsBothDirections: Scenario = {
+	id: 'FX-DEBT-BIDIRECTIONAL-01',
+	description: 'Outstanding Debts in both directions, including one Contact on both sides.',
+	clock: MEXICO_CITY_MIDDAY,
+	expected: {
+		owedToYouTotal: 400,
+		owedToYouDebtCount: 1,
+		owedToYouCounterpartCount: 1,
+		youOweTotal: 1_500,
+		youOweDebtCount: 3,
+		youOweCounterpartCount: 3,
+		sharedContactId: 9503,
+		owedToYouKey: 'in-contact-9503',
+		youOweKey: 'out-contact-9503',
+		youOweOutstandingForSharedContact: 750,
+		unlinkedYouOweKey: 'out-debt-9914',
+		settledDebtId: 9913,
+		egressDebtId: 9911,
+		fundingBoxId: 9210,
+		fundingBoxBalance: 500,
+	},
+	routes: {
+		'GET /api/debts': [
+			debtRecord({ id: 9910, contactId: 9503, contactName: 'Contacto sintético 3', direction: 'INGRESS', totalAmount: 600, totalPaid: 200, createdAt: '2026-03-01T12:00:00Z' }),
+			debtRecord({ id: 9911, contactId: 9503, contactName: 'Contacto sintético 3', direction: 'EGRESS', totalAmount: 900, totalPaid: 150, createdAt: '2026-04-01T12:00:00Z' }),
+			debtRecord({ id: 9912, contactId: 9504, contactName: 'Contacto sintético 4', direction: 'EGRESS', totalAmount: 500, totalPaid: 0, createdAt: '2026-05-01T12:00:00Z' }),
+			debtRecord({ id: 9913, contactId: 9504, contactName: 'Contacto sintético 4', direction: 'INGRESS', totalAmount: 300, totalPaid: 300, createdAt: '2026-02-01T12:00:00Z' }),
+			debtRecord({ id: 9914, contactId: null, contactName: null, direction: 'EGRESS', totalAmount: 250, totalPaid: 0, createdAt: '2026-06-01T12:00:00Z' }),
+		],
+		'GET /api/debts/9911': debtRecord({ id: 9911, contactId: 9503, contactName: 'Contacto sintético 3', direction: 'EGRESS', totalAmount: 900, totalPaid: 150, createdAt: '2026-04-01T12:00:00Z' }),
+		'GET /api/debts/9911/payments': [
+			{ id: 9710, debtId: 9911, amount: 150, paymentDate: '2026-09-07', transactionId: 9613, notes: null, createdAt: '2026-09-07T18:00:00Z' },
+		],
+		'GET /api/contacts': [
+			{ id: 9503, name: 'Contacto sintético 3', phone: null, email: null },
+			{ id: 9504, name: 'Contacto sintético 4', phone: '555-0104', email: null },
+		],
+		'GET /api/categories': [
+			{ id: 9801, name: 'Categoría sintética', type: 'INGRESS' },
+			{ id: 9802, name: 'Categoría sintética de egreso', type: 'EGRESS' },
+			{ id: 9803, name: 'Categoría sintética mixta', type: 'BOTH' },
+		],
+		'GET /api/boxes': [
+			box({ id: 9210, name: 'Caja sintética deudas', balance: 500, displayOrder: 1 }),
+			box({ id: 9211, name: 'Caja sintética vacía', balance: 0, displayOrder: 2 }),
+		],
 		'GET /api/accounts': [
 			account({ id: 9109, name: 'Cuenta sintética F', kind: 'DEBIT', balance: 1_000 }),
 		],
@@ -1809,6 +1887,7 @@ const ALL: readonly Scenario[] = Object.freeze([
 	debtTen,
 	debtComplete,
 	receivablesByDebtor,
+	debtsBothDirections,
 	dateBoundaries,
 	longNames,
 	// Slice 0B

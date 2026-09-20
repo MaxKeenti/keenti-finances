@@ -21,13 +21,14 @@
 	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
 	import { DataTableWrapper } from '$lib/components/ui/data-table';
 	import type { ColumnDef, Row } from '@tanstack/table-core';
-	import { debtorKey } from '$lib/receivables';
+	import { counterpartKey, debtDirection, type DebtDirection } from '$lib/debts';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	const debtSchema = z.object({
 		id: z.coerce.number().optional(),
 		contactId: z.coerce.number().positive(m.validation_contact_required()),
+		direction: z.enum(['INGRESS', 'EGRESS']),
 		description: z.string().min(1, m.validation_description_required()),
 		totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
 		createdAt: z.string().min(1, m.validation_date_required()),
@@ -35,6 +36,7 @@
 
 	const bulkPaymentSchema = z.object({
 		contactId: z.coerce.number().positive(m.validation_contact_required()),
+		direction: z.enum(['INGRESS', 'EGRESS']),
 		totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
 		paymentDate: z.string().min(1, m.validation_payment_date_required()),
 		categoryId: z.coerce.number().positive(m.validation_category_required()),
@@ -45,6 +47,7 @@
 		id: number;
 		contactId: number | null;
 		contactName: string | null;
+		direction: string;
 		description: string;
 		totalAmount: number;
 		totalPaid: number;
@@ -64,6 +67,7 @@
 	type BulkResult = {
 		contactId: number;
 		contactName: string | null;
+		direction: DebtDirection;
 		totalAmount: number;
 		totalApplied: number;
 		totalUnused: number;
@@ -124,16 +128,41 @@
 	});
 	const { form: bulkForm, enhance: bulkEnhance, submitting: bulkSubmitting } = bulkSf;
 
-	const ingressCategories = $derived(
-		(data.categories as Category[])
-			.filter((c) => c.type === 'INGRESS' || c.type === 'BOTH')
-			.sort((a, b) => a.name.localeCompare(b.name)),
+	const sortedCategories = $derived(
+		[...(data.categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)),
 	);
+
+	// A Debt Payment creates a Transaction in the Debt's own Direction
+	// (ADR-0023), so the Category offered has to match that Direction rather
+	// than always being an income one.
+	function categoriesFor(direction: DebtDirection) {
+		return sortedCategories.filter((c) => c.type === direction || c.type === 'BOTH');
+	}
+
+	const bulkCategories = $derived(categoriesFor($bulkForm.direction));
+
+	// Creating from a filtered view stays on that side: opening "You owe" and
+	// pressing New should not silently record money owed to the User instead.
+	const defaultDirection = $derived<DebtDirection>(
+		data.directionFilter === 'EGRESS' ? 'EGRESS' : 'INGRESS',
+	);
+
+	// A Debt with payments has Transactions behind it in one Direction, so the
+	// backend refuses to flip it; the dialog says so rather than letting the
+	// User try (ADR-0023).
+	let editDirectionLocked = $state(false);
 
 	function openCreate() {
 		editMode = false;
+		editDirectionLocked = false;
 		sf.reset({
-			data: { contactId: 0, description: '', totalAmount: 0, createdAt: dateInTimeZone(data.preferences.timeZone) },
+			data: {
+				contactId: 0,
+				direction: defaultDirection,
+				description: '',
+				totalAmount: 0,
+				createdAt: dateInTimeZone(data.preferences.timeZone),
+			},
 		});
 		dialogOpen = true;
 	}
@@ -143,6 +172,7 @@
 		bulkSf.reset({
 			data: {
 				contactId: 0,
+				direction: defaultDirection,
 				totalAmount: 0,
 				paymentDate: dateInTimeZone(data.preferences.timeZone),
 				categoryId: 0,
@@ -154,10 +184,12 @@
 
 	function openEdit(debt: Debt) {
 		editMode = true;
+		editDirectionLocked = debt.totalPaid > 0;
 		const existing = debt.createdAt ? debt.createdAt.split('T')[0] : dateInTimeZone(data.preferences.timeZone);
 		form.set({
 			id: debt.id,
 			contactId: debt.contactId ?? 0,
+			direction: debtDirection(debt.direction),
 			description: debt.description,
 			totalAmount: debt.totalAmount,
 			createdAt: existing,
@@ -185,22 +217,57 @@
 		return debt.createdAt ? debt.createdAt.split('T')[0] : '';
 	}
 
-	// Receivables totals are summarized by the loader so the opened debtor is a
-	// URL (`?debtor=`) rather than component-local state.
-	const debtorSummaries = $derived(data.receivables.debtors);
-	const openedDebtor = $derived(
-		debtorSummaries.find((debtor) => debtor.key === data.debtorFilter) ?? null,
+	// Both sides are summarized by the loader so the opened counterpart and the
+	// Direction shown are URLs (`?counterpart=`, `?direction=`) rather than
+	// component-local state.
+	const owedToYou = $derived(data.summary.owedToYou);
+	const youOwe = $derived(data.summary.youOwe);
+	const openedCounterpart = $derived(
+		[...owedToYou.counterparts, ...youOwe.counterparts].find(
+			(counterpart) => counterpart.key === data.counterpartFilter,
+		) ?? null,
 	);
+	const showOwedToYou = $derived(data.directionFilter !== 'EGRESS');
+	const showYouOwe = $derived(data.directionFilter !== 'INGRESS');
+	const hasAnyCounterpart = $derived(
+		owedToYou.counterparts.length > 0 || youOwe.counterparts.length > 0,
+	);
+
+	// Direction is a URL so a side can be linked to, unlike the status and date
+	// filters, which are a passing narrowing of what is already on screen.
+	function directionHref(direction: 'ALL' | DebtDirection): string {
+		return direction === 'ALL' ? '/debts' : `/debts?direction=${direction}`;
+	}
+
+	const directionFilters = $derived([
+		{ value: 'ALL' as const, label: m.debts_filter_direction_all() },
+		{ value: 'INGRESS' as const, label: m.debts_filter_direction_owed_to_you() },
+		{ value: 'EGRESS' as const, label: m.debts_filter_direction_you_owe() },
+	]);
+
+	function directionLabel(direction: string): string {
+		return debtDirection(direction) === 'EGRESS' ? m.debts_badge_you_owe() : m.debts_badge_owes_you();
+	}
+
+	// Money the User owes gets the same treatment a Credit Financial Account's
+	// balance gets; money owed to the User stays amber, as it was.
+	function remainingClass(debt: Debt): string {
+		if (debt.status === 'PAID') return 'text-money-positive';
+		return debtDirection(debt.direction) === 'EGRESS'
+			? 'text-money-negative'
+			: 'text-amber-600 dark:text-amber-400';
+	}
 
 	// Desktop columns. `accessorFn` keeps the searchable text in the row model so
 	// the wrapper's global filter matches debtor and description, and sorting on
 	// the money columns compares numbers rather than formatted strings.
 	const debtColumns: ColumnDef<Debt>[] = [
 		{
-			id: 'debtor',
-			header: m.debts_column_debtor(),
+			id: 'contact',
+			header: m.debts_column_contact(),
 			accessorFn: (d) => d.contactName ?? m.contact_number({ id: d.contactId ?? d.id }),
 		},
+		{ id: 'direction', header: m.debts_column_direction(), accessorFn: (d) => directionLabel(d.direction) },
 		{ id: 'description', header: m.common_description(), accessorFn: (d) => d.description },
 		{ id: 'date', header: m.common_date(), accessorFn: (d) => debtDate(d) },
 		{ id: 'total', header: m.common_total(), accessorFn: (d) => d.totalAmount },
@@ -219,7 +286,9 @@
 	const dateFilterActive = $derived(dateFrom !== '' || dateTo !== '');
 	const visibleDebts = $derived(
 		(data.debts as Debt[]).filter((d) => {
-			if (data.debtorFilter && debtorKey(d) !== data.debtorFilter) return false;
+			if (data.counterpartFilter && counterpartKey(d) !== data.counterpartFilter) return false;
+			if (data.directionFilter !== 'ALL' && debtDirection(d.direction) !== data.directionFilter)
+				return false;
 			if (statusFilter !== 'ALL') {
 				const matches = statusFilter === 'PAID' ? d.status === 'PAID' : d.status !== 'PAID';
 				if (!matches) return false;
@@ -264,59 +333,111 @@
 		</div>
 	</div>
 
-	{#if debtorSummaries.length > 0}
-		<section class="space-y-3" aria-labelledby="debtor-outstanding-title">
-			<div class="rounded-lg border p-4">
-				<p class="text-sm font-medium text-muted-foreground">{m.debts_total_owed_to_you()}</p>
-				<p class="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
-					{fmt.format(data.receivables.totalOutstanding)}
-				</p>
-				<p class="mt-1 text-sm text-muted-foreground">
-					{m.debts_total_owed_to_you_description({
-						count: data.receivables.outstandingDebtCount,
-						debtors: debtorSummaries.length,
-					})}
-				</p>
-			</div>
+	{#if data.debts.length > 0}
+		<!-- Direction is a real link, not a toggle: one side of the page is a
+		     place the User can come back to. -->
+		<div class="flex w-fit items-center gap-1 rounded-lg border p-0.5" role="group" aria-label={m.debts_filter_direction()}>
+			{#each directionFilters as option (option.value)}
+				<Button
+					variant={data.directionFilter === option.value ? 'secondary' : 'ghost'}
+					size="sm"
+					href={directionHref(option.value)}
+					aria-current={data.directionFilter === option.value ? 'true' : undefined}
+				>
+					{option.label}
+				</Button>
+			{/each}
+		</div>
+	{/if}
 
-			<div>
-				<h2 id="debtor-outstanding-title" class="text-lg font-semibold">{m.debts_outstanding_by_debtor()}</h2>
-				<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_debtor_description()}</p>
-			</div>
-
-			{#if openedDebtor}
-				<div class="flex flex-wrap items-center gap-2">
-					<Badge variant="secondary">{m.debts_filter_debtor_active({ name: openedDebtor.name })}</Badge>
-					<Button variant="ghost" size="sm" href="/debts">{m.debts_filter_debtor_clear()}</Button>
+	{#if hasAnyCounterpart}
+		<div class="grid gap-3 sm:grid-cols-2">
+			{#if showOwedToYou}
+				<div class="rounded-lg border p-4">
+					<p class="text-sm font-medium text-muted-foreground">{m.debts_total_owed_to_you()}</p>
+					<p class="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+						{fmt.format(owedToYou.totalOutstanding)}
+					</p>
+					<p class="mt-1 text-sm text-muted-foreground">
+						{m.debts_total_owed_to_you_description({
+							count: owedToYou.outstandingDebtCount,
+							debtors: owedToYou.counterparts.length,
+						})}
+					</p>
 				</div>
 			{/if}
+			{#if showYouOwe}
+				<div class="rounded-lg border p-4">
+					<p class="text-sm font-medium text-muted-foreground">{m.debts_total_you_owe()}</p>
+					<p class="text-3xl font-bold tabular-nums text-money-negative">
+						{fmt.format(youOwe.totalOutstanding)}
+					</p>
+					<p class="mt-1 text-sm text-muted-foreground">
+						{m.debts_total_you_owe_description({
+							count: youOwe.outstandingDebtCount,
+							creditors: youOwe.counterparts.length,
+						})}
+					</p>
+				</div>
+			{/if}
+		</div>
 
-			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-				{#each debtorSummaries as debtor (debtor.key)}
-					{@const opened = debtor.key === data.debtorFilter}
-					<Card.Root class={opened ? 'ring-2 ring-ring' : undefined}>
-						<Card.Content class="space-y-2 py-4">
-							<!-- The whole debtor drills down to their debts; keeping it a real
-							     link makes the opened debtor shareable and Back-navigable. -->
-							<a
-								href={opened ? '/debts' : `/debts?debtor=${debtor.key}`}
-								aria-label={m.debts_open_debtor_aria({ name: debtor.name })}
-								aria-current={opened ? 'true' : undefined}
-								class="block truncate font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-							>
-								{debtor.name}
-							</a>
-							<p class="text-sm text-muted-foreground">{debtor.debtCount === 1 ? m.debts_one_active_debt() : m.debts_active_debt_count({ count: debtor.debtCount })}</p>
-							<div class="border-t pt-2">
-								<p class="text-xs font-medium text-muted-foreground">{m.debts_amount_owed_to_you()}</p>
-								<p class="text-xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{fmt.format(debtor.outstanding)}</p>
-							</div>
-						</Card.Content>
-					</Card.Root>
-				{/each}
+		{#if openedCounterpart}
+			<div class="flex flex-wrap items-center gap-2">
+				<Badge variant="secondary">{m.debts_filter_counterpart_active({ name: openedCounterpart.name })}</Badge>
+				<Button variant="ghost" size="sm" href={directionHref(openedCounterpart.direction)}>
+					{m.debts_filter_counterpart_clear()}
+				</Button>
 			</div>
-		</section>
+		{/if}
+
+		{#if showOwedToYou && owedToYou.counterparts.length > 0}
+			<section class="space-y-3" aria-labelledby="owed-to-you-title">
+				<div>
+					<h2 id="owed-to-you-title" class="text-lg font-semibold">{m.debts_outstanding_by_debtor()}</h2>
+					<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_debtor_description()}</p>
+				</div>
+				{@render counterpartCards(owedToYou.counterparts, m.debts_amount_owed_to_you(), 'text-amber-600 dark:text-amber-400')}
+			</section>
+		{/if}
+
+		{#if showYouOwe && youOwe.counterparts.length > 0}
+			<section class="space-y-3" aria-labelledby="you-owe-title">
+				<div>
+					<h2 id="you-owe-title" class="text-lg font-semibold">{m.debts_outstanding_by_creditor()}</h2>
+					<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_creditor_description()}</p>
+				</div>
+				{@render counterpartCards(youOwe.counterparts, m.debts_amount_you_owe(), 'text-money-negative')}
+			</section>
+		{/if}
 	{/if}
+
+{#snippet counterpartCards(counterparts: typeof owedToYou.counterparts, amountLabel: string, amountClass: string)}
+	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		{#each counterparts as counterpart (counterpart.key)}
+			{@const opened = counterpart.key === data.counterpartFilter}
+			<Card.Root class={opened ? 'ring-2 ring-ring' : undefined}>
+				<Card.Content class="space-y-2 py-4">
+					<!-- The whole counterpart drills down to their debts; keeping it a
+					     real link makes the opened one shareable and Back-navigable. -->
+					<a
+						href={opened ? directionHref(counterpart.direction) : `/debts?counterpart=${counterpart.key}`}
+						aria-label={m.debts_open_counterpart_aria({ name: counterpart.name })}
+						aria-current={opened ? 'true' : undefined}
+						class="block truncate font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+					>
+						{counterpart.name}
+					</a>
+					<p class="text-sm text-muted-foreground">{counterpart.debtCount === 1 ? m.debts_one_active_debt() : m.debts_active_debt_count({ count: counterpart.debtCount })}</p>
+					<div class="border-t pt-2">
+						<p class="text-xs font-medium text-muted-foreground">{amountLabel}</p>
+						<p class="text-xl font-bold tabular-nums {amountClass}">{fmt.format(counterpart.outstanding)}</p>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		{/each}
+	</div>
+{/snippet}
 
 	{#if data.debts.length === 0}
 		<Empty.Root class="border">
@@ -331,7 +452,7 @@
 			filterPlaceholder={m.debts_search_placeholder()}
 			mobileCard={debtCard}
 			{toolbar}
-			cellRenders={{ debtor: debtorCell, date: dateCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
+			cellRenders={{ contact: contactCell, direction: directionCell, date: dateCell, total: totalCell, paid: paidCell, remaining: remainingCell, status: statusCell }}
 			actionCell={rowActions}
 		/>
 	{/if}
@@ -379,10 +500,16 @@
 	</div>
 {/snippet}
 
-{#snippet debtorCell(row: Row<Debt>)}
+{#snippet contactCell(row: Row<Debt>)}
 	<a href="/debts/{row.original.id}" class="font-medium hover:underline">
 		{row.original.contactName ?? m.contact_number({ id: row.original.contactId ?? row.original.id })}
 	</a>
+{/snippet}
+
+{#snippet directionCell(row: Row<Debt>)}
+	<Badge variant="outline" class={debtDirection(row.original.direction) === 'EGRESS' ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+		{directionLabel(row.original.direction)}
+	</Badge>
 {/snippet}
 
 {#snippet dateCell(row: Row<Debt>)}
@@ -398,7 +525,7 @@
 {/snippet}
 
 {#snippet remainingCell(row: Row<Debt>)}
-	<span class="font-medium tabular-nums {row.original.status === 'PAID' ? 'text-money-positive' : 'text-amber-600 dark:text-amber-400'}">
+	<span class="font-medium tabular-nums {remainingClass(row.original)}">
 		{fmt.format(row.original.remaining)}
 	</span>
 {/snippet}
@@ -439,7 +566,12 @@
 							</p>
 							<p class="text-sm text-muted-foreground truncate mt-0.5">{debt.description}</p>
 						</div>
-						<Badge class="shrink-0" variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
+						<div class="flex shrink-0 flex-col items-end gap-1">
+							<Badge variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
+							<Badge variant="outline" class={debtDirection(debt.direction) === 'EGRESS' ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+								{directionLabel(debt.direction)}
+							</Badge>
+						</div>
 					</div>
 
 					<div class="space-y-1 text-sm">
@@ -463,11 +595,7 @@
 						</div>
 						<div class="flex justify-between border-t pt-1">
 							<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
-							<span
-								class="font-bold {debt.status === 'PAID'
-									? 'text-money-positive'
-									: 'text-amber-600 dark:text-amber-400'}"
-							>
+							<span class="font-bold {remainingClass(debt)}">
 								{fmt.format(debt.remaining)}
 							</span>
 						</div>
@@ -511,11 +639,35 @@
 				<input type="hidden" name="id" value={$form.id} />
 			{/if}
 
+			<Form.Field form={sf} name="direction">
+				<Form.Control>
+					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
+						<Form.Label>{m.debts_direction_field()}</Form.Label>
+						<NativeSelect
+							name={fieldName}
+							value={$form.direction}
+							disabled={editDirectionLocked}
+							onValueChange={(v) => { $form.direction = v === 'EGRESS' ? 'EGRESS' : 'INGRESS'; }}
+							items={[
+								{ value: 'INGRESS', label: m.debts_direction_option_owed_to_you() },
+								{ value: 'EGRESS', label: m.debts_direction_option_you_owe() },
+							]}
+							{...triggerProps}
+						/>
+					{/snippet}
+				</Form.Control>
+				{#if editDirectionLocked}
+					<p class="text-sm text-muted-foreground">{m.debts_direction_locked()}</p>
+				{/if}
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<Form.Field form={sf} name="contactId">
 				<Form.Control>
 					{#snippet children({ props })}
 						{@const { name: fieldName, ...triggerProps } = props}
-						<Form.Label>{m.debts_debtor_contact()}</Form.Label>
+						<Form.Label>{$form.direction === 'EGRESS' ? m.debts_creditor_contact() : m.debts_debtor_contact()}</Form.Label>
 						<NativeSelect
 							name={fieldName}
 							value={$form.contactId > 0 ? String($form.contactId) : ''}
@@ -644,11 +796,36 @@
 			</div>
 		{:else}
 			<form method="POST" action="?/bulkPayment" use:bulkEnhance class="grid gap-4">
+				<Form.Field form={bulkSf} name="direction">
+					<Form.Control>
+						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
+							<Form.Label>{m.debts_direction_field()}</Form.Label>
+							<NativeSelect
+								name={fieldName}
+								value={$bulkForm.direction}
+								onValueChange={(v) => {
+									$bulkForm.direction = v === 'EGRESS' ? 'EGRESS' : 'INGRESS';
+									// The Category list is Direction-specific, so a category
+									// chosen for the other side would no longer be offered.
+									$bulkForm.categoryId = 0;
+								}}
+								items={[
+									{ value: 'INGRESS', label: m.debts_direction_option_owed_to_you() },
+									{ value: 'EGRESS', label: m.debts_direction_option_you_owe() },
+								]}
+								{...triggerProps}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
 				<Form.Field form={bulkSf} name="contactId">
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>{m.debts_contact_debtor()}</Form.Label>
+							<Form.Label>{m.common_contact()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$bulkForm.contactId > 0 ? String($bulkForm.contactId) : ''}
@@ -694,13 +871,13 @@
 					<Form.Control>
 						{#snippet children({ props })}
 							{@const { name: fieldName, ...triggerProps } = props}
-							<Form.Label>{m.common_ingress_category()}</Form.Label>
+							<Form.Label>{$bulkForm.direction === 'EGRESS' ? m.common_egress_category() : m.common_ingress_category()}</Form.Label>
 							<NativeSelect
 								name={fieldName}
 								value={$bulkForm.categoryId > 0 ? String($bulkForm.categoryId) : ''}
 								onValueChange={(v) => { $bulkForm.categoryId = v ? Number(v) : 0; }}
 								placeholder={m.common_select_category()}
-								items={ingressCategories.map(c => ({ value: String(c.id), label: c.name }))}
+								items={bulkCategories.map(c => ({ value: String(c.id), label: c.name }))}
 								{...triggerProps}
 							/>
 						{/snippet}
@@ -713,7 +890,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
-								<Form.Label>{m.debts_receiving_account()}</Form.Label>
+								<Form.Label>{$bulkForm.direction === 'EGRESS' ? m.debts_paying_account() : m.debts_receiving_account()}</Form.Label>
 								<NativeSelect name={fieldName} value={$bulkForm.accountId ? String($bulkForm.accountId) : ''} onValueChange={(v) => { $bulkForm.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
 							{/snippet}
 						</Form.Control>

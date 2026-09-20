@@ -1,5 +1,6 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.model.BoxFunding;
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
 import com.keenti.finances.domain.model.TrashItem;
@@ -18,12 +19,19 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class DebtService implements DebtUseCase {
 
     private static final Logger LOG = Logger.getLogger(DebtService.class);
+
+    /**
+     * A Debt's Direction is the Direction of the Transactions its Debt Payments
+     * create: INGRESS for money owed to the User, EGRESS for money the User owes.
+     */
+    private static final Set<String> VALID_DIRECTIONS = Set.of("INGRESS", "EGRESS");
 
     @Inject
     DebtRepository debtRepository;
@@ -51,21 +59,41 @@ public class DebtService implements DebtUseCase {
     @Override
     @Transactional
     public Debt create(Debt debt) {
+        validateDirection(debt.getDirection());
         Debt created = debtRepository.save(debt);
-        LOG.infof("debt.create id=%d contactId=%d amount=%s", created.getId(), created.getContactId(), created.getTotalAmount());
+        LOG.infof("debt.create id=%d contactId=%d direction=%s amount=%s",
+            created.getId(), created.getContactId(), created.getDirection(), created.getTotalAmount());
         return created;
     }
 
     @Override
     @Transactional
     public Debt update(Long id, Debt debt) {
-        debtRepository.findById(id).orElseThrow(() ->
+        Debt existing = debtRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Debt not found: " + id));
+        validateDirection(debt.getDirection());
+
+        // Flipping the Direction would contradict Transactions that already
+        // moved money the other way (ADR-0005), and those are not reversed here.
+        // Recorded payments therefore freeze the Direction.
+        if (!existing.getDirection().equals(debt.getDirection())
+                && !debtPaymentRepository.findByDebtId(id).isEmpty()) {
+            throw new BadRequestException(
+                "Cannot change the direction of a debt with recorded payments: " + id);
+        }
+
         Debt updated = debtRepository.update(new Debt(
-            id, debt.getContactId(), debt.getDescription(), debt.getTotalAmount(),
+            id, debt.getContactId(), debt.getDirection(), debt.getDescription(), debt.getTotalAmount(),
             debt.getStatus(), debt.getCreatedAt()));
-        LOG.infof("debt.update id=%d", id);
+        LOG.infof("debt.update id=%d direction=%s", id, updated.getDirection());
         return updated;
+    }
+
+    private void validateDirection(String direction) {
+        if (direction == null || !VALID_DIRECTIONS.contains(direction)) {
+            throw new BadRequestException(
+                "Invalid direction: " + direction + ". Must be INGRESS or EGRESS");
+        }
     }
 
     @Override
@@ -105,12 +133,22 @@ public class DebtService implements DebtUseCase {
     @Override
     @Transactional
     public DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate,
-                                     Long categoryId, Long accountId, String notes) {
+                                     Long categoryId, Long accountId, String notes,
+                                     List<BoxFunding> boxFunding) {
         Debt debt = debtRepository.findById(debtId).orElseThrow(() ->
             new NotFoundException("Debt not found: " + debtId));
 
         if (!"ACTIVE".equals(debt.getStatus())) {
             throw new BadRequestException("Cannot record payment on a PAID debt: " + debtId);
+        }
+
+        List<BoxFunding> funding = boxFunding == null ? List.of() : boxFunding;
+        // Money coming in is not spending, so there is nothing for a Box to fund.
+        // Saying so here beats letting TransactionService reject it with a message
+        // about a Transaction the User never asked for by name.
+        if (!funding.isEmpty() && !"EGRESS".equals(debt.getDirection())) {
+            throw new BadRequestException(
+                "Box funding applies only to payments on a debt the user owes: " + debtId);
         }
 
         BigDecimal paid = debtPaymentRepository.sumByDebtId(debtId);
@@ -122,11 +160,13 @@ public class DebtService implements DebtUseCase {
                     amount, remaining, debtId));
         }
 
+        // ADR-0005, extended per ADR-0023: the Transaction takes the Debt's own
+        // Direction, so settling what the User owes moves money out rather than in.
         Transaction tx = transactionUseCase.create(new Transaction(
-            null, amount, "INGRESS",
+            null, amount, debt.getDirection(),
             "Debt payment: " + debt.getDescription(),
             paymentDate, categoryId, debt.getContactId(), null, accountId,
-            List.of(), List.of()));
+            funding, List.of()));
 
         DebtPayment payment = debtPaymentRepository.save(new DebtPayment(
             null, debtId, amount, paymentDate, tx.getId(), notes, null));
@@ -134,13 +174,14 @@ public class DebtService implements DebtUseCase {
         BigDecimal newRemaining = remaining.subtract(amount);
         if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
             debtRepository.update(new Debt(
-                debt.getId(), debt.getContactId(), debt.getDescription(),
+                debt.getId(), debt.getContactId(), debt.getDirection(), debt.getDescription(),
                 debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
             LOG.infof("debt.status.paid id=%d", debtId);
         }
 
-        LOG.infof("debt.payment.record debtId=%d paymentId=%d amount=%s remaining=%s transactionId=%d",
-            debtId, payment.getId(), amount, newRemaining, tx.getId());
+        LOG.infof("debt.payment.record debtId=%d direction=%s paymentId=%d amount=%s remaining=%s transactionId=%d boxFundingCount=%d",
+            debtId, debt.getDirection(), payment.getId(), amount, newRemaining, tx.getId(),
+            funding.size());
 
         return payment;
     }
@@ -161,13 +202,18 @@ public class DebtService implements DebtUseCase {
 
     @Override
     @Transactional
-    public BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount,
+    public BulkPaymentResult bulkPayment(Long contactId, String direction, BigDecimal totalAmount,
                                           LocalDate paymentDate, Long categoryId, Long accountId,
                                           String notes) {
-        List<Debt> activeDebts = debtRepository.findActiveByContactIdOrderByCreatedAt(contactId);
+        validateDirection(direction);
+        // One lump sum settles one side of the relationship. Debts in the other
+        // direction are a separate balance and are never netted against it here.
+        List<Debt> activeDebts =
+            debtRepository.findActiveByContactIdOrderByCreatedAt(contactId, direction);
 
         if (activeDebts.isEmpty()) {
-            throw new BadRequestException("No active debts found for contact: " + contactId);
+            throw new BadRequestException(
+                "No active " + direction + " debts found for contact: " + contactId);
         }
 
         BigDecimal remaining = totalAmount;
@@ -182,7 +228,7 @@ public class DebtService implements DebtUseCase {
             BigDecimal apply = remaining.min(debtRemaining);
 
             Transaction tx = transactionUseCase.create(new Transaction(
-                null, apply, "INGRESS",
+                null, apply, debt.getDirection(),
                 "Bulk payment: " + debt.getDescription(),
                 paymentDate, categoryId, contactId, null, accountId,
                 List.of(), List.of()));
@@ -195,7 +241,7 @@ public class DebtService implements DebtUseCase {
             if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
                 newStatus = "PAID";
                 debtRepository.update(new Debt(
-                    debt.getId(), debt.getContactId(), debt.getDescription(),
+                    debt.getId(), debt.getContactId(), debt.getDirection(), debt.getDescription(),
                     debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
                 LOG.infof("bulk.payment.debt.paid debtId=%d", debt.getId());
             }
@@ -205,9 +251,9 @@ public class DebtService implements DebtUseCase {
         }
 
         BigDecimal totalApplied = totalAmount.subtract(remaining);
-        LOG.infof("bulk.payment contactId=%d totalAmount=%s applied=%s unused=%s debtsProcessed=%d",
-            contactId, totalAmount, totalApplied, remaining, items.size());
+        LOG.infof("bulk.payment contactId=%d direction=%s totalAmount=%s applied=%s unused=%s debtsProcessed=%d",
+            contactId, direction, totalAmount, totalApplied, remaining, items.size());
 
-        return new BulkPaymentResult(contactId, totalAmount, totalApplied, remaining, items);
+        return new BulkPaymentResult(contactId, direction, totalAmount, totalApplied, remaining, items);
     }
 }

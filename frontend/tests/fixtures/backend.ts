@@ -33,6 +33,14 @@ export type RecordedRequest = {
 	url: string;
 	/** Route key used for lookup, e.g. `GET /api/accounts`. */
 	key: string;
+	/**
+	 * The request body as sent, when there was one.
+	 *
+	 * A test that asserts what a loader forwarded needs the payload, not just
+	 * that a write happened: sending the right route with the wrong body is the
+	 * failure worth catching.
+	 */
+	body?: string;
 };
 
 export type FixtureBackend = {
@@ -144,6 +152,8 @@ export function createFixtureBackend(
 			candidates.find((candidate) => candidate in routes) ??
 			routeKey(method, url);
 		const request: RecordedRequest = { method, url, key };
+		const body = init?.body;
+		if (typeof body === 'string') request.body = body;
 		requests.push(request);
 
 		const failure = failures[key];

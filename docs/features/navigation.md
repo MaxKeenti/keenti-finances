@@ -4,7 +4,7 @@ How a User moves between the app's areas, and what happens to a User's own navig
 
 ## Decision record
 
-**D4 — navigation wording and model: approved 9 September 2026 by the product owner.** The approval covers the desktop and mobile models below. The receivables wording (“Money owed to you” / “Te deben”) is part of the same decision gate but is **not** settled here; it stays open and blocks slice 3C, not this one.
+**D4 — navigation wording and model: approved 9 September 2026 by the product owner.** The approval covers the desktop and mobile models below. The receivables wording (“Money owed to you” / “Te deben”) was part of the same decision gate; ADR-0023 has since superseded it, because a Debt now runs in both directions and the section is named “Debts” / “Deudas” with each side labelled underneath.
 
 ## Desktop
 

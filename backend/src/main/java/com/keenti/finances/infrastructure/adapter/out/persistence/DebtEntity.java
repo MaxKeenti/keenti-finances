@@ -32,6 +32,10 @@ public class DebtEntity extends PanacheEntityBase {
     @JoinColumn(name = "contact_id", nullable = false)
     public ContactEntity contact;
 
+    /** INGRESS when the Contact owes the User, EGRESS when the User owes them. */
+    @Column(nullable = false, length = 10)
+    public String direction;
+
     @Column(nullable = false, length = 500)
     public String description;
 

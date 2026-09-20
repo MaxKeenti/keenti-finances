@@ -1,5 +1,6 @@
 package com.keenti.finances.domain.port.in;
 
+import com.keenti.finances.domain.model.BoxFunding;
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
 import com.keenti.finances.domain.model.TrashItem;
@@ -15,16 +16,19 @@ public interface DebtUseCase {
     Debt update(Long id, Debt debt);
     void delete(Long id);
     DebtPayment recordPayment(Long debtId, BigDecimal amount, LocalDate paymentDate,
-                              Long categoryId, Long accountId, String notes);
+                              Long categoryId, Long accountId, String notes,
+                              List<BoxFunding> boxFunding);
     List<DebtPayment> listPayments(Long debtId);
-    BulkPaymentResult bulkPayment(Long contactId, BigDecimal totalAmount, LocalDate paymentDate,
-                                  Long categoryId, Long accountId, String notes);
+    BulkPaymentResult bulkPayment(Long contactId, String direction, BigDecimal totalAmount,
+                                  LocalDate paymentDate, Long categoryId, Long accountId,
+                                  String notes);
     void restore(Long id);
     void permanentDelete(Long id);
     List<TrashItem> listDeleted();
 
     record BulkPaymentResult(
         Long contactId,
+        String direction,
         BigDecimal totalAmount,
         BigDecimal totalApplied,
         BigDecimal totalUnused,
