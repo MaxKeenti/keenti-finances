@@ -1,14 +1,14 @@
 # D5 — 30-day planning horizon: stateless scenario preview
 
-Status: **proposed**, no approval date. Nothing here is approved and no application
-code exists for it. The Phase 5 gate is: the product owner approves the formula and
-the request/response contract *first*; implementation is a separate step. Merging
-PR #40 approved the dashboard composition in
-[`../features/dashboard.md`](../features/dashboard.md) and nothing else.
+Status: **accepted**, 20 September 2026. The product owner approved A1–A5 and
+this contract after merging [PR #41](https://github.com/MaxKeenti/keenti-finances/pull/41)
+and explicitly requested implementation. Slice 5A supplies the calculation and
+fixtures; 5B (reads/API) and 5C (interface) remain to implement. The feature is not
+exposed until all three slices pass. See [implementation status](../features/planning-preview.md).
 
-## What needs an explicit yes
+## Approved choices
 
-| # | Choice | Recommended | Real alternative being given up |
+| # | Choice | Approved | Real alternative being given up |
 |---|---|---|---|
 | A1 | First release is a **stateless what-if preview**: costs are typed into the form, nothing is stored | yes | persist Planned Costs from day one — needs the full completion/dedup machinery (see A4) before it is safe |
 | A2 | Two independent outputs: a **projected-unallocated** number for *unrecorded* costs, and a **separate timing list** of already-recorded dated obligations | yes | an account-by-account liquidity forecast — requires dated flows and explicit settlement accounts |
@@ -147,7 +147,7 @@ reloads ownership, status and amounts; it uses the full remaining Debt amount or
 full Payment Record amount as `R_j`, rejecting duplicate `(recordKind, recordId)` selections. No partial receipt
 amount or inferred receiving account is modeled in this version.
 
-This explicitly proposes extending D2’s “never increases available money” rule:
+This explicitly extends D2’s “never increases available money” rule:
 recorded Available to Spend and dashboard totals remain unchanged; only this
 separately labelled hypothetical result can include selected receipts. Approval of
 D5 approves that limited extension, not a change to the baseline accounting rule.
@@ -265,21 +265,21 @@ boundary), `FX-PLAN-BUDGET-UNDER-01` (no double subtraction), `FX-BOX-NOPLAN-01`
 `FX-CREDIT-INFAVOR-STMT-01` (credit in favor is not cash), `FX-STMT-MISMATCH-01`
 (incomplete timing list), `FX-BAL-OVERRESERVED-01`.
 
-**PROPOSED, to implement** (none of these ids exist yet):
+**Implemented as calculator fixtures in 5A**, in
+`backend/src/test/java/com/keenti/finances/domain/model/PlanningPreviewFixtures.java`:
 `FX-HORIZON-CASH-01` (ex.1), `FX-HORIZON-BOXFUNDED-01` (ex.2),
 `FX-HORIZON-BOXSHORT-01` (ex.3), `FX-HORIZON-STMT-NEUTRAL-01` (ex.4),
 `FX-HORIZON-FUTURE-RECORDED-01` (ex.11), `FX-HORIZON-INCOME-OPTIN-01` (ex.8),
 `FX-HORIZON-PARTIAL-01` (ex.9). These are new deterministic fixtures, not live development records.
 
-## Delivery after D5 approval
+## Delivery
 
-The product owner reviews A1–A5 and this contract in the decision PR. Record the
-approval and date before application work starts; approval of previous phases is not
-approval of this formula. No schema migration is needed for the proposed preview.
+D5 approval is recorded above. No schema migration is needed for this preview.
+5A is implemented; the API and UI remain separate slices.
 
 | Slice | Dependencies | Result and acceptance |
 |---|---|---|
-| 5A — calculation and fixtures | D5 approval; existing 0B fixtures and D1/D2 semantics | Pure decimal calculation and proposed fixtures above; assert `N'−B'=U'`, receipt effects on both totals, aggregate Box capacity, negative baselines, recorded/future-dated/MSI exclusion, and local-date boundaries. |
+| 5A — calculation and fixtures | D5 approval; existing 0B fixtures and D1/D2 semantics | Pure decimal calculation and fixtures above; assert `N'−B'=U'`, receipt effects on both totals, aggregate Box capacity, negative baselines, recorded/future-dated/MSI exclusion, and local-date boundaries. |
 | 5B — preview reads | 5A; existing 2B Box contract | Endpoint validates ownership, eligible receipts and exact money; reads all Boxes including no-plan Boxes and all relevant statements; consistent snapshot and explicit independent failure states. No financial writes. |
 | 5C — scenario UI | 5B; Phase 4 availability and navigation | Manual dated costs, explicit Box funding, opt-in receipts, review confirmations and separate statement timing. Browser checks cover partial/unavailable results, refresh/reconfirmation, lost-draft disclosure, overdue statements, long lists, keyboard and narrow screens. |
 

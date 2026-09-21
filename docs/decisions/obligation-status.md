@@ -59,7 +59,10 @@ First matching row wins per statement. Use the backend's `outstandingBalance` (o
 
 ## Combined presentation and precedence
 
-Keep each dimension labeled. Do not compress generation, contributions and provider payment into one “paid/unpaid” badge. For a single attention slot, show unavailable essential data first; otherwise past-due confirmed statements, due-today confirmed statements, pending generation, then future obligations. Preserve secondary facts as separate rows and links, not discarded statuses. Within equal-priority statements, sort by due date then stable ID. Contribution PENDING is its own expected-receipt row and never increases available money.
+Keep each dimension labeled. Do not compress generation, contributions and provider payment into one “paid/unpaid” badge. For a single attention slot, show unavailable essential data first; otherwise past-due confirmed statements, due-today confirmed statements, pending generation, then future obligations. Preserve secondary facts as separate rows and links, not discarded statuses. Within equal-priority statements, sort by due date then stable ID. Contribution PENDING is its own expected-receipt row and never increases recorded available money.
+[D5](planning-horizon.md), approved 20 September 2026, permits an explicitly selected,
+dated receipt only in a separately labelled hypothetical preview. It changes neither
+this dashboard rule nor any recorded balance.
 
 ## Boundary verification
 
