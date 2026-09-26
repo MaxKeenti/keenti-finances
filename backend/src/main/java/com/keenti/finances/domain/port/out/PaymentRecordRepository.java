@@ -1,8 +1,10 @@
 package com.keenti.finances.domain.port.out;
 
 import com.keenti.finances.domain.model.PaymentRecord;
+import com.keenti.finances.domain.model.PaymentRecordReceiptCandidate;
 import com.keenti.finances.domain.model.PendingContribution;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +29,13 @@ public interface PaymentRecordRepository {
      * this projection counts positive amounts owed, not all open payment statuses.
      */
     List<PendingContribution> findPendingContributions();
+
+    /**
+     * The given Payment Records that belong to the current User's Subscriptions
+     * not in the trash, whatever their status. IDs of another User's records or
+     * of a trashed Subscription's are simply absent, exactly like unknown IDs.
+     */
+    List<PaymentRecordReceiptCandidate> findReceiptCandidates(Collection<Long> ids);
     List<PaymentRecord> findBySubscriptionIdAndBillingDateForUpdate(
         Long subscriptionId, LocalDate billingDate);
     Optional<PaymentRecord> findById(Long id);

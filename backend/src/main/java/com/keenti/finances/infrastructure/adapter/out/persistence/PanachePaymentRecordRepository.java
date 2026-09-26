@@ -1,6 +1,7 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
 import com.keenti.finances.domain.model.PaymentRecord;
+import com.keenti.finances.domain.model.PaymentRecordReceiptCandidate;
 import com.keenti.finances.domain.model.PendingContribution;
 import com.keenti.finances.domain.port.out.PaymentRecordRepository;
 import com.keenti.finances.infrastructure.adapter.in.rest.UserContext;
@@ -11,6 +12,7 @@ import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -57,6 +59,27 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
                 toLong(row[0]), toLong(row[1]), (String) row[2], toLong(row[3]),
                 toLong(row[4]), (String) row[5],
                 toBigDecimal(row[6]), toLocalDate(row[7])))
+            .toList();
+    }
+
+    @Override
+    public List<PaymentRecordReceiptCandidate> findReceiptCandidates(Collection<Long> ids) {
+        if (ids.isEmpty()) return List.of();
+        // Native query: ownership is the owning Subscription's user_id, spelled
+        // out because no Hibernate filter applies. A trashed Subscription's
+        // records are excluded, so they read as unknown, like a trashed Debt.
+        List<Object[]> rows = em.createNativeQuery(
+            "SELECT pr.id, pr.status, pr.amount, pr.member_id "
+            + "FROM payment_record pr "
+            + "JOIN subscription s ON pr.subscription_id = s.id "
+            + "WHERE s.user_id = :userId AND s.deleted_at IS NULL AND pr.id IN (:ids)")
+            .setParameter("userId", userContext.getUserId())
+            .setParameter("ids", ids)
+            .getResultList();
+
+        return rows.stream()
+            .map(row -> new PaymentRecordReceiptCandidate(toLong(row[0]), (String) row[1],
+                toBigDecimal(row[2]), toLong(row[3])))
             .toList();
     }
 

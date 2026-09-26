@@ -3,8 +3,9 @@
 Status: **accepted**, 20 September 2026. The product owner approved A1–A5 and
 this contract after merging [PR #41](https://github.com/MaxKeenti/keenti-finances/pull/41)
 and explicitly requested implementation. Slice 5A supplies the calculation and
-fixtures; 5B (reads/API) and 5C (interface) remain to implement. The feature is not
-exposed until all three slices pass. See [implementation status](../features/planning-preview.md).
+fixtures; 5B implements the read-only `POST /api/planning/preview` API; 5C
+(interface) remains to implement. The feature is not exposed until all three slices
+pass. See [implementation status](../features/planning-preview.md).
 
 ## Approved choices
 
@@ -186,8 +187,9 @@ without a preview. Thus independent section results apply to accepted requests,
 not malformed requests.
 
 Bounds: max 50 costs and 50 receipts; positive amounts ≤ 9,999,999.99 with at most
-two decimals; nonnegative funding ≤ cost; descriptions ≤ 200 characters. Unknown
-or other-user Box/receipt IDs use the same not-found reason. Flag duplicate
+two decimals; nonnegative funding ≤ cost, under the same per-item bound and checked
+on magnitude before any arithmetic; descriptions ≤ 200 characters. Unknown,
+trashed or other-user Box/receipt IDs use the same not-found reason. Flag duplicate
 receipts and ineligible statuses. Dates outside the window return
 `DATE_OUT_OF_WINDOW`; overfunding returns `FUNDING_EXCEEDS_COST`; cumulative funding
 above a Box balance returns `BOX_CAPACITY_EXCEEDED` with the shortfall. Invalid zone
@@ -199,8 +201,11 @@ and returns complete only when every cost is confirmed unrecorded and essentials
 are reviewed. Otherwise a valid subtotal is partial with explicit missing inputs.
 
 Any permitted lazy plan evaluation completes before balance reads. Each POST then
-reads a fresh, consistent, authoritative server snapshot; the client never
-supplies balance totals. `generatedAt` is a timestamp, not a revision or a guarantee
+reads a fresh, consistent, authoritative server snapshot for the projection,
+including its baseline and selected receipts; the client never supplies balance
+totals. Timing and undated Debts use separate read-only snapshots so a failed query
+cannot abort another section. These contextual sections may reflect a slightly
+later committed state and are never added into the projection. `generatedAt` is a timestamp, not a revision or a guarantee
 that the data has not changed. Do not invent an existing global revision counter.
 Changing inputs clears the result. Returning from recording a Transaction or from a
 hidden tab clears it and requires the User to reconfirm that costs are still
@@ -275,7 +280,7 @@ boundary), `FX-PLAN-BUDGET-UNDER-01` (no double subtraction), `FX-BOX-NOPLAN-01`
 ## Delivery
 
 D5 approval is recorded above. No schema migration is needed for this preview.
-5A is implemented; the API and UI remain separate slices.
+5A and 5B are implemented; the UI (5C) remains a separate slice.
 
 | Slice | Dependencies | Result and acceptance |
 |---|---|---|
