@@ -34,7 +34,10 @@ public final class PlanningPreviewCalculator {
         BASELINE_UNAVAILABLE, ZONE_UNAVAILABLE, DATE_OUT_OF_WINDOW,
         INVALID_AMOUNT, INVALID_FUNDING, BOX_REQUIRED, BOX_NOT_FOUND,
         FUNDING_EXCEEDS_COST, BOX_CAPACITY_EXCEEDED, DUPLICATE_RECEIPT,
-        ESSENTIALS_NOT_REVIEWED, COST_NOT_CONFIRMED_UNRECORDED
+        ESSENTIALS_NOT_REVIEWED, COST_NOT_CONFIRMED_UNRECORDED,
+        // Receipt resolution happens before calculation (slice 5B); the calculator
+        // never produces these, but they share the one reason vocabulary.
+        RECEIPT_NOT_FOUND, RECEIPT_INELIGIBLE, RECEIPT_UNAVAILABLE
     }
 
     /** inBoxes must equal the sum of every active Box, including those with no plan. */
@@ -87,22 +90,25 @@ public final class PlanningPreviewCalculator {
         Map<Long, BigDecimal> funding = new TreeMap<>();
         for (int i = 0; i < costs.size(); i++) {
             Cost cost = costs.get(i);
-            boolean amountValid = positiveAmount(cost.amount());
+            boolean amountValid = validAmount(cost.amount());
             if (!amountValid) problems.add(costProblem(Reason.INVALID_AMOUNT, i, cost.boxId()));
             if (!inside(cost.date(), window)) {
                 problems.add(costProblem(Reason.DATE_OUT_OF_WINDOW, i, cost.boxId()));
             }
-            BigDecimal allocated = cost.boxAmount() == null ? ZERO : cost.boxAmount();
-            boolean fundingValid = cents(allocated) && allocated.signum() >= 0;
+            // Bounded before any arithmetic: a value like 1e999999999 passes the
+            // cents check, and subtracting from it would expand every digit. Any
+            // zero (even 0E-999999999) is normalised so its scale never matters.
+            BigDecimal allocated = cost.boxAmount() == null || cost.boxAmount().signum() == 0
+                ? ZERO : cost.boxAmount();
+            boolean fundingValid = allocated.signum() == 0 || validAmount(allocated);
             if (!fundingValid) problems.add(costProblem(Reason.INVALID_FUNDING, i, cost.boxId()));
-            if (fundingValid && amountValid && allocated.compareTo(cost.amount()) > 0) {
-                problems.add(costProblem(Reason.FUNDING_EXCEEDS_COST, i, cost.boxId()));
-            }
+            boolean exceedsCost = fundingValid && amountValid && allocated.compareTo(cost.amount()) > 0;
+            if (exceedsCost) problems.add(costProblem(Reason.FUNDING_EXCEEDS_COST, i, cost.boxId()));
             if (cost.boxId() == null && fundingValid && allocated.signum() > 0) {
                 problems.add(costProblem(Reason.BOX_REQUIRED, i, null));
             } else if (cost.boxId() != null && !source.boxBalances().containsKey(cost.boxId())) {
                 problems.add(costProblem(Reason.BOX_NOT_FOUND, i, cost.boxId()));
-            } else if (cost.boxId() != null && fundingValid) {
+            } else if (cost.boxId() != null && fundingValid && !exceedsCost) {
                 funding.merge(cost.boxId(), allocated, BigDecimal::add);
             }
             if (amountValid) expenses = expenses.add(cost.amount());
@@ -113,7 +119,7 @@ public final class PlanningPreviewCalculator {
             if (!seenReceipts.add(new ReceiptKey(receipt.recordKind(), receipt.recordId()))) {
                 problems.add(receiptProblem(Reason.DUPLICATE_RECEIPT, i));
             }
-            if (!positiveAmount(receipt.amount())) {
+            if (!validAmount(receipt.amount())) {
                 problems.add(receiptProblem(Reason.INVALID_AMOUNT, i));
             } else {
                 income = income.add(receipt.amount());
@@ -170,7 +176,12 @@ public final class PlanningPreviewCalculator {
         return sum.compareTo(source.inBoxes()) == 0 ? totals(source.netBalance(), source.inBoxes()) : null;
     }
 
-    private static Window window(Instant instant, String zone) {
+    /**
+     * The D5 window for one captured instant, or null for a missing/non-IANA zone.
+     * Public so the timing read uses exactly the calendar the rows are checked against.
+     */
+    public static Window window(Instant instant, String zone) {
+        if (instant == null) return null;
         // ZoneId.of also accepts raw offsets; the contract requires an IANA zone.
         if (zone == null || !ZoneId.getAvailableZoneIds().contains(zone)) return null;
         try {
@@ -186,8 +197,14 @@ public final class PlanningPreviewCalculator {
     private static boolean cents(BigDecimal value) {
         return value != null && value.stripTrailingZeros().scale() <= 2;
     }
-    private static boolean positiveAmount(BigDecimal value) {
-        return cents(value) && value.signum() > 0 && value.compareTo(MAX_AMOUNT) <= 0;
+    /**
+     * The one D5 per-item money bound: positive, at most 9,999,999.99, at most
+     * two decimals. Magnitude is checked first (compareTo is cheap even for an
+     * extreme exponent), so no arithmetic ever touches an unbounded value.
+     * Public so server-resolved receipt amounts use the same rule.
+     */
+    public static boolean validAmount(BigDecimal value) {
+        return value != null && value.signum() > 0 && value.compareTo(MAX_AMOUNT) <= 0 && cents(value);
     }
     private static BigDecimal money(BigDecimal value) { return value.setScale(2, RoundingMode.UNNECESSARY); }
     private static Totals totals(BigDecimal net, BigDecimal boxes) {

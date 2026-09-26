@@ -126,6 +126,30 @@ class PlanningPreviewCalculatorTest {
         unavailable(run(List.of(cost("10", "2026-09-20", 1L, "-1")), List.of()), Reason.INVALID_FUNDING);
         unavailable(run(List.of(cost("10", "2026-09-20", 1L, "0.001")), List.of()), Reason.INVALID_FUNDING);
         unavailable(run(List.of(cost("10", "2026-09-20", 1L, "11")), List.of()), Reason.FUNDING_EXCEEDS_COST);
+        unavailable(run(List.of(cost("10", "2026-09-20", 1L, "10000000")), List.of()), Reason.INVALID_FUNDING);
+    }
+    @Test
+    void extremeExponentFundingIsRejectedBeforeAnyArithmetic() {
+        // Passes the cents check and is positive; subtracting a Box balance from it
+        // would expand ~a billion digits. It must be refused on magnitude alone.
+        for (String huge : List.of("1e999999999", "9.99e999999998")) {
+            Result result = assertTimeoutPreemptively(java.time.Duration.ofSeconds(2),
+                () -> run(List.of(cost("10", "2026-09-20", 1L, huge)), List.of()));
+            assertEquals(Status.UNAVAILABLE, result.status());
+            assertNull(result.projected());
+            assertEquals(List.of(new Problem(Reason.INVALID_FUNDING, 0, null, 1L, null)), result.missingInputs());
+        }
+        // The same bound holds for the cost amount and for a negligible zero scale.
+        unavailable(assertTimeoutPreemptively(java.time.Duration.ofSeconds(2),
+            () -> run(List.of(cost("1e999999999", "2026-09-20", null, null)), List.of())), Reason.INVALID_AMOUNT);
+        check(assertTimeoutPreemptively(java.time.Duration.ofSeconds(2),
+            () -> run(List.of(cost("10", "2026-09-20", 1L, "0e-999999999")), List.of())), "9990", "3000", "6990");
+    }
+    @Test
+    void fundingAboveItsCostIsNotAccumulatedIntoABoxShortfall() {
+        // Only the row error: the over-cost amount never reaches the Box total.
+        Result result = run(List.of(cost("10", "2026-09-20", 1L, "9999999.99")), List.of());
+        assertEquals(List.of(new Problem(Reason.FUNDING_EXCEEDS_COST, 0, null, 1L, null)), result.missingInputs());
     }
     @Test
     void duplicateReceiptIdentityIncludesItsKind() {
@@ -198,6 +222,13 @@ class PlanningPreviewCalculatorTest {
         assertThrows(IllegalArgumentException.class, () -> run(List.of(), List.of(receipt(ReceiptKind.DEBT, 0, "1", "2026-09-20"))));
         assertThrows(IllegalArgumentException.class, () -> run(Collections.nCopies(51, cost("1", "2026-09-20", null, null)), List.of()));
         assertThrows(IllegalArgumentException.class, () -> run(List.of(), Collections.nCopies(51, receipt(ReceiptKind.DEBT, 1, "1", "2026-09-20"))));
+    }
+    @Test
+    void publicWindowIsTheCalendarRowsAreValidatedAgainst() {
+        // Slice 5B derives the timing window from this same method.
+        assertEquals(run(List.of(), List.of()).window(), PlanningPreviewCalculator.window(AT, ZONE));
+        assertNull(PlanningPreviewCalculator.window(null, ZONE));
+        assertNull(PlanningPreviewCalculator.window(AT, "+02:00"));
     }
     private static Result run(List<Cost> costs, List<Receipt> receipts) { return calculate(BASELINE, AT, ZONE, costs, receipts, true); }
     private static void unavailable(Result result, Reason reason) {
