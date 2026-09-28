@@ -9,7 +9,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatLocale, mxnFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { BoxPlan, BoxPlanType, PlanCadence } from '$lib/types/box-plans';
 
@@ -65,7 +65,7 @@
 	}
 
 	function weekdays(currentLocale: string): { value: string; label: string }[] {
-		const formatter = new Intl.DateTimeFormat(currentLocale === 'en' ? 'en-US' : 'es-MX', {
+		const formatter = new Intl.DateTimeFormat(formatLocale(currentLocale), {
 			weekday: 'long',
 			timeZone: 'UTC',
 		});
