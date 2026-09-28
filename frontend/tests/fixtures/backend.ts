@@ -8,6 +8,8 @@
  * failure mode Slice 1A-loader has to distinguish.
  */
 
+import { instantOf } from './clock';
+import { isPlanningPreviewRoute, respondToPlanningPreview } from './planning-preview';
 import { loadScenario, type Scenario } from './scenarios';
 
 /** How a route should fail instead of returning its fixture body. */
@@ -25,6 +27,11 @@ export type FixtureBackendOptions = {
 	failures?: Record<string, FailureMode>;
 	/** Extra or overriding route bodies for a one-off variation. */
 	routes?: Record<string, unknown>;
+	/**
+	 * The instant dynamic routes (the planning preview) answer at. Defaults to
+	 * the scenario's own clock, so a test never depends on the wall clock.
+	 */
+	now?: Date;
 };
 
 export type RecordedRequest = {
@@ -172,7 +179,18 @@ export function createFixtureBackend(
 			);
 		}
 
-		return json(routes[key]);
+		const declared = routes[key];
+		if (isPlanningPreviewRoute(declared)) {
+			// Computed from the submitted rows, like the real endpoint; still no
+			// network, no shared data and no write anywhere.
+			const answer = respondToPlanningPreview(
+				declared.fixturePlanningPreview,
+				typeof body === 'string' ? body : '',
+				options.now ?? instantOf(scenario.clock),
+			);
+			return json(answer.body, answer.status);
+		}
+		return json(declared);
 	}
 
 	return {

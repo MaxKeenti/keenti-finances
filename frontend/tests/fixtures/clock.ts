@@ -29,6 +29,15 @@ export const MEXICO_CITY_MIDDAY: FixtureClock = {
 	timeZone: 'America/Mexico_City',
 };
 
+/**
+ * D5's worked-example clock: the planning window is 2026-09-20 → 2026-10-19
+ * in Mexico City, exactly as the decision's examples are written.
+ */
+export const MEXICO_CITY_HORIZON: FixtureClock = {
+	now: '2026-09-20T18:00:00.000Z',
+	timeZone: 'America/Mexico_City',
+};
+
 /** The instant a scenario's clock points at, as a `Date`. */
 export function instantOf(clock: FixtureClock): Date {
 	return new Date(clock.now);

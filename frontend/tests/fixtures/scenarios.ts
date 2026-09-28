@@ -10,7 +10,13 @@
  * follows this file rather than restating it independently.
  */
 
-import { MEXICO_CITY_EVENING, MEXICO_CITY_MIDDAY, type FixtureClock } from './clock';
+import { MEXICO_CITY_EVENING, MEXICO_CITY_HORIZON, MEXICO_CITY_MIDDAY, type FixtureClock } from './clock';
+import {
+	planningPreviewRoute,
+	type FixtureEstimate,
+	type FixtureStatement,
+	type PlanningPreviewSpec,
+} from './planning-preview';
 
 /** A response body keyed by `"<METHOD> <path>"`, e.g. `"GET /api/accounts"`. */
 export type FixtureRoutes = Record<string, unknown>;
@@ -2381,6 +2387,595 @@ const recording: Scenario = {
  },
 };
 
+/* -------------------------------------------------------------------------
+ * D5 planning preview (slice 5C)
+ *
+ * The seven FX-HORIZON worked examples approved in
+ * `docs/decisions/planning-horizon.md`, with the same invented baselines and
+ * expected results as the backend's `PlanningPreviewFixtures`, plus browser
+ * scenarios for the planning page. `POST /api/planning/preview` is answered by
+ * `planning-preview.ts` from each scenario's declared server state; the option
+ * catalogs are ordinary GET routes. Every figure is invented.
+ * ---------------------------------------------------------------------- */
+
+type HorizonBox = { id: number; name: string; balance: number };
+
+/** One source for the Debt catalog, the server's receipt state and undated Debts. */
+function horizonDebt(values: {
+	id: number;
+	direction: 'INGRESS' | 'EGRESS';
+	contactId: number | null;
+	contactName: string | null;
+	description: string;
+	totalAmount: number;
+	totalPaid: number;
+}) {
+	const remaining = Math.round((values.totalAmount - values.totalPaid) * 100) / 100;
+	return {
+		id: values.id,
+		contactId: values.contactId,
+		contactName: values.contactName,
+		direction: values.direction,
+		description: values.description,
+		totalAmount: values.totalAmount,
+		totalPaid: values.totalPaid,
+		remaining,
+		status: remaining === 0 ? 'PAID' : 'ACTIVE',
+		createdAt: '2026-08-01T12:00:00',
+	};
+}
+
+type HorizonDebt = ReturnType<typeof horizonDebt>;
+
+function horizonPayment(values: {
+	id: number;
+	subscriptionId: number;
+	memberId: number | null;
+	amount: number;
+	status: 'PENDING' | 'PAID';
+	billingDate: string;
+}) {
+	return {
+		id: values.id,
+		subscriptionId: values.subscriptionId,
+		memberId: values.memberId,
+		billingDate: values.billingDate,
+		amount: values.amount,
+		status: values.status,
+		paidDate: values.status === 'PAID' ? values.billingDate : null,
+		// PAID with no linked Transaction on purpose: still not receivable.
+		transactionId: null,
+		createdAt: '2026-08-01T12:00:00',
+	};
+}
+
+type HorizonPayment = ReturnType<typeof horizonPayment>;
+
+function horizonSubscription(values: { id: number; name: string; cost: number; type: 'SHARED' | 'PERSONAL' }) {
+	return {
+		id: values.id,
+		name: values.name,
+		cost: values.cost,
+		billingCycle: 'MONTHLY',
+		type: values.type,
+		categoryId: null,
+		nextBillingDate: '2026-10-03',
+		tokenUuid: null,
+		ownerParticipates: values.type === 'SHARED' ? true : null,
+		createdAt: '2026-01-05T12:00:00',
+	};
+}
+
+/**
+ * The server's own view of receipts, derived from the same records the
+ * catalog serves: ACTIVE INGRESS Debts and PENDING Member records are
+ * eligible at their full amount, anything else owned is ineligible.
+ */
+function horizonReceiptState(debts: HorizonDebt[], payments: HorizonPayment[]) {
+	const receipts: PlanningPreviewSpec['receipts'] = {};
+	for (const debt of debts) {
+		receipts[`DEBT:${debt.id}`] =
+			debt.direction === 'INGRESS' && debt.status === 'ACTIVE'
+				? { eligible: true, amount: debt.remaining }
+				: { eligible: false };
+	}
+	for (const payment of payments) {
+		receipts[`PAYMENT_RECORD:${payment.id}`] =
+			payment.status === 'PENDING' && payment.memberId !== null
+				? { eligible: true, amount: payment.amount }
+				: { eligible: false };
+	}
+	return receipts;
+}
+
+function horizonUndatedDebts(debts: HorizonDebt[]) {
+	return debts
+		.filter((debt) => debt.status === 'ACTIVE' && debt.remaining > 0)
+		.map((debt) => ({
+			debtId: debt.id,
+			direction: debt.direction,
+			contactId: debt.contactId,
+			contactName: debt.contactName,
+			description: debt.description,
+			totalAmount: debt.totalAmount,
+			paidAmount: debt.totalPaid,
+			remaining: debt.remaining,
+		}));
+}
+
+/**
+ * A complete planning scenario: layout shell reads, option catalogs, and the
+ * preview's server state, all from one set of invented records.
+ */
+function horizonScenario(values: {
+	id: string;
+	description: string;
+	netBalance: number;
+	boxes: HorizonBox[];
+	creditInFavor?: number | null;
+	trackingActive?: boolean;
+	debts?: HorizonDebt[];
+	subscriptions?: Array<{
+		subscription: ReturnType<typeof horizonSubscription>;
+		members: Array<{ id: number; contactId: number; contactName: string }>;
+		payments: HorizonPayment[];
+	}>;
+	statements?: FixtureStatement[];
+	estimates?: FixtureEstimate[];
+	timingReasons?: Array<{ code: string; accountId: number | null; statementId: number | null }>;
+	expected?: Scenario['expected'];
+	preview?: (spec: PlanningPreviewSpec) => PlanningPreviewSpec;
+}): Scenario {
+	const trackingActive = values.trackingActive ?? true;
+	const inBoxes = values.boxes.reduce((sum, item) => sum + Math.round(item.balance * 100), 0) / 100;
+	const availableToSpend = Math.round((values.netBalance - inBoxes) * 100) / 100;
+	const debts = values.debts ?? [];
+	const subscriptions = values.subscriptions ?? [];
+	const payments = subscriptions.flatMap((entry) => entry.payments);
+	const spec: PlanningPreviewSpec = {
+		timeZone: 'America/Mexico_City',
+		baseline: {
+			trackingActive,
+			netBalance: values.netBalance,
+			boxes: values.boxes,
+			creditInFavor: trackingActive ? (values.creditInFavor ?? 0) : null,
+		},
+		receipts: horizonReceiptState(debts, payments),
+		timing: trackingActive
+			? {
+					kind: 'data',
+					statements: values.statements ?? [],
+					estimates: values.estimates ?? [],
+					reasons: values.timingReasons ?? [],
+				}
+			: { kind: 'notApplicable' },
+		undatedDebts: horizonUndatedDebts(debts),
+	};
+	const routes: FixtureRoutes = {
+		'GET /api/accounts/status': trackingStatus({
+			active: trackingActive,
+			setupRequired: false,
+			activatedAt: trackingActive ? '2026-01-15' : null,
+			transactionNetBalance: values.netBalance,
+			accountNetBalance: values.netBalance,
+		}),
+		'GET /api/boxes/summary': boxSummary({ netBalance: values.netBalance, inBoxes, availableToSpend }),
+		'GET /api/dashboard/overview': overview({
+			netBalance: values.netBalance,
+			inBoxes,
+			availableToSpend,
+			trackingActive,
+			creditInFavor: values.creditInFavor ?? 0,
+			moneyHeld: values.netBalance - (values.creditInFavor ?? 0),
+		}),
+		'GET /api/boxes': values.boxes.map((item, index) =>
+			box({ id: item.id, name: item.name, balance: item.balance, displayOrder: index + 1 }),
+		),
+		'GET /api/debts': debts,
+		'GET /api/subscriptions': subscriptions.map((entry) => entry.subscription),
+		'POST /api/planning/preview': planningPreviewRoute(values.preview ? values.preview(spec) : spec),
+	};
+	for (const entry of subscriptions) {
+		const id = entry.subscription.id;
+		routes[`GET /api/subscriptions/${id}/payments`] = entry.payments;
+		if (entry.subscription.type === 'SHARED') {
+			routes[`GET /api/subscriptions/${id}/members`] = entry.members.map((member) => ({
+				id: member.id,
+				subscriptionId: id,
+				contactId: member.contactId,
+				contactName: member.contactName,
+				shareAmount: null,
+				createdAt: '2026-01-05T12:00:00',
+			}));
+		}
+	}
+	return {
+		id: values.id,
+		description: values.description,
+		clock: MEXICO_CITY_HORIZON,
+		expected: { netBalance: values.netBalance, inBoxes, availableToSpend, ...(values.expected ?? {}) },
+		routes,
+	};
+}
+
+/** D5's shared worked-example baseline: N 10,000.00; Rent 2,500.00 + Trips 500.00. */
+const HORIZON_BOXES: HorizonBox[] = [
+	{ id: 9240, name: 'Renta sintética H', balance: 2_500 },
+	{ id: 9241, name: 'Viajes sintéticos H', balance: 500 },
+];
+
+const HORIZON_INCOME_DEBT = horizonDebt({
+	id: 9920,
+	direction: 'INGRESS',
+	contactId: 9520,
+	contactName: 'Cliente sintético H',
+	description: 'Proyecto sintético sin fecha',
+	totalAmount: 4_500,
+	totalPaid: 0,
+});
+
+/** Example 1: a cash cost of 1,200.00 on 10-02 with no funding. */
+const horizonCash = horizonScenario({
+	id: 'FX-HORIZON-CASH-01',
+	description: "D5 ex.1: a 1,200.00 cash cost on 2026-10-02 lowers N' and U' by 1,200.00.",
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	expected: { projectedNetBalance: 8_800, projectedInBoxes: 3_000, projectedAvailableToSpend: 5_800, status: 'complete' },
+});
+
+/** Example 2: rent paid entirely from its Box leaves U' unchanged. */
+const horizonBoxFunded = horizonScenario({
+	id: 'FX-HORIZON-BOXFUNDED-01',
+	description: "D5 ex.2: 2,500.00 rent fully funded from Box Rent leaves U' at 7,000.00.",
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	expected: { projectedNetBalance: 7_500, projectedInBoxes: 500, projectedAvailableToSpend: 7_000, status: 'complete' },
+});
+
+/** Example 3: the Box holds 2,000.00, so 2,500.00 of funding is refused, 2,000.00 accepted. */
+const horizonBoxShort = horizonScenario({
+	id: 'FX-HORIZON-BOXSHORT-01',
+	description: 'D5 ex.3: Rent holds 2,000.00; funding 2,500.00 is BOX_CAPACITY_EXCEEDED short 500.00.',
+	netBalance: 10_000,
+	boxes: [
+		{ id: 9240, name: 'Renta sintética H', balance: 2_000 },
+		{ id: 9241, name: 'Viajes sintéticos H', balance: 1_000 },
+	],
+	expected: {
+		shortfall: 500,
+		projectedNetBalance: 7_500,
+		projectedInBoxes: 1_000,
+		projectedAvailableToSpend: 6_500,
+		status: 'complete',
+	},
+});
+
+/** Example 4: a confirmed statement is timing only; it changes no total. */
+const horizonStatementNeutral = horizonScenario({
+	id: 'FX-HORIZON-STMT-NEUTRAL-01',
+	description: "D5 ex.4: a 3,100.00 statement due 2026-10-05 is listed, and U' stays 7,000.00.",
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	statements: [
+		{
+			accountId: 9120,
+			accountName: 'Tarjeta sintética H',
+			statementId: 9310,
+			dueInDays: 15,
+			periodEndInDays: -5,
+			officialBalance: 3_100,
+			paidAmount: 0,
+			minimumPayment: 400,
+			avoidInterest: 3_100,
+		},
+	],
+	expected: { projectedAvailableToSpend: 7_000, statementDue: '2026-10-05', statementOutstanding: 3_100 },
+});
+
+/** Example 11: a recorded future-dated EGRESS is already inside N; nothing to enter. */
+const horizonFutureRecorded = horizonScenario({
+	id: 'FX-HORIZON-FUTURE-RECORDED-01',
+	description: "D5 ex.11: a recorded 1,100.00 EGRESS dated 10-12 is already in N; U' stays 7,000.00.",
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	expected: { projectedNetBalance: 10_000, projectedAvailableToSpend: 7_000 },
+});
+
+/** Example 8: undated INGRESS Debt, off by default, opted in on 10-10. */
+const horizonIncomeOptIn = horizonScenario({
+	id: 'FX-HORIZON-INCOME-OPTIN-01',
+	description: "D5 ex.8: an undated 4,500.00 receivable is excluded by default; opted in on 10-10, U' 11,500.00.",
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	debts: [HORIZON_INCOME_DEBT],
+	expected: {
+		debtId: 9920,
+		projectedAvailableToSpend: 7_000,
+		optedInNetBalance: 14_500,
+		optedInAvailableToSpend: 11_500,
+	},
+});
+
+/** Example 9: essentials not reviewed — a subtotal, never "money left". */
+const horizonPartial = horizonScenario({
+	id: 'FX-HORIZON-PARTIAL-01',
+	description: 'D5 ex.9: essentials not reviewed; 7,000.00 is a partial subtotal with ESSENTIALS_NOT_REVIEWED.',
+	netBalance: 10_000,
+	boxes: HORIZON_BOXES,
+	expected: { projectedAvailableToSpend: 7_000, status: 'partial' },
+});
+
+/**
+ * The records behind the planning page's browser checks (examples 6, 8 and 10
+ * together). The catalog must offer 9920, 9921, 9443 and 9444 only:
+ *
+ * - 9922 is an EGRESS Debt to the same Contact as 9921 (never netted);
+ * - 9923 is settled;
+ * - 9445 is the Shared Subscription's own charge (no Member);
+ * - 9446 is PAID with no linked Transaction;
+ * - 9448 is a Personal Subscription's own charge.
+ */
+const HORIZON_UI_DEBTS = [
+	HORIZON_INCOME_DEBT,
+	horizonDebt({
+		id: 9921,
+		direction: 'INGRESS',
+		contactId: 9521,
+		contactName: 'Vecina sintética H',
+		description: 'Préstamo sintético a vecina',
+		totalAmount: 300,
+		totalPaid: 0,
+	}),
+	horizonDebt({
+		id: 9922,
+		direction: 'EGRESS',
+		contactId: 9521,
+		contactName: 'Vecina sintética H',
+		description: 'Préstamo sintético de vecina',
+		totalAmount: 500,
+		totalPaid: 0,
+	}),
+	horizonDebt({
+		id: 9923,
+		direction: 'INGRESS',
+		contactId: 9520,
+		contactName: 'Cliente sintético H',
+		description: 'Anticipo sintético liquidado',
+		totalAmount: 800,
+		totalPaid: 800,
+	}),
+];
+
+const HORIZON_UI_SUBSCRIPTIONS = [
+	{
+		subscription: horizonSubscription({ id: 9440, name: 'Streaming sintético H', cost: 400, type: 'SHARED' }),
+		members: [
+			{ id: 9441, contactId: 9522, contactName: 'Miembro sintético A' },
+			{ id: 9442, contactId: 9523, contactName: 'Miembro sintético B' },
+		],
+		payments: [
+			horizonPayment({ id: 9443, subscriptionId: 9440, memberId: 9441, amount: 133.33, status: 'PENDING', billingDate: '2026-09-03' }),
+			horizonPayment({ id: 9444, subscriptionId: 9440, memberId: 9442, amount: 133.33, status: 'PENDING', billingDate: '2026-09-03' }),
+			horizonPayment({ id: 9445, subscriptionId: 9440, memberId: null, amount: 133.34, status: 'PENDING', billingDate: '2026-09-03' }),
+			horizonPayment({ id: 9446, subscriptionId: 9440, memberId: 9441, amount: 133.33, status: 'PAID', billingDate: '2026-08-03' }),
+		],
+	},
+	{
+		subscription: horizonSubscription({ id: 9447, name: 'Gimnasio sintético H', cost: 350, type: 'PERSONAL' }),
+		members: [],
+		payments: [
+			horizonPayment({ id: 9448, subscriptionId: 9447, memberId: null, amount: 350, status: 'PENDING', billingDate: '2026-09-10' }),
+		],
+	},
+];
+
+const HORIZON_UI_STATEMENTS: FixtureStatement[] = [
+	{
+		accountId: 9120,
+		accountName: 'Tarjeta sintética H',
+		statementId: 9310,
+		dueInDays: 15,
+		periodEndInDays: -5,
+		officialBalance: 3_100,
+		paidAmount: 0,
+		minimumPayment: 400,
+		avoidInterest: 3_100,
+	},
+	{
+		accountId: 9121,
+		accountName: 'Tarjeta sintética H2 con nombre largo para pantallas angostas',
+		statementId: 9311,
+		dueInDays: -12,
+		periodEndInDays: -32,
+		officialBalance: 450,
+		paidAmount: 0,
+		minimumPayment: 100,
+		avoidInterest: 450,
+		reconciliationMismatch: true,
+	},
+	{
+		// Due after the window: omitted, never pulled forward.
+		accountId: 9120,
+		accountName: 'Tarjeta sintética H',
+		statementId: 9312,
+		dueInDays: 45,
+		periodEndInDays: 25,
+		officialBalance: 900,
+		paidAmount: 0,
+		minimumPayment: 120,
+		avoidInterest: 900,
+	},
+];
+
+function horizonUi(values: {
+	id: string;
+	description: string;
+	preview?: (spec: PlanningPreviewSpec) => PlanningPreviewSpec;
+	trackingActive?: boolean;
+}) {
+	return horizonScenario({
+		id: values.id,
+		description: values.description,
+		netBalance: 10_000,
+		boxes: HORIZON_BOXES,
+		creditInFavor: 55.5,
+		trackingActive: values.trackingActive,
+		debts: HORIZON_UI_DEBTS,
+		subscriptions: HORIZON_UI_SUBSCRIPTIONS,
+		statements: HORIZON_UI_STATEMENTS,
+		estimates: [
+			{
+				accountId: 9121,
+				accountName: 'Tarjeta sintética H2 con nombre largo para pantallas angostas',
+				periodEndInDays: 3,
+				dueInDays: 23,
+				estimatedBalance: 820.4,
+			},
+		],
+		timingReasons: [{ code: 'UNCONFIRMED_STATEMENT', accountId: 9121, statementId: null }],
+		expected: {
+			selectableDebtIds: '9920,9921',
+			selectablePaymentRecordIds: '9443,9444',
+			creditInFavor: 55.5,
+		},
+		preview: values.preview,
+	});
+}
+
+const horizonUiScenario = horizonUi({
+	id: 'FX-HORIZON-UI-01',
+	description:
+		'Planning page: N 10,000.00 (55.50 credit in favor), Boxes 2,500.00 + 500.00, receipts, bidirectional Debts, overdue/dated statements.',
+});
+
+/** The server has moved on since the catalog was read: 9920 was paid, 9444's Subscription trashed. */
+const horizonStaleScenario = horizonUi({
+	id: 'FX-HORIZON-STALE-01',
+	description: 'Planning page where Debt 9920 became ineligible and record 9444 not found after the catalog loaded.',
+	preview: (spec) => {
+		const receipts: PlanningPreviewSpec['receipts'] = { ...spec.receipts, 'DEBT:9920': { eligible: false } };
+		delete receipts['PAYMENT_RECORD:9444'];
+		return { ...spec, receipts };
+	},
+});
+
+const horizonSectionsDown = horizonUi({
+	id: 'FX-HORIZON-SECTIONS-DOWN-01',
+	description: 'Planning page where statement timing and undated Debts fail while the projection succeeds.',
+	preview: (spec) => ({ ...spec, timing: { kind: 'unavailable' }, undatedDebts: null }),
+});
+
+const horizonBaselineDown = horizonUi({
+	id: 'FX-HORIZON-BASELINE-DOWN-01',
+	description: 'Planning page where the balance snapshot fails; timing and undated Debts still load.',
+	preview: (spec) => ({ ...spec, baseline: null }),
+});
+
+const horizonTrackingOff = horizonUi({
+	id: 'FX-HORIZON-TRACKING-OFF-01',
+	description: 'Planning page before Financial Account tracking: transaction baseline, timing not applicable.',
+	trackingActive: false,
+});
+
+/** A User whose stored zone the server cannot use: no window, never UTC. */
+const horizonZoneUnavailable: Scenario = (() => {
+	const scenario = horizonUi({
+		id: 'FX-HORIZON-ZONE-01',
+		description: 'Planning page with an unusable time-zone preference: no window and ZONE_UNAVAILABLE.',
+		preview: (spec) => ({ ...spec, timeZone: null }),
+	});
+	scenario.routes['GET /api/user/preferences'] = {
+		primaryHue: 91,
+		headingFont: 'Fraunces',
+		bodyFont: 'Geist',
+		locale: 'es',
+		transactionPageSize: 25,
+		transactionSortBy: 'transactionDate',
+		transactionSortDirection: 'desc',
+		mobilePinnedNavItems: '/transactions,/subscriptions,/debts',
+		dockMagnification: true,
+		timeZone: 'Mars/Olympus_Mons',
+		themeMode: 'system',
+	};
+	return scenario;
+})();
+
+/** Long option lists and many Boxes, for the 50-row bounds and narrow screens. */
+const horizonLongLists = horizonScenario({
+	id: 'FX-HORIZON-LONG-01',
+	description: 'Planning page with 60 receivable Debts, 55 pending Member contributions and 12 Boxes.',
+	netBalance: 250_000,
+	boxes: Array.from({ length: 12 }, (_, index) => ({
+		id: 9250 + index,
+		name: `Caja sintética ${index + 1} con un nombre bastante largo`,
+		balance: 1_000 + index * 250,
+	})),
+	creditInFavor: 0,
+	debts: Array.from({ length: 60 }, (_, index) =>
+		horizonDebt({
+			id: 9930 + index,
+			direction: 'INGRESS',
+			contactId: 9530 + (index % 7),
+			contactName: `Contacto sintético ${(index % 7) + 1}`,
+			description: `Cobro sintético ${index + 1}`,
+			totalAmount: 100 + index,
+			totalPaid: 0,
+		}),
+	),
+	subscriptions: [
+		{
+			subscription: horizonSubscription({ id: 9450, name: 'Plan familiar sintético', cost: 5_500, type: 'SHARED' }),
+			members: Array.from({ length: 5 }, (_, index) => ({
+				id: 9451 + index,
+				contactId: 9540 + index,
+				contactName: `Integrante sintético ${index + 1}`,
+			})),
+			payments: Array.from({ length: 55 }, (_, index) =>
+				horizonPayment({
+					id: 9460 + index,
+					subscriptionId: 9450,
+					memberId: 9451 + (index % 5),
+					amount: 100,
+					status: 'PENDING',
+					billingDate: `2026-${String(1 + Math.floor(index / 5)).padStart(2, '0')}-03`,
+				}),
+			),
+		},
+	],
+	statements: HORIZON_UI_STATEMENTS,
+	expected: { selectableDebts: 60, selectablePaymentRecords: 55, boxes: 12 },
+});
+
+/**
+ * The approved worked examples' inputs, as preview request bodies. Dates are
+ * D5's own (window 2026-09-20 → 2026-10-19 at `MEXICO_CITY_HORIZON`).
+ */
+export const HORIZON_EXAMPLE_REQUESTS: Record<string, unknown> = {
+	'FX-HORIZON-CASH-01': horizonRequest(true, [horizonCost('1200.00', '2026-10-02')]),
+	'FX-HORIZON-BOXFUNDED-01': horizonRequest(true, [horizonCost('2500.00', '2026-10-01', 9240, '2500.00')]),
+	'FX-HORIZON-BOXSHORT-01': horizonRequest(true, [horizonCost('2500.00', '2026-10-01', 9240, '2500.00')]),
+	'FX-HORIZON-BOXSHORT-01/reduced': horizonRequest(true, [horizonCost('2500.00', '2026-10-01', 9240, '2000.00')]),
+	'FX-HORIZON-STMT-NEUTRAL-01': horizonRequest(true, []),
+	'FX-HORIZON-FUTURE-RECORDED-01': horizonRequest(true, []),
+	'FX-HORIZON-INCOME-OPTIN-01': horizonRequest(true, []),
+	'FX-HORIZON-INCOME-OPTIN-01/opted-in': horizonRequest(true, [], [
+		{ recordId: 9920, recordKind: 'DEBT', date: '2026-10-10' },
+	]),
+	'FX-HORIZON-PARTIAL-01': horizonRequest(false, []),
+};
+
+function horizonCost(amount: string, date: string, boxId: number | null = null, boxAmount: string | null = null) {
+	return { amount, date, description: null, boxId, boxAmount, notYetRecordedConfirmed: true };
+}
+
+function horizonRequest(
+	essentialsReviewed: boolean,
+	items: ReturnType<typeof horizonCost>[],
+	expectedReceipts: Array<{ recordId: number; recordKind: string; date: string }> = [],
+) {
+	return { horizonDays: 30, essentialsReviewed, items, expectedReceipts };
+}
+
 const ALL: readonly Scenario[] = Object.freeze([
 	recording,
 	trackingInactive,
@@ -2410,6 +3005,21 @@ const ALL: readonly Scenario[] = Object.freeze([
 	subscriptionList,
 	creditInFavorUnpaidStatement,
 	dashboardNegativeAvailable,
+	// Slice 5C (D5 planning preview)
+	horizonCash,
+	horizonBoxFunded,
+	horizonBoxShort,
+	horizonStatementNeutral,
+	horizonFutureRecorded,
+	horizonIncomeOptIn,
+	horizonPartial,
+	horizonUiScenario,
+	horizonStaleScenario,
+	horizonSectionsDown,
+	horizonBaselineDown,
+	horizonTrackingOff,
+	horizonZoneUnavailable,
+	horizonLongLists,
 ]);
 
 export type ScenarioId = (typeof ALL)[number]['id'];

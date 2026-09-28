@@ -171,3 +171,65 @@ empty archived-account list, MSI list, and the next statement estimate. Open
 `/accounts/9112` to verify the positive credit position alongside the unpaid
 confirmed statement, then open and cancel the contextual card-payment form.
 The fixture server remains read-only; it cannot record a Transfer.
+
+## Slice 5C — planning preview (D5)
+
+`POST /api/planning/preview` is the one computed fixture route. A scenario declares it with `planningPreviewRoute(spec)`, and `planning-preview.ts` answers from that server state and the submitted rows: structural problems are 400s, business problems are reason codes in a 200 envelope, and timing and undated Debts are evaluated independently. In-process it answers at the scenario clock (or `createFixtureBackend(id, { now })`); the browser server answers at the real wall clock, so the window is always *today* in the User's zone. It writes nothing. It is a stand-in for browser and loader checks, never imported by the app; `tests/planning-fixtures.test.js` pins it to the approved worked examples.
+
+### Approved D5 worked examples
+
+Clock `MEXICO_CITY_HORIZON` (2026-09-20T18:00Z, window 2026-09-20 → 2026-10-19). Baseline N 10,000.00, Box Rent 9240 at 2,500.00, Box Trips 9241 at 500.00, U 7,000.00 unless stated. Inputs are in `HORIZON_EXAMPLE_REQUESTS`.
+
+| ID | D5 | Expected |
+|---|---|---|
+| `FX-HORIZON-CASH-01` | ex.1 | 1,200.00 on 10-02, no Box: N' 8,800.00, B' 3,000.00, U' 5,800.00 |
+| `FX-HORIZON-BOXFUNDED-01` | ex.2 | 2,500.00 on 10-01 fully from Rent: N' 7,500.00, B' 500.00, U' 7,000.00 |
+| `FX-HORIZON-BOXSHORT-01` | ex.3 | Rent 2,000.00 / Trips 1,000.00: funding 2,500.00 is `BOX_CAPACITY_EXCEEDED` short 500.00; funding 2,000.00 gives N' 7,500.00, B' 1,000.00, U' 6,500.00 |
+| `FX-HORIZON-STMT-NEUTRAL-01` | ex.4 | statement 9310 outstanding 3,100.00 due 10-05 listed; U' 7,000.00 |
+| `FX-HORIZON-FUTURE-RECORDED-01` | ex.11 | nothing to enter; U' 7,000.00 |
+| `FX-HORIZON-INCOME-OPTIN-01` | ex.8 | Debt 9920 (4,500.00, undated) off by default; opted in for 10-10: N' 14,500.00, U' 11,500.00 *if received* |
+| `FX-HORIZON-PARTIAL-01` | ex.9 | essentials not reviewed: `partial`, subtotal 7,000.00, `ESSENTIALS_NOT_REVIEWED` |
+
+### Planning page scenarios
+
+All share N 10,000.00 (55.50 of it credit in favor), Rent 2,500.00 and Trips 500.00 (Trips has no plan), unless stated.
+
+| ID | What it shows |
+|---|---|
+| `FX-HORIZON-UI-01` | Selectable receipts: Debts 9920 (4,500.00) and 9921 (300.00); Member contributions 9443 and 9444 (133.33 each). Not offered: EGRESS Debt 9922 (500.00, same Contact as 9921), settled 9923, own charge 9445, PAID-without-Transaction 9446, Personal charge 9448. Timing: 9310 (3,100.00) due today+15, 9311 (450.00, mismatch, long account name) overdue by 12 days, 9312 after the window (omitted), an unconfirmed estimate → `partial`. Undated Debts: 9920, 9921 owed to the User; 9922 owed by them — never netted |
+| `FX-HORIZON-STALE-01` | Same catalog, but the server says 9920 is no longer eligible and 9444 is not found (changed after the page loaded) |
+| `FX-HORIZON-SECTIONS-DOWN-01` | Timing `unavailable` (`READ_FAILED`) and undated Debts unavailable; the projection still succeeds |
+| `FX-HORIZON-BASELINE-DOWN-01` | `BASELINE_UNAVAILABLE`: no baseline, no projection; timing and Debts still listed |
+| `FX-HORIZON-TRACKING-OFF-01` | Tracking inactive: transaction baseline, timing `notApplicable` |
+| `FX-HORIZON-ZONE-01` | Stored zone `Mars/Olympus_Mons`: the page has no window and offers no entry; the server returns `ZONE_UNAVAILABLE` |
+| `FX-HORIZON-LONG-01` | 60 receivable Debts, 55 pending contributions, 12 Boxes with long names, N 250,000.00 — for the 50-row limits and narrow screens |
+
+### Browser verification (5C)
+
+Ports 8199 and 5196 are used below so nothing collides with other local servers (5186/5187 are in use elsewhere).
+
+```bash
+cd frontend
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-UI-01
+# second shell
+BACKEND_URL=http://127.0.0.1:8199 TEST_AUTH_BYPASS=true bun run dev --port 5196 --strictPort
+# open http://localhost:5196/planning
+```
+
+Variations (restart the fixture server; the dev server can stay up):
+
+```bash
+FIXTURE_PORT=8199 FIXTURE_PREVIEW_DELAYS='4000,300' bun run tests/fixtures/server.ts FX-HORIZON-UI-01   # 1st preview slow, 2nd fast: edit + recalculate while the 1st is pending
+FIXTURE_PORT=8199 FIXTURE_FAIL='POST /api/planning/preview=500' bun run tests/fixtures/server.ts FX-HORIZON-UI-01   # request failure, no figures
+FIXTURE_PORT=8199 FIXTURE_FAIL='GET /api/debts=500' bun run tests/fixtures/server.ts FX-HORIZON-UI-01                # one catalog unavailable
+FIXTURE_PORT=8199 FIXTURE_FAIL='GET /api/subscriptions/9440/payments=500' bun run tests/fixtures/server.ts FX-HORIZON-UI-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-STALE-01          # select 9920 and 9444, calculate: per-row guidance
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-SECTIONS-DOWN-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-BASELINE-DOWN-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-TRACKING-OFF-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-ZONE-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-LONG-01
+FIXTURE_PORT=8199 bun run tests/fixtures/server.ts FX-HORIZON-BOXSHORT-01       # ex.3 with today's dates: fund 2,500 from Rent, then 2,000
+```
+
+A 500 on the preview POST is not retried by the proxy (POSTs are single-attempt); a 503 on a catalog GET is retried for ~16 s before the page shows it unavailable, so prefer 500 for quick checks.

@@ -9,6 +9,13 @@
  *   bun run tests/fixtures/server.ts FX-BAL-OVERRESERVED-01
  *   FIXTURE_FAIL='GET /api/dashboard/summary=500' bun run tests/fixtures/server.ts FX-BAL-ZERO-01
  *
+ * `POST /api/planning/preview` is the one computed route: it is answered from
+ * the scenario's declared server state and the submitted rows, at the real
+ * wall-clock instant (see `planning-preview.ts`). It still writes nothing.
+ * `FIXTURE_PREVIEW_DELAYS='3000,300'` delays successive preview responses by
+ * those milliseconds, cycling, so an older slow response can be made to
+ * arrive after a newer fast one.
+ *
  * It is read-only: it never writes, and it never proxies to a real backend, so
  * pointing the dev server at it cannot reach or modify shared data. It binds
  * loopback only, so a fixture scenario is never exposed on the network.
@@ -20,6 +27,7 @@
 
 import { routeKeys } from './backend';
 import { HARNESS_ROUTES } from './harness-routes';
+import { isPlanningPreviewRoute, respondToPlanningPreview } from './planning-preview';
 import { loadScenario, scenarioIds } from './scenarios';
 
 const scenarioId = process.argv[2] ?? process.env.FIXTURE_SCENARIO;
@@ -66,6 +74,12 @@ const failures = new Map<string, number>(
 		}),
 );
 
+const previewDelays = (process.env.FIXTURE_PREVIEW_DELAYS ?? '')
+	.split(',')
+	.map((value) => Number(value.trim()))
+	.filter((value) => Number.isFinite(value) && value >= 0);
+let previewCount = 0;
+
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body ?? null), {
 		status,
@@ -79,7 +93,7 @@ declare const Bun: {
 	serve(options: {
 		port: number;
 		hostname: string;
-		fetch(request: Request): Response;
+		fetch(request: Request): Response | Promise<Response>;
 	}): { port: number; hostname: string };
 };
 
@@ -88,7 +102,7 @@ const server = Bun.serve({
 	// Loopback only. Binding every interface would publish invented balances on
 	// whatever network the machine happens to be on.
 	hostname: '127.0.0.1',
-	fetch(request: Request): Response {
+	async fetch(request: Request): Promise<Response> {
 		// Same precedence as the in-process backend: a scenario key that includes
 		// the query string wins over the bare path.
 		const candidates = routeKeys(request.method, request.url);
@@ -104,8 +118,21 @@ const server = Bun.serve({
 
 		for (const candidate of candidates) {
 			if (candidate in scenario.routes) {
+				const declared = scenario.routes[candidate];
+				if (isPlanningPreviewRoute(declared)) {
+					const delay = previewDelays.length > 0 ? previewDelays[previewCount % previewDelays.length] : 0;
+					const sequence = ++previewCount;
+					const answer = respondToPlanningPreview(
+						declared.fixturePlanningPreview,
+						await request.text(),
+						new Date(),
+					);
+					if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+					console.log(`[fixture-backend] ${candidate} #${sequence} -> ${answer.status} after ${delay}ms`);
+					return jsonResponse(answer.body, answer.status);
+				}
 				console.log(`[fixture-backend] ${candidate} -> 200`);
-				return jsonResponse(scenario.routes[candidate]);
+				return jsonResponse(declared);
 			}
 		}
 
