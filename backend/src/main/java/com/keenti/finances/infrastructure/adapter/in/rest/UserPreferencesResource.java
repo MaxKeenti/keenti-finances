@@ -28,6 +28,7 @@ public class UserPreferencesResource {
         "/boxes",
         "/subscriptions",
         "/debts",
+        "/planning",
         "/settings"
     );
 

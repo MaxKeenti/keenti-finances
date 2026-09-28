@@ -122,6 +122,64 @@ class UserPreferencesResourceTest {
     }
 
     @Test
+    void put_planningPin_isAcceptedAndPersistsWithoutChangingDefaultsOrOtherUsersPins() {
+        String existing = "test-prefs-planning-existing";
+        String pinner = "test-prefs-planning-pinner";
+        String untouched = "test-prefs-planning-untouched";
+
+        // A User whose pins predate Planning saves them before it is chosen anywhere.
+        given()
+            .header("X-WorkOS-User-Id", existing)
+            .contentType(ContentType.JSON)
+            .body(preferencesJson(100, "Fraunces", "Geist", "es", 25, "transactionDate", "desc",
+                "/subscriptions,/debts,/settings", true))
+            .when().put("/api/user/preferences")
+            .then().statusCode(200);
+
+        given()
+            .header("X-WorkOS-User-Id", pinner)
+            .contentType(ContentType.JSON)
+            .body(preferencesJson(100, "Fraunces", "Geist", "es", 25, "transactionDate", "desc",
+                "/transactions,/planning,/boxes", true))
+            .when().put("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("mobilePinnedNavItems", equalTo("/transactions,/planning,/boxes"));
+
+        given()
+            .header("X-WorkOS-User-Id", pinner)
+            .when().get("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("mobilePinnedNavItems", equalTo("/transactions,/planning,/boxes"));
+
+        // Offering Planning neither rewrites stored pins nor the default for new Users.
+        given()
+            .header("X-WorkOS-User-Id", existing)
+            .when().get("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("mobilePinnedNavItems", equalTo("/subscriptions,/debts,/settings"));
+
+        given()
+            .header("X-WorkOS-User-Id", untouched)
+            .when().get("/api/user/preferences")
+            .then()
+            .statusCode(200)
+            .body("mobilePinnedNavItems", equalTo(UserEntity.DEFAULT_MOBILE_PINNED_NAV_ITEMS))
+            .body("mobilePinnedNavItems", equalTo("/,/transactions,/boxes"));
+
+        // Planning is one allowed destination, not a wildcard: duplicates still fail.
+        given()
+            .header("X-WorkOS-User-Id", pinner)
+            .contentType(ContentType.JSON)
+            .body(preferencesJson(100, "Fraunces", "Geist", "es", 25, "transactionDate", "desc",
+                "/planning,/planning,/boxes", true))
+            .when().put("/api/user/preferences")
+            .then().statusCode(400);
+    }
+
+    @Test
     void put_hueOutOfRange_returns400() {
         String body = preferencesJson(360, "Fraunces", "Geist");
 

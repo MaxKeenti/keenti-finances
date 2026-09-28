@@ -4,8 +4,10 @@ Status: **accepted**, 20 September 2026. The product owner approved A1–A5 and
 this contract after merging [PR #41](https://github.com/MaxKeenti/keenti-finances/pull/41)
 and explicitly requested implementation. Slice 5A supplies the calculation and
 fixtures; 5B implements the read-only `POST /api/planning/preview` API; 5C
-implements an unlisted interface for review. The feature is not exposed until all
-three slices pass; navigation remains withheld pending the real-browser hide/return check. See [implementation status](../features/planning-preview.md).
+implements the scenario interface. All three slices are implemented. The product
+owner confirmed the real-browser hide/return check manually on 27 September 2026;
+the navigation entry points are on the `codex/ux-planning-navigation` branch. See
+[implementation status](../features/planning-preview.md).
 
 ## Approved choices
 
@@ -280,8 +282,9 @@ boundary), `FX-PLAN-BUDGET-UNDER-01` (no double subtraction), `FX-BOX-NOPLAN-01`
 ## Delivery
 
 D5 approval is recorded above. No schema migration is needed for this preview.
-5A and 5B are implemented; 5C (UI) is implemented but unlisted pending the final
-browser lifecycle check. See the linked verification record before rollout.
+5A, 5B and 5C are implemented. The final browser lifecycle check passed as a
+product-owner manual verification on 27 September 2026, and navigation entry points
+are on `codex/ux-planning-navigation`. See the linked verification record.
 
 | Slice | Dependencies | Result and acceptance |
 |---|---|---|

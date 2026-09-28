@@ -7,11 +7,13 @@
 | 5A — calculator and fixtures | implemented |
 | 5B — `POST /api/planning/preview` | implemented (API only) |
 | 5C — scenario interface | implemented; local verification recorded below |
+| Navigation entry points | implemented on `codex/ux-planning-navigation`; see [rollout](#rollout-gate) |
 
-5C adds the unlisted `/planning` page for review (see
-[5C](#scenario-interface-5c)). Local automated and browser checks are recorded below, including the visibility-event
-limitation. Merge and deployment remain separate review steps.
-No migration, dependency, backend or deployment change was needed.
+5C added the `/planning` page, reachable only by direct URL (see
+[5C](#scenario-interface-5c)). Local automated and browser checks are recorded below,
+together with the product owner's manual hide/return check. 5C needed no migration,
+dependency, backend or deployment change; the navigation follow-up adds one backend
+allowlist entry and no migration. Merge and deployment remain separate review steps.
 
 ## Calculator boundary
 
@@ -248,11 +250,21 @@ Directions, per Debt, never netted) render from their own statuses. The
 snapshot time is formatted in the response's zone (else the preference zone,
 else labelled UTC), never the browser's.
 
-**Rollout gate.** The route can be opened directly for review, but this change adds
-no dock, More, Settings or dashboard entry. Add those entry points only after the
-remaining real-browser hide/return check below passes. Planning should then be
-pinnable without changing default or stored pins, with a dashboard link below the
-current position (see [navigation](navigation.md)).
+<a id="rollout-gate"></a>**Rollout.** 5C added no dock, More, Settings or dashboard entry, and navigation
+waited on a real-browser hide/return check. That check has passed (product-owner
+manual verification, [below](#manual-verification--27-september-2026)). The
+branch `codex/ux-planning-navigation` adds the entry points:
+
+- Planning in the desktop dock and in mobile More, both from the dock's item list;
+- a dashboard link below the current position;
+- Planning as a mobile pin choice in Settings. The backend preferences allowlist
+  (`UserPreferencesResource.ALLOWED_MOBILE_PINNED_NAV_ITEMS`) now accepts `/planning`.
+
+The existing `nav_planning` and `dashboard_planning_link*` messages are reused.
+Planning can be pinned, but it is not a default. Default and stored mobile pins are
+unchanged, and `UserPreferencesResourceTest` covers accepting and saving the pin
+while defaults and other stored pins stay as they were (see
+[navigation](navigation.md)). No migration is involved.
 
 ### 5C fixtures and verification
 
@@ -294,16 +306,39 @@ database containing synthetic data, then against the fixture server:
   it produced an explicitly labelled partial subtotal.
 - Invalid zone: Retry is present and recovers the form when the source recovers.
 - Overdue and in-window statements, reconciliation mismatch and unconfirmed
-  estimates remain separate. The candidate mobile More entry was checked, then withheld for the rollout gate.
+  estimates remain separate. The candidate mobile More entry was checked.
 - 390 px and 320 px layouts had no document-level horizontal overflow. The long
   fixture offered all 60 receivable Debts and 55 contributions, plus 12 Boxes.
 - Cost fieldsets have accessible names; an unconfirmed cost marks only its
   confirmation invalid; included receipts use a distinct section heading; no
   duplicate IDs were found with a receipt result rendered.
 
-Limitation: the available in-app browser keeps `document.visibilityState` visible
-even when another tab is opened or the browser panel is hidden. Genuine OS/tab
-visibility transitions could not be exercised there. Withdrawal, cancellation and
+Limitation of the automated observation: the available in-app browser keeps
+`document.visibilityState` visible even when another tab is opened or the browser
+panel is hidden, and native Safari automation failed. Genuine OS/tab visibility
+transitions could not be exercised by automation. Withdrawal, cancellation and
 confirmation reset are covered by automated tests, and the event wiring was
-reviewed; complete the hide/return journey in a normal browser before adding navigation
-entry points and exposing the feature. No shared development or production records were changed.
+reviewed. No shared development or production records were changed.
+
+### Manual verification — 27 September 2026
+
+Product-owner manual verification on 27 September 2026 (America/Mexico_City), in a
+normal browser. It is separate from the automated observation above. After
+calculating a preview, switching to another tab and returning:
+
+- the calculated preview had disappeared;
+- both the cost confirmation and the essentials confirmation had reset.
+
+This is the real-browser hide/return check that navigation was waiting on.
+
+### Navigation follow-up verification
+
+The dashboard link opened `/planning` in the local fixture browser. Planning was
+visible in mobile More at 390 px and in the Settings pin choices; saved fixture
+pins remained unchanged. At 640 px every desktop dock link remained within the
+viewport, with no document-level horizontal overflow.
+
+The 13 `UserPreferencesResourceTest` tests passed against an isolated PostgreSQL 18
+database, including saving and reading a Planning pin, unchanged defaults and
+other Users' pins, and rejecting duplicate pins. Frontend tests (401), type checks
+(0 errors, 7 existing warnings), and the production build passed.

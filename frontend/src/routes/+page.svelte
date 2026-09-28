@@ -105,6 +105,17 @@
 			<PositionSection {position} {tracking} format={mxn} />
 		{/if}
 
+		<!-- The planning preview reads its own figures, so the link stays offered
+		     even when the position above could not be loaded. -->
+		<Card.Root>
+			<Card.Header class="gap-1">
+				<Card.Title class="font-heading text-lg">
+					<a href="/planning" class="underline-offset-4 hover:underline">{m.dashboard_planning_link()}</a>
+				</Card.Title>
+				<Card.Description>{m.dashboard_planning_link_description()}</Card.Description>
+			</Card.Header>
+		</Card.Root>
+
 		<!-- 2 — Needs attention -->
 		{#if attention === null}
 			<SectionUnavailable title={m.section_attention_unavailable()} />

@@ -18,6 +18,7 @@ export const NAVIGABLE_HREFS = [
 	'/accounts',
 	'/subscriptions',
 	'/debts',
+	'/planning',
 	'/settings',
 	'/categories',
 	'/contacts',

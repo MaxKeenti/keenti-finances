@@ -8,15 +8,19 @@ How a User moves between the app's areas, and what happens to a User's own navig
 
 ## Desktop
 
-A single bar lists every area: Dashboard, Transactions, Boxes, Financial Accounts, Subscriptions, Debts, Settings, and Logout.
+A single bar lists every area: Dashboard, Transactions, Boxes, Financial Accounts, Subscriptions, Debts, Planning, Settings, and Logout.
+
+Planning opens the [30-day planning preview](planning-preview.md). The desktop dock was browser-checked at 640 px with no document-level horizontal overflow.
 
 Each entry shows its name at all times. A name that appears only on pointer hover is unavailable to touch and to anyone scanning the bar, and it forces the icon alone to be recognized; the persistent label is also the link's accessible name, so the screen-reader name and the visible name are the same string. Pointer magnification remains a presentation flourish and is still governed by the User's `dockMagnification` preference.
 
 ## Mobile
 
-The bar carries **Dashboard** first, then the User's pinned areas, then **More**, which opens the full list. Dashboard is a stable entry: it is always present and never occupies a pin.
+The bar carries **Dashboard** first, then the User's pinned areas, then **More**, which opens the full list, including Planning. Dashboard is a stable entry: it is always present and never occupies a pin.
 
 Defaults for a User who has pinned nothing are Dashboard, Transactions, Boxes, and More, so recording money and planning are both reachable without opening More.
+
+Planning can be chosen as a pin in Settings; the preferences API accepts `/planning` alongside the other pinnable areas. Adding the choice changes neither the defaults nor any stored pins.
 
 ## Navigation preference migration
 

@@ -6,6 +6,7 @@
 		PackageOpen,
 		CreditCard,
 		HandCoins,
+		CalendarRange,
 		Landmark,
 		Settings,
 		Layers,
@@ -35,6 +36,7 @@
 		{ href: '/accounts', label: m.nav_accounts(), icon: Landmark },
 		{ href: '/subscriptions', label: m.nav_subscriptions(), icon: CreditCard },
 		{ href: '/debts', label: m.nav_debts(), icon: HandCoins },
+		{ href: '/planning', label: m.nav_planning(), icon: CalendarRange },
 		{
 			href: '/settings',
 			label: m.nav_settings(),

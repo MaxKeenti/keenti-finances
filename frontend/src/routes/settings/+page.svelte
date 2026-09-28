@@ -75,6 +75,7 @@
 		{ value: '/boxes', label: m.nav_boxes() },
 		{ value: '/subscriptions', label: m.nav_subscriptions() },
 		{ value: '/debts', label: m.nav_debts() },
+		{ value: '/planning', label: m.nav_planning() },
 		{ value: '/settings', label: m.nav_settings() },
 	];
 	const defaultPinnedNavItems = ['/', '/transactions', '/boxes'];
