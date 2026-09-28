@@ -4,8 +4,8 @@ Status: **accepted**, 20 September 2026. The product owner approved A1–A5 and
 this contract after merging [PR #41](https://github.com/MaxKeenti/keenti-finances/pull/41)
 and explicitly requested implementation. Slice 5A supplies the calculation and
 fixtures; 5B implements the read-only `POST /api/planning/preview` API; 5C
-(interface) remains to implement. The feature is not exposed until all three slices
-pass. See [implementation status](../features/planning-preview.md).
+implements an unlisted interface for review. The feature is not exposed until all
+three slices pass; navigation remains withheld pending the real-browser hide/return check. See [implementation status](../features/planning-preview.md).
 
 ## Approved choices
 
@@ -280,7 +280,8 @@ boundary), `FX-PLAN-BUDGET-UNDER-01` (no double subtraction), `FX-BOX-NOPLAN-01`
 ## Delivery
 
 D5 approval is recorded above. No schema migration is needed for this preview.
-5A and 5B are implemented; the UI (5C) remains a separate slice.
+5A and 5B are implemented; 5C (UI) is implemented but unlisted pending the final
+browser lifecycle check. See the linked verification record before rollout.
 
 | Slice | Dependencies | Result and acceptance |
 |---|---|---|

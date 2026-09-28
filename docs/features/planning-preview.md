@@ -6,11 +6,12 @@
 |---|---|
 | 5A — calculator and fixtures | implemented |
 | 5B — `POST /api/planning/preview` | implemented (API only) |
-| 5C — scenario interface | pending |
+| 5C — scenario interface | implemented; local verification recorded below |
 
-No route, navigation entry or visible preview exists yet; the endpoint is not
-linked from the interface until 5C passes. No migration, dependency or deployment
-change was needed.
+5C adds the unlisted `/planning` page for review (see
+[5C](#scenario-interface-5c)). Local automated and browser checks are recorded below, including the visibility-event
+limitation. Merge and deployment remain separate review steps.
+No migration, dependency, backend or deployment change was needed.
 
 ## Calculator boundary
 
@@ -182,3 +183,127 @@ Not covered by an automated test: a *real* database failure inside the preview
 endpoint (only the probe and stubs simulate it), archived-account statements
 (excluded by the same `findAll(false)` rule as the dashboard). Slice 5C owns browser/keyboard/narrow-screen checks,
 draft loss disclosure, refresh/reconfirmation, and independent section states.
+
+## Scenario interface (5C)
+
+`/planning` (`src/routes/planning/`). The page sends the draft to
+`POST /api/planning/preview` through the existing `/api` proxy and renders the
+response; it computes no figure of its own and never writes.
+
+**Module boundaries.**
+
+- `src/lib/planning-preview.ts` — pure: draft operations, local validation,
+  request building, strict response parsing, and `PlanningPreviewSession`, the
+  one owner of the in-flight request.
+- `src/lib/planning-labels.ts` — guidance for every reason, timing reason and
+  note code; an unknown code is shown verbatim, never hidden.
+- `src/lib/server/planning-options.ts` — the option catalogs (GETs only).
+- `src/lib/components/planning/` — result, timing and undated-Debt sections.
+
+**Options.** Boxes come from `GET /api/boxes` (every active Box, with or without
+a plan). Receipts come from complete reads, not the dashboard's capped
+expected-money list: `GET /api/debts` filtered to ACTIVE INGRESS Debts with a
+valid preview amount, and every Subscription's `GET …/payments` filtered to
+PENDING records with a Subscription Member (PAID records are excluded even with
+no linked Transaction; the Subscription's own charge is excluded). Member names
+come from `GET …/members` and are optional; at most four Subscriptions are read
+at once, because every tab return reloads the catalogs. Each catalog is its own section: a
+failed read (or one failed Subscription's payments) makes that catalog
+unavailable with Retry instead of offering an empty list. The catalogs choose
+what may be selected; the server reloads every amount. Box Plan terms are not
+shown, and nothing is derived from plan cadence or top-up suggestions.
+
+**Draft and validation.** Costs have an amount, an explicit date (no default),
+an optional description (≤ 200), optional funding from one Box, and a "not yet
+recorded" confirmation. Receipts are off by default; each selected receipt needs
+a date the User types. At most 50 of each; the add controls stop there. Local
+validation only blocks what cannot be sent (missing or non-decimal amounts,
+missing dates, a Box without an amount or no longer offered). When the Box list
+cannot be read, a Box already chosen is kept (under its last-known name) and
+left to the server's `BOX_NOT_FOUND`; only new Box choices are unavailable.
+Money rules and window membership are the server's, and its reasons are shown on the same rows
+with a "Go to" control that focuses the field. Amounts are sent as decimal text.
+
+**Staleness.** Every edit clears the result immediately and aborts the request.
+A response is applied only if it belongs to the latest calculation and nothing
+was cleared since it began, so an older response can never reappear, even if a
+transport ignores the abort. Hiding the tab (or a back/forward-cache restore)
+withdraws the result, aborts any request and resets every confirmation; on
+return the option catalogs and window are reloaded. Refresh does the same.
+Receipts a reloaded catalog no longer offers are removed from the draft and
+named. The draft is never stored; the page says so before any entry, together
+with the absence of automatic Transaction matching.
+
+**Results.** `complete` shows the hypothetical Available to Spend with current
+and projected Net Balance, In Boxes and per-Box balances, labelled a ledger
+figure — not cash and not safe to spend. `partial` shows the subtotal as "not
+money left" with the missing inputs, and its comparison columns read "Subtotal
+of entered rows", never "After this scenario". `unavailable` shows no projected figure,
+only the reasons and, when readable, the current recorded figures. Credit in
+favor is named as inside Net Balance and not cash; included receipts are listed
+*if received* with the server's amounts. The timing list (overdue group, due in
+window, unconfirmed estimates as context, partial reasons, "none confirmed" is
+not "nothing owed", not applicable before tracking) and undated Debts (both
+Directions, per Debt, never netted) render from their own statuses. The
+snapshot time is formatted in the response's zone (else the preference zone,
+else labelled UTC), never the browser's.
+
+**Rollout gate.** The route can be opened directly for review, but this change adds
+no dock, More, Settings or dashboard entry. Add those entry points only after the
+remaining real-browser hide/return check below passes. Planning should then be
+pinnable without changing default or stored pins, with a dashboard link below the
+current position (see [navigation](navigation.md)).
+
+### 5C fixtures and verification
+
+`tests/fixtures/planning-preview.ts` answers the preview route in the fixture
+harness from each scenario's declared server state (structural 400s, reason
+codes, independent sections). It is test code, never imported by the app.
+The seven `FX-HORIZON-*` worked examples exist in the frontend catalog with the
+backend's figures, plus browser scenarios (`FX-HORIZON-UI-01`, `-STALE-01`,
+`-SECTIONS-DOWN-01`, `-BASELINE-DOWN-01`, `-TRACKING-OFF-01`, `-ZONE-01`,
+`-LONG-01`); see `frontend/tests/fixtures/README.md`.
+
+Automated (`bun test`): `planning-preview.test.js` (window and zone boundaries,
+draft limits and keys, validation, exact request text, request/response field
+names compared against the Java records, parser invariants, stale/out-of-order
+responses, failures, hidden-tab/refresh withdrawal, no storage use);
+`planning-fixtures.test.js` (the D5 worked examples, `N'−B'=U'`, server-side
+receipt amounts, ineligible/duplicate/unknown/stale receipts, row reasons,
+bounds and 400s, independent sections, zone and clock boundaries);
+`planning-loader.test.js` (GET-only loader, complete and filtered catalogs,
+per-catalog failures, bounded request concurrency, guidance for every backend
+enum code and en/es parity).
+
+### Local verification — 27 September 2026
+
+The browser was checked against the merged 5B Java API and an isolated PostgreSQL
+database containing synthetic data, then against the fixture server:
+
+- Real API: baseline N 10,000.00 / B 3,000.00 / U 7,000.00; an unreserved
+  1,200.00 cost produced U 5,800.00; a fully Box-funded 2,500.00 cost kept
+  U 7,000.00; adding an explicitly dated 4,500.00 receipt produced U 11,500.00.
+  The 310.25 statement stayed separate. Reading the baseline and Boxes afterward
+  confirmed that recorded balances were unchanged.
+- Keyboard entry, confirmation, calculation and removal controls; edits withdraw
+  results; Refresh withdraws the result and resets both confirmations.
+- Fixture requests returned in reverse order (4,000 ms then 300 ms): the newer
+  complete result remained visible after the older partial response arrived.
+- Unavailable baseline: no projected figure, with independent timing and Debts
+  still visible. Box-capacity rejection named the Box and shortfall; correcting
+  it produced an explicitly labelled partial subtotal.
+- Invalid zone: Retry is present and recovers the form when the source recovers.
+- Overdue and in-window statements, reconciliation mismatch and unconfirmed
+  estimates remain separate. The candidate mobile More entry was checked, then withheld for the rollout gate.
+- 390 px and 320 px layouts had no document-level horizontal overflow. The long
+  fixture offered all 60 receivable Debts and 55 contributions, plus 12 Boxes.
+- Cost fieldsets have accessible names; an unconfirmed cost marks only its
+  confirmation invalid; included receipts use a distinct section heading; no
+  duplicate IDs were found with a receipt result rendered.
+
+Limitation: the available in-app browser keeps `document.visibilityState` visible
+even when another tab is opened or the browser panel is hidden. Genuine OS/tab
+visibility transitions could not be exercised there. Withdrawal, cancellation and
+confirmation reset are covered by automated tests, and the event wiring was
+reviewed; complete the hide/return journey in a normal browser before adding navigation
+entry points and exposing the feature. No shared development or production records were changed.
