@@ -3,7 +3,9 @@
 	"version": "0.0.1",
 	"scripts": {
 		"dev": "vite dev",
+		"prebuild": "bun run lint:colors",
 		"build": "vite build",
+		"lint:colors": "bun scripts/lint-colors.mjs",
 		"preview": "vite preview",
 		"paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy cookie globalVariable baseLocale --silent",
 		"prepare": "bun run paraglide:compile && svelte-kit sync",

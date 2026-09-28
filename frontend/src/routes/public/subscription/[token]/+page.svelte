@@ -9,9 +9,9 @@
 
 	const fmt = $derived(mxnFormatter(data.preferences.locale));
 
-	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
+	const cycleBadgeVariant: Record<string, 'info' | 'highlight'> = {
 		MONTHLY: 'info',
-		YEARLY: 'purple',
+		YEARLY: 'highlight',
 	};
 
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {

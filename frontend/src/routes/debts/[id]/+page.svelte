@@ -171,7 +171,7 @@
 					<p class="text-sm text-muted-foreground mt-0.5">{data.debt.description}</p>
 				</div>
 				<div class="flex shrink-0 items-center gap-2">
-					<Badge variant="outline" class={owedByUser ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+					<Badge variant="outline" class={owedByUser ? 'text-money-negative' : 'text-money-owed-to-you'}>
 						{owedByUser ? m.debts_badge_you_owe() : m.debts_badge_owes_you()}
 					</Badge>
 					<Badge variant={statusBadgeVariant[data.debt.status]}>{debtStatusLabel(data.debt.status)}</Badge>
@@ -192,7 +192,7 @@
 				</div>
 				<div>
 					<p class="text-muted-foreground">{m.common_remaining()}</p>
-					<p class="text-lg font-semibold {owedByUser ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}">
+					<p class="text-lg font-semibold {owedByUser ? 'text-money-negative' : 'text-money-owed-to-you'}">
 						{fmt.format(data.debt.remaining)}
 					</p>
 				</div>

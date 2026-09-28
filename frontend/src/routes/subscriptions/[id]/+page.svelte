@@ -84,9 +84,9 @@
 		return `${tx.direction === 'EGRESS' ? '-' : '+'}${fmt.format(tx.amount)}`;
 	}
 
-	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
+	const cycleBadgeVariant: Record<string, 'info' | 'highlight'> = {
 		MONTHLY: 'info',
-		YEARLY: 'purple',
+		YEARLY: 'highlight',
 	};
 
 	const typeBadgeVariant: Record<string, 'secondary' | 'warning'> = {
