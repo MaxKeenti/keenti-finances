@@ -1,65 +1,61 @@
-# Svelte library
+# Keenti Finances — Frontend
 
-Everything you need to build a Svelte library, powered by [`sv`](https://npmjs.com/package/sv).
+SvelteKit (Svelte 5) app for Keenti Finances, served by `adapter-node`. It owns authentication (WorkOS passkeys, ADR-0002 / ADR-0004) and is the only public entry point. Server code talks to the backend directly; the browser only calls `/api/*`, which `src/routes/api/[...path]/+server.ts` proxies to the backend with the User's `X-WorkOS-User-Id` (ADR-0003).
 
-Read more about creating a library [in the docs](https://svelte.dev/docs/kit/packaging).
+Standards for working in this code live in [`AI_RULES.md`](../AI_RULES.md); domain language in [`CONTEXT.md`](../CONTEXT.md).
 
-## Creating a project
+Use **bun** for everything — not npm.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Layout
 
-```sh
-# create a new project in the current directory
-npx sv create
+| Path | Holds |
+|---|---|
+| `src/routes/<feature>/` | Pages: `+page.server.ts` (load + form actions) and `+page.svelte` |
+| `src/routes/layout.css` | Theme: semantic colour tokens, per-User hue and fonts |
+| `src/lib/components/ui/` | shadcn-svelte generated primitives only |
+| `src/lib/components/<feature>/` | Hand-written components, exported from each folder's `index.ts` |
+| `src/lib/server/` | Server-only code: backend fetch, payload parsing, section loading, WorkOS session |
+| `src/lib/*.ts` | Pure shared logic: formatting, labels, obligation status, planning |
+| `messages/en.json`, `messages/es.json` | Paraglide messages — every user-facing string |
+| `tests/` | `bun test` suites and synthetic fixtures (`tests/fixtures/`) |
 
-# create a new project in my-app
-npx sv create my-app
+## Running locally
+
+```shell
+bun install
+bun run dev
 ```
 
-To recreate this project with the same configuration:
+Environment variables (see [`DEPLOY.md`](../DEPLOY.md) for production values):
 
-```sh
-# recreate this project
-bun x sv@0.15.3 create --template library --types ts --add tailwindcss="plugins:none" --install bun my-app
+| Variable | Local use |
+|---|---|
+| `BACKEND_URL` | Defaults to `http://localhost:8080` |
+| `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD` | Needed for real passkey login |
+| `TEST_AUTH_BYPASS=true` | Skips WorkOS and signs in as a demo User (`TEST_WORKOS_USER_ID`, default `development-demo`). Refused when `NODE_ENV=production` |
+
+### Against fixtures instead of a backend
+
+`tests/fixtures/server.ts` serves one synthetic scenario over HTTP, read-only and on loopback only:
+
+```shell
+bun run tests/fixtures/server.ts FX-BAL-ZERO-01      # listens on :8099 (FIXTURE_PORT)
+BACKEND_URL=http://localhost:8099 TEST_AUTH_BYPASS=true bun run dev
 ```
 
-## Developing
+See [`tests/fixtures/README.md`](tests/fixtures/README.md) for scenarios and failure injection.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Checks
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```shell
+bun run check        # Paraglide compile + svelte-check
+bun run build        # runs lint:colors first (prebuild), then vite build
+bun run test         # bun test
+bun run lint:colors  # raw palette / arbitrary colour gate on its own
 ```
 
-Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
+CI runs `check`, `build`, and `test`, then builds the production Docker image.
 
-## Building
+## Deployment
 
-To build your library:
-
-```sh
-npm pack
-```
-
-To create a production version of your showcase app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
-
-## Publishing
-
-Go into the `package.json` and give your package the desired name through the `"name"` option. Also consider adding a `"license"` field and point it to a `LICENSE` file which you can create from a template (one popular option is the [MIT license](https://opensource.org/license/mit/)).
-
-To publish your library to [npm](https://www.npmjs.com):
-
-```sh
-npm publish
-```
+Built from `Dockerfile` (bun build, Node runtime) on Railway. `ORIGIN` must be set in production or the WorkOS callback fails. See [`DEPLOY.md`](../DEPLOY.md).
