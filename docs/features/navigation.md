@@ -6,13 +6,19 @@ How a User moves between the app's areas, and what happens to a User's own navig
 
 **D4 — navigation wording and model: approved 9 September 2026 by the product owner.** The approval covers the desktop and mobile models below. The receivables wording (“Money owed to you” / “Te deben”) was part of the same decision gate; ADR-0023 has since superseded it, because a Debt now runs in both directions and the section is named “Debts” / “Deudas” with each side labelled underneath.
 
+D4 also required every desktop dock entry to show its name at all times. The product owner withdrew that requirement on 1 October 2026: the desktop dock now shows names on hover, as described below. The rest of D4 stands.
+
 ## Desktop
 
-A single bar lists every area: Dashboard, Transactions, Boxes, Financial Accounts, Subscriptions, Debts, Planning, Settings, and Logout.
+A single dock lists the main areas: Dashboard, Transactions, Boxes, Financial Accounts, Subscriptions, Debts, Planning, and Settings, followed by **More**. More opens the full list, which adds Categories, Contacts, Trash, and Logout. Settings is highlighted while one of those three management areas is open.
 
-Planning opens the [30-day planning preview](planning-preview.md). The desktop dock was browser-checked at 640 px with no document-level horizontal overflow.
+Planning opens the [30-day planning preview](planning-preview.md). The desktop dock was browser-checked at 640 px with no document-level horizontal overflow, including while magnified.
 
-Each entry shows its name at all times. A name that appears only on pointer hover is unavailable to touch and to anyone scanning the bar, and it forces the icon alone to be recognized; the persistent label is also the link's accessible name, so the screen-reader name and the visible name are the same string. Pointer magnification remains a presentation flourish and is still governed by the User's `dockMagnification` preference.
+Each tile is an icon. Its name appears above it on pointer hover and on keyboard focus, and is the tile's accessible name at all times. On a touch screen wide enough to get the desktop dock, the name is not shown.
+
+The tile for the current area is filled with the User's primary hue. A dot under a tile marks an area opened this session; Dashboard always carries one. The dots are kept in memory only and reset on reload.
+
+Pointer magnification remains a presentation flourish and is still governed by the User's `dockMagnification` preference. The dock keeps a fixed height, so magnified tiles rise above it.
 
 ## Mobile
 

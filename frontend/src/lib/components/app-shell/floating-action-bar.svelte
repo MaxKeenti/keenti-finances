@@ -2,6 +2,8 @@
 	import { X } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages.js';
+	import { cn } from '$lib/utils';
+	import { DOCK_SURFACE } from './dock-surface';
 	import type { DockActionBar } from './dock-action.svelte';
 
 	let { bar }: { bar: DockActionBar } = $props();
@@ -14,9 +16,12 @@
 	<div
 		role="toolbar"
 		aria-label={m.common_selected_count({ count: bar.count })}
-		class="flex w-full max-w-md flex-wrap items-center gap-2 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 py-2 shadow-2xl shadow-scrim/15 backdrop-blur-xl sm:w-auto"
+		class={cn(
+			DOCK_SURFACE,
+			'flex w-full max-w-md flex-wrap items-center gap-2 rounded-3xl px-3 py-2 sm:w-auto',
+		)}
 	>
-		<span class="whitespace-nowrap pl-1 text-sm font-medium text-sidebar-foreground">
+		<span class="whitespace-nowrap pl-1 text-sm font-medium text-foreground">
 			{m.common_selected_count({ count: bar.count })}
 		</span>
 
