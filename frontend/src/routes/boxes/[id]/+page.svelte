@@ -321,7 +321,7 @@
 			<div class="flex flex-wrap items-start justify-between gap-4">
 				<div class="flex min-w-0 w-full items-start gap-3">
 					<div
-						class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-2xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-black/5"
+						class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-2xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-scrim/5"
 						aria-hidden="true"
 					>
 						{data.box.icon || '□'}
@@ -492,7 +492,7 @@
 					{@const transactionDescription = movement.relatedTransactionDescription || (movement.relatedTransactionId ? m.boxes_transaction_number({ id: movement.relatedTransactionId }) : '')}
 					<div class="grid gap-3 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
 						<div
-							class="flex size-9 items-center justify-center rounded-full {ingress ? 'bg-green-500/10 text-money-positive' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}"
+							class="flex size-9 items-center justify-center rounded-full {ingress ? 'bg-money-positive/10 text-money-positive' : 'bg-warning/10 text-warning-text'}"
 						>
 							{#if movement.type === 'SPENDING'}
 								<ReceiptText class="size-4" aria-hidden="true" />
@@ -528,7 +528,7 @@
 									{/if}
 								</div>
 								{#if sourceState === 'CHANGED'}
-									<p class="text-xs text-amber-700 dark:text-amber-400">{m.boxes_ingress_source_changed_hint()}</p>
+									<p class="text-xs text-warning-text">{m.boxes_ingress_source_changed_hint()}</p>
 								{:else if sourceState === 'REMOVED'}
 									<p class="text-xs text-destructive">{m.boxes_ingress_source_removed_hint()}</p>
 								{/if}

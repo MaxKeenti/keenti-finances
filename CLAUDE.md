@@ -1,5 +1,9 @@
 # Keenti Finances
 
+**See [AI_RULES.md](./AI_RULES.md) for development standards and conventions.**
+
+The frontend uses **bun** (`bun run check`, `bun run build`, `bun run test`), never npm. The backend uses the Maven wrapper (`./mvnw verify`).
+
 ## Agent skills
 
 ### Issue tracker

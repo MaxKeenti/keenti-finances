@@ -75,7 +75,7 @@
 		];
 		let classes = '';
 		if (period?.status === 'ACHIEVED') {
-			classes = 'border-b-2 border-green-600 bg-green-500/15 font-semibold text-green-900 dark:text-green-200';
+			classes = 'border-b-2 border-success bg-success/15 font-semibold text-success-text';
 			labels.push(m.box_plan_calendar_achieved());
 		} else if (period?.status === 'MISSED') {
 			classes = 'outline outline-1 outline-dashed outline-destructive bg-destructive/15 text-destructive';
@@ -93,15 +93,15 @@
 			labels.push(m.box_plan_status_overdue());
 		}
 		if (revisionDates.has(date)) {
-			classes += ' relative after:absolute after:right-1 after:top-1 after:size-1.5 after:rounded-full after:bg-blue-500';
+			classes += ' relative after:absolute after:right-1 after:top-1 after:size-1.5 after:rounded-full after:bg-info';
 			labels.push(m.box_plan_calendar_revision());
 		}
 		if (movementDates.has(date)) {
-			classes += ' relative before:absolute before:bottom-1 before:left-1/2 before:size-1 before:-translate-x-1/2 before:rounded-full before:bg-amber-500';
+			classes += ' relative before:absolute before:bottom-1 before:left-1/2 before:size-1 before:-translate-x-1/2 before:rounded-full before:bg-warning';
 			labels.push(m.box_plan_calendar_movement());
 		}
 		if (fundedTransactionDates.has(date)) {
-			classes += ' border-l-2 border-l-purple-500';
+			classes += ' border-l-2 border-l-highlight';
 			labels.push(m.box_plan_calendar_transaction());
 		}
 		return { classes, labels };
@@ -127,12 +127,12 @@
 			</CalendarUI.Calendar>
 		</div>
 		<ul class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-1" aria-label={m.box_plan_calendar_title()}>
-			<li class="flex items-center gap-2"><span class="flex size-5 items-center justify-center rounded bg-green-500/15 text-xs text-green-800 dark:text-green-300" aria-hidden="true">✓</span>{m.box_plan_calendar_achieved()}</li>
+			<li class="flex items-center gap-2"><span class="flex size-5 items-center justify-center rounded bg-success/15 text-xs text-success-text" aria-hidden="true">✓</span>{m.box_plan_calendar_achieved()}</li>
 			<li class="flex items-center gap-2"><span class="flex size-5 items-center justify-center rounded bg-destructive/15 text-xs text-destructive" aria-hidden="true">!</span>{m.box_plan_calendar_missed()}</li>
 			<li class="flex items-center gap-2"><span class="size-5 rounded ring-1 ring-primary/60 ring-inset" aria-hidden="true"></span>{m.box_plan_calendar_current()}</li>
-			<li class="flex items-center gap-2"><span class="size-2 rounded-full bg-blue-500" aria-hidden="true"></span>{m.box_plan_calendar_revision()}</li>
-			<li class="flex items-center gap-2"><span class="size-2 rounded-full bg-amber-500" aria-hidden="true"></span>{m.box_plan_calendar_movement()}</li>
-			<li class="flex items-center gap-2"><span class="h-5 border-l-2 border-purple-500" aria-hidden="true"></span>{m.box_plan_calendar_transaction()}</li>
+			<li class="flex items-center gap-2"><span class="size-2 rounded-full bg-info" aria-hidden="true"></span>{m.box_plan_calendar_revision()}</li>
+			<li class="flex items-center gap-2"><span class="size-2 rounded-full bg-warning" aria-hidden="true"></span>{m.box_plan_calendar_movement()}</li>
+			<li class="flex items-center gap-2"><span class="h-5 border-l-2 border-highlight" aria-hidden="true"></span>{m.box_plan_calendar_transaction()}</li>
 			<li class="flex items-center gap-2"><span class="text-sm font-semibold underline decoration-2 underline-offset-2" aria-hidden="true">1</span>{m.box_plan_calendar_boundary()}</li>
 		</ul>
 	</div>

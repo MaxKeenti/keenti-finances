@@ -51,6 +51,24 @@
 	--chart-income: oklch(0.529 0.180 142.5);
 	--chart-expense: oklch(0.623 0.191 24.9);
 	--chart-net: oklch(0.575 0.163 255.5);
+	/* Status tones. The bare token is the solid mark (dots, borders, tints via
+	 * `/15`); `-text` is the readable foreground, stepped per mode. Raw palette
+	 * classes are not allowed anywhere else — add a token here instead. */
+	--success: oklch(0.723 0.219 149.579);
+	--success-text: oklch(0.448 0.119 151.328);
+	--warning: oklch(0.769 0.188 70.08);
+	--warning-text: oklch(0.555 0.163 48.998);
+	--info: oklch(0.623 0.214 259.815);
+	--info-text: oklch(0.424 0.199 265.638);
+	--highlight: oklch(0.627 0.265 303.9);
+	--highlight-text: oklch(0.438 0.218 303.724);
+	/* Transfers between Financial Accounts: neither income nor expense. */
+	--transfer: oklch(0.606 0.25 292.717);
+	--transfer-text: oklch(0.491 0.27 292.581);
+	/* Debts with Direction INGRESS ("Owed to you"). */
+	--money-owed-to-you: oklch(0.666 0.179 58.318);
+	/* Overlays, drop shadows, and hairline rings: black in both modes. */
+	--scrim: oklch(0 0 0);
 	/* Primitive radius root: every --radius-* step (and thus every rounded-*
 	 * utility on the shadcn primitives + the dock) scales from this single
 	 * value. Was 0rem (fully square); now matches the rounded dock language. */
@@ -97,6 +115,18 @@
 	--chart-income: oklch(0.529 0.180 142.5);
 	--chart-expense: oklch(0.669 0.159 22.3);
 	--chart-net: oklch(0.622 0.161 255.1);
+	--success: oklch(0.723 0.219 149.579);
+	--success-text: oklch(0.792 0.209 151.711);
+	--warning: oklch(0.769 0.188 70.08);
+	--warning-text: oklch(0.828 0.189 84.429);
+	--info: oklch(0.623 0.214 259.815);
+	--info-text: oklch(0.707 0.165 254.624);
+	--highlight: oklch(0.627 0.265 303.9);
+	--highlight-text: oklch(0.714 0.203 305.504);
+	--transfer: oklch(0.606 0.25 292.717);
+	--transfer-text: oklch(0.811 0.111 293.571);
+	--money-owed-to-you: oklch(0.828 0.189 84.429);
+	--scrim: oklch(0 0 0);
 	--sidebar: oklch(0.216 0.006 56.043);
 	--sidebar-foreground: oklch(0.985 0.001 106.423);
 	--sidebar-primary: oklch(0.795 0.184 86.047);
@@ -128,6 +158,18 @@
 	--color-chart-income: var(--chart-income);
 	--color-chart-expense: var(--chart-expense);
 	--color-chart-net: var(--chart-net);
+	--color-success: var(--success);
+	--color-success-text: var(--success-text);
+	--color-warning: var(--warning);
+	--color-warning-text: var(--warning-text);
+	--color-info: var(--info);
+	--color-info-text: var(--info-text);
+	--color-highlight: var(--highlight);
+	--color-highlight-text: var(--highlight-text);
+	--color-transfer: var(--transfer);
+	--color-transfer-text: var(--transfer-text);
+	--color-money-owed-to-you: var(--money-owed-to-you);
+	--color-scrim: var(--scrim);
 	--color-ring: var(--ring);
 	--color-input: var(--input);
 	--color-border: var(--border);

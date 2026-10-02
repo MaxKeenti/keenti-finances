@@ -250,12 +250,12 @@
 	}
 
 	// Money the User owes gets the same treatment a Credit Financial Account's
-	// balance gets; money owed to the User stays amber, as it was.
+	// balance gets; money owed to the User takes the `money-owed-to-you` tone.
 	function remainingClass(debt: Debt): string {
 		if (debt.status === 'PAID') return 'text-money-positive';
 		return debtDirection(debt.direction) === 'EGRESS'
 			? 'text-money-negative'
-			: 'text-amber-600 dark:text-amber-400';
+			: 'text-money-owed-to-you';
 	}
 
 	// Desktop columns. `accessorFn` keeps the searchable text in the row model so
@@ -355,7 +355,7 @@
 			{#if showOwedToYou}
 				<div class="rounded-lg border p-4">
 					<p class="text-sm font-medium text-muted-foreground">{m.debts_total_owed_to_you()}</p>
-					<p class="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+					<p class="text-3xl font-bold tabular-nums text-money-owed-to-you">
 						{fmt.format(owedToYou.totalOutstanding)}
 					</p>
 					<p class="mt-1 text-sm text-muted-foreground">
@@ -397,7 +397,7 @@
 					<h2 id="owed-to-you-title" class="text-lg font-semibold">{m.debts_outstanding_by_debtor()}</h2>
 					<p class="text-sm text-muted-foreground">{m.debts_outstanding_by_debtor_description()}</p>
 				</div>
-				{@render counterpartCards(owedToYou.counterparts, m.debts_amount_owed_to_you(), 'text-amber-600 dark:text-amber-400')}
+				{@render counterpartCards(owedToYou.counterparts, m.debts_amount_owed_to_you(), 'text-money-owed-to-you')}
 			</section>
 		{/if}
 
@@ -507,7 +507,7 @@
 {/snippet}
 
 {#snippet directionCell(row: Row<Debt>)}
-	<Badge variant="outline" class={debtDirection(row.original.direction) === 'EGRESS' ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+	<Badge variant="outline" class={debtDirection(row.original.direction) === 'EGRESS' ? 'text-money-negative' : 'text-money-owed-to-you'}>
 		{directionLabel(row.original.direction)}
 	</Badge>
 {/snippet}
@@ -568,7 +568,7 @@
 						</div>
 						<div class="flex shrink-0 flex-col items-end gap-1">
 							<Badge variant={statusBadgeVariant[debt.status]}>{debtStatusLabel(debt.status)}</Badge>
-							<Badge variant="outline" class={debtDirection(debt.direction) === 'EGRESS' ? 'text-money-negative' : 'text-amber-600 dark:text-amber-400'}>
+							<Badge variant="outline" class={debtDirection(debt.direction) === 'EGRESS' ? 'text-money-negative' : 'text-money-owed-to-you'}>
 								{directionLabel(debt.direction)}
 							</Badge>
 						</div>
@@ -754,7 +754,7 @@
 					</div>
 					<div>
 						<p class="text-muted-foreground">{m.common_unused()}</p>
-						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-amber-600 dark:text-amber-400' : ''}">{fmt.format(bulkResult.totalUnused)}</p>
+						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-warning-text' : ''}">{fmt.format(bulkResult.totalUnused)}</p>
 					</div>
 				</div>
 

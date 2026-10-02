@@ -339,7 +339,7 @@
 						<Card.Content class="space-y-3">
 							<p class="text-sm font-medium tabular-nums">{triggerValue(trigger)}</p>
 							{#if trigger.strategy === 'PLAN_DERIVED' && !hasActivePlan}
-								<p class="text-xs text-amber-700 dark:text-amber-400">
+								<p class="text-xs text-warning-text">
 									{trigger.enabled ? m.funding_trigger_plan_paused() : m.funding_trigger_plan_unavailable()}
 								</p>
 							{/if}

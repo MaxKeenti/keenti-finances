@@ -558,10 +558,10 @@
 					</div>
 				{:else}
 					{@const transfer = item.transfer}
-					<Card.Root class="border-violet-500/20 bg-violet-500/4">
+					<Card.Root class="border-transfer/20 bg-transfer/4">
 						<Card.Content class="pt-4">
-							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</span></div>
-							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">{m.transfer_title()}</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
+							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-transfer-text">↔ {fmt.format(transfer.amount)}</span></div>
+							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-transfer/15 px-2 py-0.5 text-xs font-medium text-transfer-text">{m.transfer_title()}</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
 						</Card.Content>
 					</Card.Root>
 				{/if}
@@ -679,12 +679,12 @@
 							</Table.Row>
 						{:else}
 							{@const transfer = item.transfer}
-							<Table.Row class="bg-violet-500/4">
+							<Table.Row class="bg-transfer/4">
 								<Table.Cell></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</Table.Cell>
 								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
-								<Table.Cell class="font-mono font-medium text-violet-700 dark:text-violet-300">↔ {fmt.format(transfer.amount)}</Table.Cell>
-								<Table.Cell><span class="inline-flex rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">{m.transfer_title()}</span></Table.Cell>
+								<Table.Cell class="font-mono font-medium text-transfer-text">↔ {fmt.format(transfer.amount)}</Table.Cell>
+								<Table.Cell><span class="inline-flex rounded-full bg-transfer/15 px-2 py-0.5 text-xs font-medium text-transfer-text">{m.transfer_title()}</span></Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell></Table.Cell>

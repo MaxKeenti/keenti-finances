@@ -298,7 +298,7 @@
 						aria-label={m.transactions_box_select_aria({ number: index + 1 })}
 					/>
 					{#if archived}
-						<p class="text-xs text-amber-700 dark:text-amber-400">{m.transactions_box_archived_locked()}</p>
+						<p class="text-xs text-warning-text">{m.transactions_box_archived_locked()}</p>
 					{:else if kind === 'funding' && selectedBox}
 						<p class="text-xs text-muted-foreground">
 							{m.transactions_box_available({ amount: fmt.format(maxForBox(allocation.boxId)) })}

@@ -49,7 +49,7 @@
 		style={`--account-hue: ${account.hue}`}
 	>
 		<div class="flex items-start gap-3 p-4">
-			<div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.88_0.12_var(--account-hue))] text-[oklch(0.32_0.08_var(--account-hue))] shadow-sm ring-1 ring-black/5 dark:bg-[oklch(0.38_0.1_var(--account-hue))] dark:text-[oklch(0.9_0.05_var(--account-hue))]">
+			<div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.88_0.12_var(--account-hue))] text-[oklch(0.32_0.08_var(--account-hue))] shadow-sm ring-1 ring-scrim/5 dark:bg-[oklch(0.38_0.1_var(--account-hue))] dark:text-[oklch(0.9_0.05_var(--account-hue))]">
 				<Icon class="size-5" aria-hidden="true" />
 			</div>
 			<div class="min-w-0 flex-1">

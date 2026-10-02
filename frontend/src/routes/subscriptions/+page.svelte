@@ -213,9 +213,9 @@
 		return contacts.filter((c) => !memberContactIds.has(c.id));
 	}
 
-	const cycleBadgeVariant: Record<string, 'info' | 'purple'> = {
+	const cycleBadgeVariant: Record<string, 'info' | 'highlight'> = {
 		MONTHLY: 'info',
-		YEARLY: 'purple',
+		YEARLY: 'highlight',
 	};
 
 	const typeBadgeVariant: Record<string, 'secondary' | 'warning'> = {

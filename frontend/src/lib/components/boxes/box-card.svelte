@@ -48,7 +48,7 @@
 	<Card.Header>
 		<div class="flex min-w-0 items-start gap-3">
 			<div
-				class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-black/5"
+				class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[oklch(0.88_0.12_var(--box-hue))] text-xl text-[oklch(0.32_0.08_var(--box-hue))] shadow-sm ring-1 ring-scrim/5"
 				aria-hidden="true"
 			>
 				{box.icon || '□'}

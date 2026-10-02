@@ -164,7 +164,7 @@
 	{/snippet}
 
 	<div
-		class="hidden items-end gap-1.5 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 pb-2 pt-2.5 shadow-2xl shadow-black/10 backdrop-blur-xl sm:flex"
+		class="hidden items-end gap-1.5 rounded-3xl border border-sidebar-border/70 bg-sidebar/80 px-3 pb-2 pt-2.5 shadow-2xl shadow-scrim/10 backdrop-blur-xl sm:flex"
 	>
 		{#each dockNavItems as item}
 			{@render dockIcon(item.href, item.label, item.icon, isActive(item))}
@@ -177,7 +177,7 @@
 
 	<!-- Mobile: 3 pinned + overflow menu button -->
 	<div
-		class="flex w-full items-center gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-2 py-2 shadow-2xl shadow-black/15 backdrop-blur-xl sm:hidden"
+		class="flex w-full items-center gap-1 rounded-2xl border border-sidebar-border/70 bg-sidebar/90 px-2 py-2 shadow-2xl shadow-scrim/15 backdrop-blur-xl sm:hidden"
 	>
 		{#each pinnedItems as item}
 			{@const active = isActive(item)}
