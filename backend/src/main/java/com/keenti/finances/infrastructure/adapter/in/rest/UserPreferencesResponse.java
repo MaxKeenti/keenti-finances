@@ -11,5 +11,8 @@ public record UserPreferencesResponse(
     String mobilePinnedNavItems,
     boolean dockMagnification,
     String timeZone,
-    String themeMode
+    String themeMode,
+    String primaryCurrency,
+    /** The currencies a User may choose from (ADR-0024). */
+    java.util.List<String> supportedCurrencies
 ) {}

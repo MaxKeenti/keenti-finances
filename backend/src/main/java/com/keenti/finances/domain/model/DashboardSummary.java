@@ -6,6 +6,7 @@ import java.util.List;
 public class DashboardSummary {
 
     private final int year;
+    private final String currency;
     private final BigDecimal netBalance;
     private final BigDecimal inBoxes;
     private final BigDecimal availableToSpend;
@@ -13,10 +14,11 @@ public class DashboardSummary {
     private final BigDecimal totalEgress;
     private final List<MonthSummary> monthly;
 
-    public DashboardSummary(int year, BigDecimal netBalance, BigDecimal inBoxes,
+    public DashboardSummary(int year, String currency, BigDecimal netBalance, BigDecimal inBoxes,
                             BigDecimal availableToSpend, BigDecimal totalIngress,
                             BigDecimal totalEgress, List<MonthSummary> monthly) {
         this.year = year;
+        this.currency = currency;
         this.netBalance = netBalance;
         this.inBoxes = inBoxes;
         this.availableToSpend = availableToSpend;
@@ -26,6 +28,7 @@ public class DashboardSummary {
     }
 
     public int getYear() { return year; }
+    public String getCurrency() { return currency; }
     public BigDecimal getNetBalance() { return netBalance; }
     public BigDecimal getInBoxes() { return inBoxes; }
     public BigDecimal getAvailableToSpend() { return availableToSpend; }

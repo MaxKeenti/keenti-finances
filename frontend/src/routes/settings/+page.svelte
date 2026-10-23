@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { currencyItems } from '$lib/currency-labels';
 	import {
 		Check,
 		ChevronRight,
@@ -113,6 +114,7 @@
 	let dockMagnification = $state(initialPreferences.dockMagnification);
 	let timeZone = $state(initialPreferences.timeZone);
 	let themeMode = $state<ThemeMode>(initialPreferences.themeMode);
+	let primaryCurrency = $state(initialPreferences.primaryCurrency);
 	let saveState = $state<SaveState>('idle');
 	let savedTimer: ReturnType<typeof setTimeout> | null = null;
 	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -153,6 +155,7 @@
 					dockMagnification,
 					timeZone,
 					themeMode,
+					primaryCurrency,
 				}),
 			});
 			if (!res.ok) {
@@ -207,6 +210,11 @@
 
 	function onTimeZoneChange(next: string) {
 		timeZone = next;
+		void persist();
+	}
+
+	function onPrimaryCurrencyChange(next: string) {
+		primaryCurrency = next;
 		void persist();
 	}
 
@@ -397,6 +405,17 @@
 							items={timeZoneItems}
 						/>
 						<p class="text-xs text-muted-foreground">{m.settings_time_zone_description()}</p>
+					</div>
+					<div class="grid gap-1.5">
+						<Label for="primary-currency">{m.settings_primary_currency()}</Label>
+						<NativeSelect
+							id="primary-currency"
+							name="primary-currency"
+							value={primaryCurrency}
+							onValueChange={onPrimaryCurrencyChange}
+							items={currencyItems(data.preferences.supportedCurrencies)}
+						/>
+						<p class="text-xs text-muted-foreground">{m.settings_primary_currency_description()}</p>
 					</div>
 				</div>
 			</Card.Content>

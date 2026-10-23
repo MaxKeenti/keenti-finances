@@ -412,6 +412,8 @@ export function respondToPlanningPreview(spec: PlanningPreviewSpec, bodyText: st
 	return {
 		status: 200,
 		body: {
+			// Every planning fixture is an MXN scenario (ADR-0024).
+			currency: 'MXN',
 			generatedAt: now.toISOString(),
 			timeZone: today === null ? null : spec.timeZone,
 			window: today === null ? null : { from: today, to },

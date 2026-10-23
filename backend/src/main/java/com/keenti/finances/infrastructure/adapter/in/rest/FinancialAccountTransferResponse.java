@@ -8,9 +8,12 @@ public record FinancialAccountTransferResponse(
     Long id,
     Long sourceAccountId,
     String sourceAccountName,
+    String sourceCurrency,
     Long destinationAccountId,
     String destinationAccountName,
+    String destinationCurrency,
     BigDecimal amount,
+    BigDecimal destinationAmount,
     LocalDate transferDate,
     String notes,
     LocalDateTime createdAt

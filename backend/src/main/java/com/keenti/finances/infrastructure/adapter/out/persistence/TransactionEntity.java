@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
+import com.keenti.finances.domain.model.Currencies;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,6 +35,9 @@ public class TransactionEntity extends PanacheEntityBase {
 
     @Column(nullable = false, length = 10)
     public String direction;
+
+    @Column(nullable = false, length = 3)
+    public String currency = Currencies.DEFAULT;
 
     @Column(length = 500)
     public String description;

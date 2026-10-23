@@ -21,6 +21,7 @@ import type { PageServerLoad } from './$types';
 import { loadSection } from '$lib/server/section-load';
 import { parseDashboardOverview, type DashboardOverview } from '$lib/server/payloads';
 import type { Section } from '$lib/types/section';
+import { isSupportedCurrency } from '$lib/formatting';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -51,9 +52,15 @@ export const load: PageServerLoad = async ({ fetch, url, cookies }) => {
 		? { Authorization: `Bearer ${accessToken}` }
 		: {};
 
+	// The Viewing Currency (ADR-0024). Only a well-formed code is forwarded: an
+	// unsupported one is a 400 that would take every section down, so it falls
+	// back to the Primary Currency instead.
+	const currencyParam = url.searchParams.get('currency');
+	const currency = currencyParam !== null && isSupportedCurrency(currencyParam) ? currencyParam : null;
+
 	const overview: Section<DashboardOverview> = await loadSection<DashboardOverview>(
 		fetch,
-		`${BACKEND}/api/dashboard/overview?year=${requestedYear ?? 'current'}`,
+		`${BACKEND}/api/dashboard/overview?year=${requestedYear ?? 'current'}${currency ? `&currency=${currency}` : ''}`,
 		{
 			parse: parseDashboardOverview,
 			headers: authHeaders,

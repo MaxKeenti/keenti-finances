@@ -61,6 +61,7 @@ public class PublicSubscriptionResource {
         return new PublicSubscriptionResponse(
             view.subscriptionName(),
             view.cost(),
+            view.currency(),
             view.billingCycle(),
             view.nextBillingDate(),
             members

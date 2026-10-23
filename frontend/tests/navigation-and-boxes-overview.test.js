@@ -24,7 +24,12 @@ function cookies(values = {}) {
 }
 
 async function runBoxes(backend) {
-	const data = await boxesLoad({ fetch: backend.fetch, cookies: cookies() });
+	const data = await boxesLoad({
+		fetch: backend.fetch,
+		cookies: cookies(),
+		url: new URL('http://localhost/boxes'),
+		parent: async () => ({ preferences: { primaryCurrency: 'MXN' } }),
+	});
 	backend.assertNoUndeclaredRoutes();
 	expect(backend.requests.every((request) => request.method === 'GET')).toBe(true);
 	return data;

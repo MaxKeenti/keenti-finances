@@ -69,6 +69,7 @@ public class PanacheBoxRepository implements BoxRepository {
         JOIN box owned ON owned.id = entry.box_id
         WHERE owned.user_id = :userId
           AND owned.archived = FALSE
+          AND owned.currency = :currency
         """;
 
     private static final String HISTORY_SQL = """
@@ -196,6 +197,7 @@ public class PanacheBoxRepository implements BoxRepository {
         entity.user = UserEntity.findById(userContext.getUserId());
         entity.name = box.getName();
         entity.hue = box.getHue();
+        entity.currency = box.getCurrency();
         entity.icon = box.getIcon();
         entity.description = box.getDescription();
         entity.displayOrder = box.getDisplayOrder();
@@ -432,11 +434,20 @@ public class PanacheBoxRepository implements BoxRepository {
     }
 
     @Override
-    public BigDecimal getTotalBalance() {
+    public BigDecimal getTotalBalance(String currency) {
         Object raw = em.createNativeQuery(TOTAL_BALANCE_SQL)
             .setParameter("userId", userContext.getUserId())
+            .setParameter("currency", currency)
             .getSingleResult();
         return decimal(raw);
+    }
+
+    @Override
+    public List<String> findActiveCurrencies() {
+        return em.createQuery(
+                "SELECT DISTINCT box.currency FROM BoxEntity box WHERE box.archived = false",
+                String.class)
+            .getResultList();
     }
 
     @Override
@@ -479,7 +490,8 @@ public class PanacheBoxRepository implements BoxRepository {
             entity.archived,
             entity.createdAt,
             entity.updatedAt,
-            entity.version
+            entity.version,
+            entity.currency
         );
     }
 

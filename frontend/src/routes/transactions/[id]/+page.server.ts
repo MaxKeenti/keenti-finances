@@ -4,6 +4,8 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { m } from '$lib/paraglide/messages.js';
 import { transactionSchema } from '$lib/schemas/transaction';
 import type { BoxDto } from '$lib/types/boxes';
+import { parseBalanceSummary } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 import {
 	normalizeTransactionBoxFields,
 	type BoxDistributionDto,
@@ -18,6 +20,7 @@ type Contact = { id: number; name: string; phone: string | null; email: string |
 type Transaction = {
 	id: number;
 	amount: number;
+	currency: string;
 	direction: string;
 	description: string | null;
 	transactionDate: string;
@@ -72,6 +75,15 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		console.error(`[transactions/${id}] load: backend unreachable for categories/contacts/boxes`);
 	}
 
+	// Box funding is limited by Available to Spend in the Transaction's own
+	// currency; only Boxes holding it can fund it (ADR-0024).
+	const balanceSummary = await loadSection(
+		fetch,
+		`${BACKEND}/api/boxes/summary?currency=${encodeURIComponent(transaction.currency ?? 'MXN')}`,
+		{ parse: parseBalanceSummary, label: `transactions/${id}/summary` },
+	);
+	boxes = boxes.filter((box) => (box.currency ?? 'MXN') === (transaction.currency ?? 'MXN'));
+
 	const form = await superValidate(
 		{
 			id: transaction.id,
@@ -87,7 +99,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 		zod4(transactionSchema),
 	);
 
-	return { transaction, categories, contacts, boxes, form };
+	return { transaction, categories, contacts, boxes, form, balanceSummary };
 };
 
 export const actions: Actions = {

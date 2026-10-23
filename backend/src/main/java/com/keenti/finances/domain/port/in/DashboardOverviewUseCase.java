@@ -11,6 +11,10 @@ import com.keenti.finances.domain.model.DashboardOverview;
  * periods that ADR-0021 already performs on every plan read.
  */
 public interface DashboardOverviewUseCase {
-    /** Null requests the current year in the User's time zone. */
-    DashboardOverview getOverview(Integer year);
+    /** Null requests the current year in the User's time zone, and the Primary Currency. */
+    DashboardOverview getOverview(Integer year, String currency);
+
+    default DashboardOverview getOverview(Integer year) {
+        return getOverview(year, null);
+    }
 }

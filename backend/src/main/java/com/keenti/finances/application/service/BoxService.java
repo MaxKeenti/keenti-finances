@@ -6,10 +6,12 @@ import com.keenti.finances.domain.model.BoxCommandResult;
 import com.keenti.finances.domain.model.BoxHistoryEntry;
 import com.keenti.finances.domain.model.BoxMovement;
 import com.keenti.finances.domain.model.BoxTransferResult;
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.port.in.BoxUseCase;
 import com.keenti.finances.domain.port.out.BoxPlanRepository;
 import com.keenti.finances.domain.port.out.BoxRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
+import com.keenti.finances.domain.port.out.PrimaryCurrencyProvider;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import com.keenti.finances.domain.port.out.UserTimeZoneProvider;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -53,6 +55,12 @@ public class BoxService implements BoxUseCase {
     @Inject
     UserTimeZoneProvider userTimeZoneProvider;
 
+    @Inject
+    NetBalanceReader netBalanceReader;
+
+    @Inject
+    PrimaryCurrencyProvider primaryCurrencyProvider;
+
     @Override
     @Transactional
     public List<Box> list(boolean archived) {
@@ -80,22 +88,30 @@ public class BoxService implements BoxUseCase {
 
     @Override
     @Transactional
-    public BoxBalanceSummary summary() {
-        BigDecimal netBalance = financialAccountRepository.isTrackingActive()
-            ? financialAccountRepository.getTotalBalance()
-            : transactionRepository.getNetBalance();
-        BigDecimal inBoxes = boxRepository.getTotalBalance();
-        return new BoxBalanceSummary(
-            netBalance,
-            inBoxes,
-            netBalance.subtract(inBoxes)
-        );
+    public BoxBalanceSummary summary(String currency) {
+        return netBalanceReader.summary(netBalanceReader.viewingCurrency(currency));
+    }
+
+    @Override
+    public List<String> currenciesInUse() {
+        return netBalanceReader.currenciesInUse();
     }
 
     @Override
     @Transactional
     public Box create(Box requested) {
         Box normalized = normalizedBox(requested);
+        String currency = Currencies.normalize(requested.getCurrency());
+        if (currency == null) {
+            currency = primaryCurrencyProvider.primaryCurrency();
+        }
+        if (!Currencies.isSupported(currency)) {
+            throw new BadRequestException("Unsupported currency: " + requested.getCurrency());
+        }
+        if (!Currencies.DEFAULT.equals(currency) && !financialAccountRepository.isTrackingActive()) {
+            throw new BadRequestException(
+                "Activate Financial Account tracking before holding another currency");
+        }
         boxRepository.lockAllocationScope();
         ensureNameAvailable(normalized.getName(), null);
 
@@ -110,9 +126,10 @@ public class BoxService implements BoxUseCase {
             false,
             null,
             null,
-            0
+            0,
+            currency
         ));
-        LOG.infof("box.create id=%d name=%s", created.getId(), created.getName());
+        LOG.infof("box.create id=%d name=%s currency=%s", created.getId(), created.getName(), currency);
         return created;
     }
 
@@ -135,7 +152,8 @@ public class BoxService implements BoxUseCase {
             false,
             existing.getCreatedAt(),
             existing.getUpdatedAt(),
-            existing.getVersion()
+            existing.getVersion(),
+            existing.getCurrency()
         ));
         LOG.infof("box.update id=%d", id);
         return updated;
@@ -179,8 +197,8 @@ public class BoxService implements BoxUseCase {
         validEffectiveDate(effectiveDate);
 
         boxRepository.lockAllocationScope();
-        requireActiveLock(id);
-        BoxBalanceSummary before = summary();
+        Box box = requireActiveLock(id);
+        BoxBalanceSummary before = netBalanceReader.summary(box.getCurrency());
         if (amount.compareTo(before.availableToSpend()) > 0) {
             throw new BadRequestException("Deposit exceeds Available to Spend");
         }
@@ -196,7 +214,7 @@ public class BoxService implements BoxUseCase {
             createdAt
         ));
         Box updated = boxRepository.findActiveById(id).orElseThrow();
-        BoxBalanceSummary after = summary();
+        BoxBalanceSummary after = netBalanceReader.summary(updated.getCurrency());
         LOG.infof("box.deposit id=%d amount=%s effectiveDate=%s",
             id, amount, effectiveDate);
         return new BoxCommandResult(updated, after);
@@ -222,7 +240,7 @@ public class BoxService implements BoxUseCase {
             createdAt
         ));
         Box updated = boxRepository.findActiveById(id).orElseThrow();
-        BoxBalanceSummary after = summary();
+        BoxBalanceSummary after = netBalanceReader.summary(updated.getCurrency());
         LOG.infof("box.withdraw id=%d amount=%s effectiveDate=%s",
             id, amount, effectiveDate);
         return new BoxCommandResult(updated, after);
@@ -241,8 +259,13 @@ public class BoxService implements BoxUseCase {
 
         Long firstId = Math.min(sourceBoxId, targetBoxId);
         Long secondId = Math.max(sourceBoxId, targetBoxId);
-        requireActiveLock(firstId);
-        requireActiveLock(secondId);
+        Box first = requireActiveLock(firstId);
+        Box second = requireActiveLock(secondId);
+        // Box Movements are internal allocations with no exchange rate, so both
+        // ends must hold the same currency (ADR-0024).
+        if (!first.getCurrency().equals(second.getCurrency())) {
+            throw new BadRequestException("Both Boxes must hold the same currency");
+        }
 
         LocalDateTime createdAt = LocalDateTime.now();
         ensureCanDebit(sourceBoxId, amount, effectiveDate, createdAt);
@@ -258,7 +281,7 @@ public class BoxService implements BoxUseCase {
 
         Box source = boxRepository.findActiveById(sourceBoxId).orElseThrow();
         Box target = boxRepository.findActiveById(targetBoxId).orElseThrow();
-        BoxBalanceSummary after = summary();
+        BoxBalanceSummary after = netBalanceReader.summary(source.getCurrency());
         LOG.infof("box.transfer sourceId=%d targetId=%d amount=%s effectiveDate=%s",
             sourceBoxId, targetBoxId, amount, effectiveDate);
         return new BoxTransferResult(source, target, after);
@@ -286,6 +309,7 @@ public class BoxService implements BoxUseCase {
             .distinct()
             .sorted()
             .toList();
+        String currency = null;
         for (Long affectedBoxId : affectedBoxIds) {
             Box affected = boxRepository.lockByIdIncludingArchived(affectedBoxId)
                 .orElseThrow(() -> new NotFoundException(
@@ -294,6 +318,7 @@ public class BoxService implements BoxUseCase {
                 throw conflict(
                     "Every affected Box must be restored before correcting a movement");
             }
+            currency = affected.getCurrency();
         }
 
         BoxMovement replacement = new BoxMovement(
@@ -306,7 +331,7 @@ public class BoxService implements BoxUseCase {
         BigDecimal allocationIncrease = allocationContribution(replacement)
             .subtract(allocationContribution(existing));
         if (allocationIncrease.signum() > 0
-                && allocationIncrease.compareTo(summary().availableToSpend()) > 0) {
+                && allocationIncrease.compareTo(netBalanceReader.summary(currency).availableToSpend()) > 0) {
             throw new BadRequestException(
                 "Correction would allocate more than Available to Spend");
         }
@@ -317,7 +342,7 @@ public class BoxService implements BoxUseCase {
 
         boxRepository.updateMovement(replacement);
         Box correctedBox = boxRepository.findActiveById(boxId).orElseThrow();
-        BoxBalanceSummary after = summary();
+        BoxBalanceSummary after = netBalanceReader.summary(correctedBox.getCurrency());
         LOG.infof(
             "box.movement.corrected boxId=%d movementId=%d amount=%s effectiveDate=%s",
             boxId, movementId, amount, effectiveDate);
@@ -410,7 +435,7 @@ public class BoxService implements BoxUseCase {
         return new Box(
             box.getId(), name, box.getHue(), icon, description,
             box.getDisplayOrder(), box.getBalance(), box.isArchived(),
-            box.getCreatedAt(), box.getUpdatedAt(), box.getVersion()
+            box.getCreatedAt(), box.getUpdatedAt(), box.getVersion(), box.getCurrency()
         );
     }
 

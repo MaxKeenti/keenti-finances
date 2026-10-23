@@ -3,7 +3,7 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { getSession } from '$lib/server/workos-session';
-import { parseBoxPlanSummaries } from '$lib/server/payloads';
+import { parseBalanceSummaryWithCurrencies, parseBoxPlanSummaries } from '$lib/server/payloads';
 import { loadSection } from '$lib/server/section-load';
 import { m } from '$lib/paraglide/messages.js';
 import type { BoxDto } from '$lib/types/boxes';
@@ -19,6 +19,8 @@ const boxSchema = z.object({
 	hue: z.coerce.number().int().min(0).max(359),
 	icon: z.string().trim().max(16, m.validation_box_icon_too_long()).optional(),
 	description: z.string().trim().max(500, m.validation_box_description_too_long()).optional(),
+	// Fixed at creation; the update action ignores it (ADR-0024).
+	currency: z.string().regex(/^[A-Z]{3}$/).optional(),
 });
 
 function headers(cookies: Parameters<typeof getSession>[0], json = false): Record<string, string> {
@@ -33,7 +35,7 @@ async function readBoxes(response: Response): Promise<BoxDto[]> {
 	return response.ok ? ((await response.json()) as BoxDto[]) : [];
 }
 
-export const load: PageServerLoad = async ({ fetch, cookies }) => {
+export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 	let boxes: BoxDto[] = [];
 	let archivedBoxes: BoxDto[] = [];
 	let loadFailed = false;
@@ -71,8 +73,19 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		}),
 	);
 
+	// The headline figures in the Viewing Currency the User picked, or the
+	// Primary Currency. Boxes in other currencies stay listed below, each in
+	// its own currency; only these totals are per currency.
+	const requestedCurrency = url.searchParams.get('currency');
+	const summary = await loadSection(
+		fetch,
+		`${BACKEND}/api/boxes/summary${requestedCurrency ? `?currency=${encodeURIComponent(requestedCurrency)}` : ''}`,
+		{ parse: parseBalanceSummaryWithCurrencies, headers: headers(cookies), label: 'boxes/summary' },
+	);
+
+	const { preferences } = await parent();
 	const form = await superValidate(
-		{ name: '', hue: 220, icon: '', description: '' },
+		{ name: '', hue: 220, icon: '', description: '', currency: preferences.primaryCurrency },
 		zod4(boxSchema),
 	);
 
@@ -80,6 +93,7 @@ export const load: PageServerLoad = async ({ fetch, cookies }) => {
 		boxes: boxes.toSorted((a, b) => a.displayOrder - b.displayOrder),
 		archivedBoxes: archivedBoxes.toSorted((a, b) => a.displayOrder - b.displayOrder),
 		planSections,
+		summary,
 		loadFailed,
 		form,
 	};
@@ -100,6 +114,7 @@ export const actions: Actions = {
 					hue: form.data.hue,
 					icon: form.data.icon || null,
 					description: form.data.description || null,
+					currency: form.data.currency || null,
 				}),
 			});
 		} catch {

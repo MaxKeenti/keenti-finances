@@ -21,7 +21,8 @@ public record TransactionResponse(
     String accountKind,
     List<BoxFundingResponse> boxFunding,
     List<BoxDistributionResponse> boxDistributions,
-    BigDecimal availableToSpendAmount
+    BigDecimal availableToSpendAmount,
+    String currency
 ) {
 
     public TransactionResponse(Long id, BigDecimal amount, String direction, String description,
@@ -30,7 +31,7 @@ public record TransactionResponse(
                                Long subscriptionId) {
         this(id, amount, direction, description, transactionDate, categoryId, categoryName,
             categoryHue, contactId, contactName, subscriptionId, null, null, null,
-            List.of(), List.of(), amount);
+            List.of(), List.of(), amount, com.keenti.finances.domain.model.Currencies.DEFAULT);
     }
 
     public TransactionResponse(Long id, BigDecimal amount, String direction, String description,
@@ -41,6 +42,7 @@ public record TransactionResponse(
                                BigDecimal availableToSpendAmount) {
         this(id, amount, direction, description, transactionDate, categoryId, categoryName,
             categoryHue, contactId, contactName, subscriptionId, null, null, null,
-            boxFunding, boxDistributions, availableToSpendAmount);
+            boxFunding, boxDistributions, availableToSpendAmount,
+            com.keenti.finances.domain.model.Currencies.DEFAULT);
     }
 }

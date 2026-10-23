@@ -14,7 +14,9 @@ public interface BoxUseCase {
     List<Box> list(boolean archived);
     Optional<Box> getById(Long id);
     List<BoxHistoryEntry> history(Long id);
-    BoxBalanceSummary summary();
+    /** Headline figures in {@code currency}, or in the Primary Currency when it is null. */
+    BoxBalanceSummary summary(String currency);
+    List<String> currenciesInUse();
     Box create(Box box);
     Box update(Long id, Box box);
     List<Box> reorder(List<Long> boxIds);

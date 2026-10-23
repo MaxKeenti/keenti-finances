@@ -11,7 +11,8 @@
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
+	import { currencyItems } from '$lib/currency-labels';
 	import { m } from '$lib/paraglide/messages.js';
 
 	type OpeningStatement = {
@@ -27,6 +28,7 @@
 	type SetupAccount = {
 		name: string;
 		kind: string;
+		currency: string;
 		hue: number;
 		openingBalance: string | number;
 		creditLimit: string | number;
@@ -36,8 +38,15 @@
 		openingMsiPlans: OpeningMsiPlan[];
 	};
 
-	let { transactionNetBalance, locale, today }: { transactionNetBalance: number; locale: string; today: string } = $props();
-	const fmt = $derived(mxnFormatter(locale));
+	let {
+		transactionNetBalance,
+		locale,
+		today,
+		primaryCurrency,
+	}: { transactionNetBalance: number; locale: string; today: string; primaryCurrency: string } = $props();
+	// Every legacy Transaction is MXN, so the reconciliation is in MXN whatever
+	// the Primary Currency is (ADR-0024).
+	const fmt = $derived(moneyFormatter(locale, 'MXN'));
 	const kindItems = $derived([
 		{ value: 'DEBIT', label: m.account_kind_debit() },
 		{ value: 'CHECKING', label: m.account_kind_checking() },
@@ -47,7 +56,7 @@
 	]);
 
 	const newAccount = (hue = 220): SetupAccount => ({
-		name: '', kind: 'DEBIT', hue, openingBalance: 0,
+		name: '', kind: 'DEBIT', currency: primaryCurrency, hue, openingBalance: 0,
 		creditLimit: '', statementClosingDay: '', paymentDueDay: '', openingStatements: [], openingMsiPlans: [],
 	});
 	const newStatement = (): OpeningStatement => ({
@@ -56,10 +65,17 @@
 	const newMsiPlan = (): OpeningMsiPlan => ({ remainingAmount: '', remainingInstallmentCount: '', firstInstallmentDate: '' });
 
 	let accounts = $state<SetupAccount[]>([newAccount()]);
-	const total = $derived(accounts.reduce((sum, account) => sum + Number(account.openingBalance || 0), 0));
+	// Only MXN openings reconcile against the recorded Net Balance; an opening
+	// in another currency is money Keenti never recorded.
+	const total = $derived(
+		accounts
+			.filter((account) => account.currency === 'MXN')
+			.reduce((sum, account) => sum + Number(account.openingBalance || 0), 0),
+	);
 	const payload = $derived(accounts.map((account) => ({
 		name: account.name,
 		kind: account.kind,
+		currency: account.currency,
 		hue: account.hue,
 		openingBalance: Number(account.openingBalance || 0),
 		creditSettings: account.kind === 'CREDIT' && Number(account.creditLimit) > 0
@@ -85,7 +101,7 @@
 			<input type="hidden" name="accounts" value={JSON.stringify(payload)} />
 			{#each accounts as account, accountIndex}
 				<div class="space-y-4 rounded-lg border bg-muted/20 p-4">
-					<div class="grid gap-4 md:grid-cols-3">
+					<div class="grid gap-4 md:grid-cols-4">
 						<div class="grid gap-2">
 							<Label for={`setup-name-${accountIndex}`}>{m.account_name()}</Label>
 							<Input id={`setup-name-${accountIndex}`} bind:value={account.name} placeholder={m.account_name_placeholder()} required />
@@ -95,8 +111,12 @@
 							<NativeSelect id={`setup-kind-${accountIndex}`} name={`setup-kind-${accountIndex}`} value={account.kind} onValueChange={(value) => (account.kind = value)} items={kindItems} />
 						</div>
 						<div class="grid gap-2">
+							<Label for={`setup-currency-${accountIndex}`}>{m.currency_label()}</Label>
+							<NativeSelect id={`setup-currency-${accountIndex}`} name={`setup-currency-${accountIndex}`} value={account.currency} onValueChange={(value) => (account.currency = value)} items={currencyItems()} />
+						</div>
+						<div class="grid gap-2">
 							<Label for={`setup-balance-${accountIndex}`}>{m.account_opening_balance()}</Label>
-							<CurrencyInput id={`setup-balance-${accountIndex}`} bind:value={account.openingBalance} {locale} required />
+							<CurrencyInput id={`setup-balance-${accountIndex}`} bind:value={account.openingBalance} {locale} currency={account.currency} required />
 						</div>
 					</div>
 					<div class="grid gap-1.5">
@@ -113,7 +133,7 @@
 									<div>
 										<h3 class="font-medium">{m.account_credit_settings()}</h3>
 										<div class="mt-3 grid gap-4 md:grid-cols-3">
-											<div class="grid gap-2"><Label for={`setup-limit-${accountIndex}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`setup-limit-${accountIndex}`} bind:value={account.creditLimit} {locale} /></div>
+											<div class="grid gap-2"><Label for={`setup-limit-${accountIndex}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`setup-limit-${accountIndex}`} bind:value={account.creditLimit} {locale} currency={account.currency} /></div>
 											<div class="grid gap-2"><Label for={`setup-close-${accountIndex}`}>{m.account_statement_closing_day()}</Label><Input id={`setup-close-${accountIndex}`} type="number" min="1" max="31" bind:value={account.statementClosingDay} /></div>
 											<div class="grid gap-2"><Label for={`setup-due-${accountIndex}`}>{m.account_payment_due_day()}</Label><Input id={`setup-due-${accountIndex}`} type="number" min="1" max="31" bind:value={account.paymentDueDay} /></div>
 										</div>
@@ -126,9 +146,9 @@
 													<div class="grid gap-2"><Label>{m.account_period_start()}</Label><NativeDatePicker name={`opening-start-${accountIndex}-${statementIndex}`} value={statement.periodStart} onValueChange={(value) => (statement.periodStart = value)} /></div>
 													<div class="grid gap-2"><Label>{m.account_period_end()}</Label><NativeDatePicker name={`opening-end-${accountIndex}-${statementIndex}`} value={statement.periodEnd} onValueChange={(value) => (statement.periodEnd = value)} /></div>
 													<div class="grid gap-2"><Label>{m.account_due_date()}</Label><NativeDatePicker name={`opening-due-${accountIndex}-${statementIndex}`} value={statement.dueDate} onValueChange={(value) => (statement.dueDate = value)} /></div>
-													<div class="grid gap-2"><Label>{m.account_official_balance()}</Label><CurrencyInput bind:value={statement.officialBalance} {locale} /></div>
-													<div class="grid gap-2"><Label>{m.account_minimum_payment()}</Label><CurrencyInput bind:value={statement.officialMinimumPayment} {locale} /></div>
-													<div class="grid gap-2"><Label>{m.account_avoid_interest()}</Label><CurrencyInput bind:value={statement.officialAvoidInterest} {locale} /></div>
+													<div class="grid gap-2"><Label>{m.account_official_balance()}</Label><CurrencyInput bind:value={statement.officialBalance} {locale} currency={account.currency} /></div>
+													<div class="grid gap-2"><Label>{m.account_minimum_payment()}</Label><CurrencyInput bind:value={statement.officialMinimumPayment} {locale} currency={account.currency} /></div>
+													<div class="grid gap-2"><Label>{m.account_avoid_interest()}</Label><CurrencyInput bind:value={statement.officialAvoidInterest} {locale} currency={account.currency} /></div>
 													<div class="grid gap-2 md:col-span-3"><Label>{m.common_notes()} {m.common_optional()}</Label><Input bind:value={statement.officialNote} /></div>
 												</div>
 											{/each}
@@ -139,7 +159,7 @@
 										<div class="mt-3 space-y-4">
 											{#each account.openingMsiPlans as plan, planIndex}
 												<div class="grid gap-4 rounded-md bg-muted/30 p-3 md:grid-cols-3">
-													<div class="grid gap-2"><Label>{m.account_remaining_total()}</Label><CurrencyInput bind:value={plan.remainingAmount} {locale} /></div>
+													<div class="grid gap-2"><Label>{m.account_remaining_total()}</Label><CurrencyInput bind:value={plan.remainingAmount} {locale} currency={account.currency} /></div>
 													<div class="grid gap-2"><Label>{m.account_installments_left()}</Label><Input type="number" min="1" max="60" bind:value={plan.remainingInstallmentCount} /></div>
 													<div class="grid gap-2"><Label>{m.account_first_installment()}</Label><NativeDatePicker name={`opening-msi-${accountIndex}-${planIndex}`} value={plan.firstInstallmentDate} onValueChange={(value) => (plan.firstInstallmentDate = value)} /></div>
 												</div>

@@ -128,9 +128,10 @@ public class TransactionResource {
     @GET
     @Path("/funding-suggestions")
     public Response fundingSuggestions(@QueryParam("categoryId") Long categoryId,
-                                       @QueryParam("ingressAmount") java.math.BigDecimal ingressAmount) {
+                                       @QueryParam("ingressAmount") java.math.BigDecimal ingressAmount,
+                                       @QueryParam("currency") String currency) {
         return Response.ok(FundingSuggestionResource.toResponse(
-            fundingTriggerUseCase.suggestions(categoryId, ingressAmount))).build();
+            fundingTriggerUseCase.suggestions(categoryId, ingressAmount, currency))).build();
     }
 
     @POST
@@ -250,7 +251,8 @@ public class TransactionResource {
                 .map(d -> new BoxDistributionResponse(
                     d.boxId(), d.boxName(), d.amount(), d.lineOrder(), d.effectiveDate()))
                 .toList(),
-            t.getAvailableToSpendAmount()
+            t.getAvailableToSpendAmount(),
+            t.getCurrency()
         );
     }
 }

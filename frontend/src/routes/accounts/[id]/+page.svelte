@@ -16,7 +16,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { SectionUnavailable } from '$lib/components/section-status';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
 	import { availableCredit, creditMagnitude, creditPosition } from '$lib/balance-presentation';
 	import { accountStatementPaymentStatus, isOutstandingStatement } from '$lib/obligation-status';
 	import { statementAmountLabel, statementStateLabel } from '$lib/statement-labels';
@@ -30,7 +30,7 @@
 	let accountHue = $state(untrack(() => data.account.hue));
 	let selectedPurchaseId = $state('');
 	let firstInstallmentDate = $state(untrack(() => dateInTimeZone(data.preferences.timeZone)));
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.account.currency));
 	const accountKindLabel = $derived(({
 		CASH: m.account_kind_cash(), DEBIT: m.account_kind_debit(), CHECKING: m.account_kind_checking(), SAVINGS: m.account_kind_savings(), CREDIT: m.account_kind_credit(),
 	} as Record<string, string>)[data.account.kind] ?? data.account.kind);

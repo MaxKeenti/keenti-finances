@@ -24,6 +24,8 @@ type MemberPaymentSummary = {
 export type PublicSubscriptionData = {
 	subscriptionName: string;
 	cost: number;
+	/** Absent from a backend older than ADR-0024, where every amount was MXN. */
+	currency?: string;
 	billingCycle: string;
 	nextBillingDate: string;
 	members: MemberPaymentSummary[];

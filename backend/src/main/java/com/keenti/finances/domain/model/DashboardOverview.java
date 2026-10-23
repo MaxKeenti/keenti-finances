@@ -20,6 +20,14 @@ import java.util.List;
  * User's money.
  */
 public record DashboardOverview(
+    /**
+     * The Viewing Currency every total is stated in (ADR-0024). The attention
+     * section is the exception: it lists obligations in every currency, each
+     * labelled, so one due in another currency is never hidden.
+     */
+    String currency,
+    /** Every currency the User holds, Primary Currency first. */
+    List<String> currencies,
     /** The User's calendar day, or {@code null} when their zone is unusable. */
     LocalDate today,
     String timeZone,
@@ -27,8 +35,29 @@ public record DashboardOverview(
     Section<NeedsAttention> attention,
     Section<PlanGuidance> plans,
     Section<ExpectedMoney> expected,
-    Section<YearHistory> history
+    Section<YearHistory> history,
+    Section<ConvertedTotal> convertedTotal
 ) {
+
+    /**
+     * Every currency's Net Balance expressed in the Primary Currency at the
+     * latest daily reference rate. Display-only (ADR-0024): an estimate that
+     * never enters a ledger, Box, plan or validation, and is unavailable rather
+     * than zero when the rates cannot be read.
+     */
+    public record ConvertedTotal(
+        String currency,
+        BigDecimal total,
+        /** The reference rates' publication day. */
+        LocalDate ratesDate,
+        List<ConvertedPart> parts
+    ) {}
+
+    public record ConvertedPart(
+        String currency,
+        BigDecimal netBalance,
+        BigDecimal converted
+    ) {}
 
     /** One independently available section. */
     public record Section<T>(String status, String reason, T data) {
@@ -82,6 +111,7 @@ public record DashboardOverview(
         Long id,
         String name,
         String kind,
+        String currency,
         BigDecimal balance,
         /** {@code null} when the Credit Financial Account has no configured limit. */
         BigDecimal creditLimit,
@@ -116,6 +146,7 @@ public record DashboardOverview(
     public record StatementObligation(
         Long accountId,
         String accountName,
+        String currency,
         Long statementId,
         LocalDate periodStart,
         LocalDate periodEnd,
@@ -141,6 +172,7 @@ public record DashboardOverview(
     public record BillingCursor(
         Long subscriptionId,
         String name,
+        String currency,
         String subscriptionType,
         LocalDate nextBillingDate
     ) {}

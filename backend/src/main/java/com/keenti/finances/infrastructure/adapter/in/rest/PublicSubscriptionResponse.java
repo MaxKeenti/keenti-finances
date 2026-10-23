@@ -7,6 +7,7 @@ import java.util.List;
 public record PublicSubscriptionResponse(
     String subscriptionName,
     BigDecimal cost,
+    String currency,
     String billingCycle,
     LocalDate nextBillingDate,
     List<MemberPaymentSummary> members

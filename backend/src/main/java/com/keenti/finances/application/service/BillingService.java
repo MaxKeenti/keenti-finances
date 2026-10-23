@@ -87,7 +87,7 @@ public class BillingService {
 
         if (periods > 0 && !billingDate.equals(sub.getNextBillingDate())) {
             subscriptionRepository.update(new Subscription(
-                sub.getId(), sub.getName(), sub.getCost(), sub.getBillingCycle(), sub.getType(),
+                sub.getId(), sub.getName(), sub.getCost(), sub.getCurrency(), sub.getBillingCycle(), sub.getType(),
                 sub.getCategoryId(), billingDate, sub.getTokenUuid(), sub.getCreatedAt(),
                 sub.isOwnerParticipates()
             ));

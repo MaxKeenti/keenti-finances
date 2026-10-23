@@ -4,6 +4,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { m } from '$lib/paraglide/messages.js';
 import { loadSection } from '$lib/server/section-load';
 import { parseAccountTrackingStatus } from '$lib/server/payloads';
+import { isSupportedCurrency } from '$lib/formatting';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
@@ -13,6 +14,12 @@ function headers(cookies: Parameters<typeof getSession>[0], json = false): Recor
 		...(json ? { 'content-type': 'application/json' } : {}),
 		...(token ? { Authorization: `Bearer ${token}` } : {}),
 	};
+}
+
+/** Sent only for an exchange; a same-currency Transfer moves one amount. */
+function optionalAmount(value: FormDataEntryValue | null): number | null {
+	const text = String(value ?? '').trim();
+	return text === '' ? null : Number(text);
 }
 
 export const load: PageServerLoad = async ({ fetch, cookies, url }) => {
@@ -58,6 +65,10 @@ export const actions: Actions = {
 		if (!name) return fail(400, { message: m.error_account_name_required() });
 		if (!validKinds.has(kind)) return fail(400, { message: m.error_account_kind_invalid() });
 
+		const currency = String(data.get('currency') ?? '').toUpperCase() || null;
+		if (currency !== null && !isSupportedCurrency(currency)) {
+			return fail(400, { message: m.error_currency_invalid() });
+		}
 		const openingBalance = Number(data.get('openingBalance') ?? 0);
 		const hue = Number(data.get('hue'));
 		if (!Number.isFinite(openingBalance)) return fail(400, { message: m.error_opening_balance_invalid() });
@@ -65,7 +76,7 @@ export const actions: Actions = {
 		const response = await fetch(`${BACKEND}/api/accounts`, {
 			method: 'POST',
 			headers: headers(cookies, true),
-			body: JSON.stringify({ name, kind, hue, openingBalance }),
+			body: JSON.stringify({ name, kind, currency, hue, openingBalance }),
 		});
 		if (!response.ok) {
 			return fail(response.status === 409 ? 409 : 400, {
@@ -105,6 +116,7 @@ export const actions: Actions = {
 				sourceAccountId: Number(data.get('sourceAccountId')),
 				destinationAccountId: Number(data.get('destinationAccountId')),
 				amount: Number(data.get('amount')),
+				destinationAmount: optionalAmount(data.get('destinationAmount')),
 				transferDate: data.get('transferDate'),
 				notes: String(data.get('notes') ?? '') || null,
 			}),
@@ -125,6 +137,7 @@ export const actions: Actions = {
 				sourceAccountId: Number(data.get('sourceAccountId')),
 				destinationAccountId: Number(data.get('destinationAccountId')),
 				amount: Number(data.get('amount')),
+				destinationAmount: optionalAmount(data.get('destinationAmount')),
 				transferDate: data.get('transferDate'),
 				notes: String(data.get('notes') ?? '') || null,
 			}),

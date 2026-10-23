@@ -31,15 +31,32 @@
 	} from '$lib/components/dashboard';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import { SectionUnavailable } from '$lib/components/section-status';
-	import { mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, moneyFormatter } from '$lib/formatting';
+	import { currencyName } from '$lib/currency-labels';
+	import { CurrencySwitcher } from '$lib/components/currency-switcher';
 	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
-	const mxn = (value: number) => fmt.format(value);
+	// `null` here means the whole overview could not be loaded or parsed, which
+	// is different from any individual section being unavailable.
+	const overview = $derived(sectionValue(data.overview));
+	// Every total on this page is in the Viewing Currency the overview reports
+	// (ADR-0024); obligations in the attention list carry their own.
+	const viewingCurrency = $derived(overview?.currency ?? data.preferences.primaryCurrency);
+	const fmt = $derived(moneyFormatter(data.preferences.locale, viewingCurrency));
+	const money = (value: number) => fmt.format(value);
+	const moneyIn = (value: number, currency: string) =>
+		moneyFormatter(data.preferences.locale, currency, { code: currency !== viewingCurrency }).format(value);
+	const converted = $derived(overview === null ? null : sectionValue(overview.convertedTotal));
+	const multiCurrency = $derived((overview?.currencies.length ?? 1) > 1);
+	// Moving between years keeps the currency the page is being read in.
+	const yearHref = (year: number) =>
+		overview && overview.currency !== data.preferences.primaryCurrency
+			? `?year=${year}&currency=${overview.currency}`
+			: `?year=${year}`;
 
 	const prevYear = $derived(data.year - 1);
 	const nextYear = $derived(data.year + 1);
@@ -47,9 +64,6 @@
 		? Number(data.obligationToday.day.slice(0, 4)) : null);
 	const nextYearDisabled = $derived(currentYear === null || nextYear > currentYear);
 
-	// `null` here means the whole overview could not be loaded or parsed, which
-	// is different from any individual section being unavailable.
-	const overview = $derived(sectionValue(data.overview));
 	const position = $derived(overview === null ? null : sectionValue(overview.position));
 	const attention = $derived(overview === null ? null : sectionValue(overview.attention));
 	const plans = $derived(overview === null ? null : sectionValue(overview.plans));
@@ -98,11 +112,33 @@
 			<SetupSection />
 		{/if}
 
+		{#if multiCurrency}
+			<!-- Several currencies are never added into one ledger figure. The
+			     switcher picks which one every total below is stated in; the
+			     Converted Total is a labelled, display-only estimate. -->
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<CurrencySwitcher currencies={overview.currencies} current={overview.currency} />
+				{#if converted !== null}
+					<p class="text-sm text-muted-foreground">
+						{m.dashboard_converted_total({
+							amount: moneyIn(converted.total, converted.currency),
+							currency: currencyName(converted.currency),
+						})}
+						{#if converted.ratesDate}
+							<span class="block text-xs">{m.dashboard_converted_total_note({ date: formatDateOnly(converted.ratesDate, data.preferences.locale) })}</span>
+						{/if}
+					</p>
+				{:else}
+					<p class="text-xs text-muted-foreground">{m.dashboard_converted_total_unavailable()}</p>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- 1 — Current position -->
 		{#if position === null}
 			<SectionUnavailable title={m.section_position_unavailable()} />
 		{:else}
-			<PositionSection {position} {tracking} format={mxn} />
+			<PositionSection {position} {tracking} format={money} />
 		{/if}
 
 		<!-- The planning preview reads its own figures, so the link stays offered
@@ -124,7 +160,8 @@
 				{attention}
 				{position}
 				{today}
-				format={mxn}
+				format={money}
+				formatIn={moneyIn}
 				locale={data.preferences.locale}
 			/>
 		{/if}
@@ -133,14 +170,14 @@
 		{#if plans === null}
 			<SectionUnavailable title={m.section_plans_unavailable()} />
 		{:else}
-			<PlansSection {plans} format={mxn} />
+			<PlansSection {plans} format={money} />
 		{/if}
 
 		<!-- 4 — Money expected -->
 		{#if expected === null}
 			<SectionUnavailable title={m.section_expected_unavailable()} />
 		{:else}
-			<ExpectedSection {expected} format={mxn} locale={data.preferences.locale} />
+			<ExpectedSection {expected} format={money} locale={data.preferences.locale} />
 		{/if}
 	{/if}
 
@@ -155,7 +192,7 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					href={prevYear < 1900 ? undefined : `?year=${prevYear}`}
+					href={prevYear < 1900 ? undefined : yearHref(prevYear)}
 					disabled={prevYear < 1900}
 					aria-label={m.dashboard_previous_year({ year: prevYear })}
 					class="size-8 p-0"
@@ -166,7 +203,7 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					href={nextYearDisabled ? undefined : `?year=${nextYear}`}
+					href={nextYearDisabled ? undefined : yearHref(nextYear)}
 					aria-label={m.dashboard_next_year({ year: nextYear })}
 					disabled={nextYearDisabled}
 					class="size-8 p-0 {nextYearDisabled ? 'pointer-events-none opacity-40' : ''}"
@@ -188,7 +225,7 @@
 					<Card.Header class="gap-1">
 						<Card.Description>{m.dashboard_total_income({ year: data.year })}</Card.Description>
 						<Card.Title class="text-2xl font-bold tabular-nums text-money-positive">
-							{mxn(history.totalIngress)}
+							{money(history.totalIngress)}
 						</Card.Title>
 					</Card.Header>
 					<Card.Content>
@@ -199,7 +236,7 @@
 					<Card.Header class="gap-1">
 						<Card.Description>{m.dashboard_total_expenses({ year: data.year })}</Card.Description>
 						<Card.Title class="text-2xl font-bold tabular-nums text-money-negative">
-							{mxn(history.totalEgress)}
+							{money(history.totalEgress)}
 						</Card.Title>
 					</Card.Header>
 					<Card.Content>
@@ -213,8 +250,9 @@
 					monthly={history.monthly}
 					year={data.year}
 					locale={data.preferences.locale}
+					currency={viewingCurrency}
 				/>
-				<NetTrendChart monthly={history.monthly} year={data.year} locale={data.preferences.locale} />
+				<NetTrendChart monthly={history.monthly} year={data.year} locale={data.preferences.locale} currency={viewingCurrency} />
 			</div>
 		{/if}
 	</section>

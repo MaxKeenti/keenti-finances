@@ -56,6 +56,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         SubscriptionEntity entity = SubscriptionEntity.findById(subscription.getId());
         entity.name = subscription.getName();
         entity.cost = subscription.getCost();
+        entity.currency = subscription.getCurrency();
         entity.billingCycle = subscription.getBillingCycle();
         entity.type = subscription.getType();
         entity.category = subscription.getCategoryId() != null
@@ -131,6 +132,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
         SubscriptionEntity e = new SubscriptionEntity();
         e.name = s.getName();
         e.cost = s.getCost();
+        e.currency = s.getCurrency();
         e.billingCycle = s.getBillingCycle();
         e.type = s.getType();
         e.category = s.getCategoryId() != null ? CategoryEntity.findById(s.getCategoryId()) : null;
@@ -144,7 +146,7 @@ public class PanacheSubscriptionRepository implements SubscriptionRepository {
 
     private Subscription toDomain(SubscriptionEntity e) {
         return new Subscription(
-            e.id, e.name, e.cost, e.billingCycle, e.type,
+            e.id, e.name, e.cost, e.currency, e.billingCycle, e.type,
             e.category != null ? e.category.id : null,
             e.nextBillingDate, e.tokenUuid, e.createdAt, e.ownerParticipates
         );

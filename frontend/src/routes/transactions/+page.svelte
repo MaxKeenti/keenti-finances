@@ -39,7 +39,7 @@
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/categories';
 	import * as Card from '$lib/components/ui/card';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
 	import { transactionSchema } from '$lib/schemas/transaction';
@@ -65,8 +65,6 @@
 	// Box funding and distribution are limited by Available to Spend. When that
 	// total is unavailable the optional funding UI is withheld and says why;
 	// recording the Transaction itself is unaffected.
-	const availableBalance = $derived(sectionValue(data.balanceSummary));
-
 	let dialogOpen = $state(false);
 	let editMode = $state(false);
 	let deleteTargetId = $state<number | null>(null);
@@ -74,6 +72,7 @@
 	let bulkDeleteForm = $state<HTMLFormElement | null>(null);
 	let selectedTxIds = $state<Set<number>>(new Set());
 	let editingTransaction = $state<Transaction | null>(null);
+
 
 	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
@@ -93,6 +92,38 @@
 		},
 	});
 	const { form, enhance, submitting, message } = sf;
+
+	// The form's currency is its Financial Account's (ADR-0024). An edited
+	// Transaction keeps the one it was recorded in; a new one without an
+	// Account yet shows the Primary Currency until one is picked.
+	const selectedAccount = $derived(data.accounts.find((account) => account.id === Number($form.accountId)));
+	const formCurrency = $derived(
+		editingTransaction?.currency ??
+			(selectedAccount ? (selectedAccount.currency ?? 'MXN') : data.preferences.primaryCurrency),
+	);
+	// Only Boxes holding the Transaction's currency can fund or receive it.
+	const formBoxes = $derived(data.boxes.filter((box) => (box.currency ?? 'MXN') === formCurrency));
+	// An edit may only move to another Account in the same currency.
+	const formAccounts = $derived(
+		editingTransaction
+			? data.accounts.filter((account) => (account.currency ?? 'MXN') === editingTransaction?.currency)
+			: data.accounts,
+	);
+	const availableBalance = $derived(sectionValue(data.balanceSummaries[formCurrency] ?? { status: 'unavailable', reason: 'unreachable' }));
+	// Switching to an Account in another currency leaves no Box that could
+	// still fund or receive the old allocations, so they are dropped rather
+	// than submitted for the backend to reject.
+	$effect(() => {
+		const allowed = new Set(formBoxes.map((box) => box.id));
+		untrack(() => {
+			if ($form.boxFunding.some((line) => !allowed.has(line.boxId))) {
+				$form.boxFunding = $form.boxFunding.filter((line) => allowed.has(line.boxId));
+			}
+			if ($form.boxDistributions.some((line) => !allowed.has(line.boxId))) {
+				$form.boxDistributions = $form.boxDistributions.filter((line) => allowed.has(line.boxId));
+			}
+		});
+	});
 
 	function openCreate(direction: TransactionDirection = 'INGRESS', boxId?: number) {
 		editMode = false;
@@ -151,8 +182,8 @@
 		dialogOpen = true;
 	}
 
-	async function openDelete(tx: { id: number; description: string | null; amount: number; direction: string }) {
-		const description = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS');
+	async function openDelete(tx: { id: number; description: string | null; amount: number; direction: string; currency: string }) {
+		const description = tx.description || formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS', tx.currency);
 		const linkedDepositWarning =
 			data.transactions.find((transaction) => transaction.id === tx.id)?.boxDistributions.length
 				? ` ${m.transactions_distribution_delete_warning()}`
@@ -167,7 +198,7 @@
 		});
 	}
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const multiCurrency = $derived(new Set(data.accounts.map((account) => account.currency)).size > 1);
 	const sortItems: { value: TransactionSortBy; label: string }[] = [
 		{ value: 'transactionDate', label: m.common_date() },
 		{ value: 'amount', label: m.common_amount() },
@@ -277,9 +308,17 @@
 		),
 	);
 
-	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
+	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS', currency: string): string {
 		const prefix = direction === 'INGRESS' ? '+' : '-';
-		return `${prefix}${fmt.format(amount)}`;
+		return `${prefix}${moneyFormatter(data.preferences.locale, currency, { code: multiCurrency }).format(amount)}`;
+	}
+
+	/** An exchange shows what left and what arrived, each in its own currency. */
+	function transferAmount(transfer: PageData['transfers'][number]): string {
+		const sent = moneyFormatter(data.preferences.locale, transfer.sourceCurrency, { code: multiCurrency });
+		if (transfer.sourceCurrency === transfer.destinationCurrency) return sent.format(transfer.amount);
+		const received = moneyFormatter(data.preferences.locale, transfer.destinationCurrency, { code: true });
+		return `${sent.format(transfer.amount)} → ${received.format(transfer.destinationAmount)}`;
 	}
 
 	function transactionHref({
@@ -417,7 +456,7 @@
 		if ($form.direction === 'INGRESS') {
 			// Without Available to Spend there is no limit to check against, so the
 			// allocation cannot be validated rather than being waved through.
-			const available = sectionValue(data.balanceSummary);
+			const available = availableBalance;
 			if (available === null) return true;
 			return (
 				allocatedCents > amountToCents(Math.max(0, available.availableToSpend + $form.amount))
@@ -539,7 +578,7 @@
 					{@const selected = selectedTxIds.has(tx.id)}
 					<div class="relative">
 						<div class="absolute left-3 top-4 z-1">
-							<Checkbox checked={selected} onclick={(event) => { event.preventDefault(); event.stopPropagation(); toggleSelectedTx(tx.id); }} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} />
+							<Checkbox checked={selected} onclick={(event) => { event.preventDefault(); event.stopPropagation(); toggleSelectedTx(tx.id); }} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS', tx.currency) })} />
 						</div>
 						<Card.Root class="transition-colors hover:bg-muted/50 {selected ? 'ring-2 ring-primary/50' : ''}">
 							<Card.Content class="pt-4 pl-10">
@@ -549,10 +588,10 @@
 								     its own was a 20px-tall target on a phone. -->
 								<a href="/transactions/{tx.id}" class="flex items-start justify-between gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
 									<span class="min-w-0 flex-1"><span class="block truncate text-sm text-muted-foreground">{tx.description ?? '—'}</span><span class="mt-0.5 block text-xs text-muted-foreground">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</span></span>
-									<span class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</span>
+									<span class="shrink-0 font-mono text-sm font-semibold {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS', tx.currency)}</span>
 								</a>
 								<div class="mt-2 flex flex-wrap items-center gap-2">{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{/if}{#if tx.contactName}<span class="text-xs text-muted-foreground">{tx.contactName}</span>{/if}{#if tx.accountName}<span class="text-xs text-muted-foreground">{tx.accountName}</span>{/if}</div>
-								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} /></div>{/if}
+								{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<div class="mt-3"><TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} currency={tx.currency} /></div>{/if}
 							</Card.Content>
 						</Card.Root>
 					</div>
@@ -560,7 +599,7 @@
 					{@const transfer = item.transfer}
 					<Card.Root class="border-transfer/20 bg-transfer/4">
 						<Card.Content class="pt-4">
-							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-transfer-text">↔ {fmt.format(transfer.amount)}</span></div>
+							<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><p class="truncate text-sm text-muted-foreground">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="mt-0.5 text-xs text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</p></div><span class="shrink-0 font-mono text-sm font-semibold text-transfer-text">↔ {transferAmount(transfer)}</span></div>
 							<div class="mt-2 flex flex-wrap items-center gap-2"><span class="inline-flex rounded-full bg-transfer/15 px-2 py-0.5 text-xs font-medium text-transfer-text">{m.transfer_title()}</span>{#if transfer.notes}<span class="min-w-0 truncate text-xs text-muted-foreground">{transfer.notes}</span>{/if}</div>
 						</Card.Content>
 					</Card.Root>
@@ -665,10 +704,10 @@
 						{#if item.kind === 'Transaction'}
 							{@const tx = item.transaction}
 							<Table.Row class="group/row" data-state={selectedTxIds.has(tx.id) ? 'selected' : undefined}>
-								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS') })} /></Table.Cell>
+								<Table.Cell><Checkbox checked={selectedTxIds.has(tx.id)} onclick={() => toggleSelectedTx(tx.id)} aria-label={m.transactions_select_transaction({ description: tx.description ?? formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS', tx.currency) })} /></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(tx.transactionDate, data.preferences.locale)}</Table.Cell>
-								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} />{/if}</div></Table.Cell>
-								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS')}</Table.Cell>
+								<Table.Cell class="text-muted-foreground"><div class="space-y-1.5"><a href="/transactions/{tx.id}" class="hover:text-foreground hover:underline">{tx.description ?? '—'}</a>{#if tx.boxFunding.length > 0 || tx.boxDistributions.length > 0}<TransactionBoxBreakdown direction={tx.direction as TransactionDirection} amount={tx.amount} boxFunding={tx.boxFunding} boxDistributions={tx.boxDistributions} availableToSpendAmount={tx.availableToSpendAmount} locale={data.preferences.locale} currency={tx.currency} />{/if}</div></Table.Cell>
+								<Table.Cell class="font-mono font-medium {tx.direction === 'INGRESS' ? 'text-money-positive' : 'text-money-negative'}">{formatAmount(tx.amount, tx.direction as 'INGRESS' | 'EGRESS', tx.currency)}</Table.Cell>
 								<Table.Cell>{#if tx.categoryName}<CategoryBadge hue={tx.categoryHue} name={tx.categoryName} direction={tx.direction} />{:else}—{/if}</Table.Cell>
 								<Table.Cell>{tx.contactName ?? '—'}</Table.Cell>
 								<Table.Cell>{tx.accountName ?? '—'}</Table.Cell>
@@ -683,7 +722,7 @@
 								<Table.Cell></Table.Cell>
 								<Table.Cell class="whitespace-nowrap">{formatDateOnly(transfer.transferDate, data.preferences.locale)}</Table.Cell>
 								<Table.Cell><a href="/accounts" class="font-medium hover:underline">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</a>{#if transfer.notes}<p class="text-xs text-muted-foreground">{transfer.notes}</p>{/if}</Table.Cell>
-								<Table.Cell class="font-mono font-medium text-transfer-text">↔ {fmt.format(transfer.amount)}</Table.Cell>
+								<Table.Cell class="font-mono font-medium text-transfer-text">↔ {transferAmount(transfer)}</Table.Cell>
 								<Table.Cell><span class="inline-flex rounded-full bg-transfer/15 px-2 py-0.5 text-xs font-medium text-transfer-text">{m.transfer_title()}</span></Table.Cell>
 								<Table.Cell>—</Table.Cell>
 								<Table.Cell>—</Table.Cell>
@@ -759,6 +798,7 @@
 						amount={editingTransaction.amount}
 						boxDistributions={editingTransaction.boxDistributions}
 						locale={data.preferences.locale}
+						currency={editingTransaction.currency}
 					/>
 				</Alert.Description>
 			</Alert.Root>
@@ -779,7 +819,7 @@
 				<Form.Field form={sf} name="amount">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Form.Label>{m.common_amount_mxn()}</Form.Label>
+							<Form.Label>{m.common_amount_in({ currency: formCurrency })}</Form.Label>
 							<Input
 								{...props}
 								type="number"
@@ -849,9 +889,9 @@
 								value={$form.accountId ? String($form.accountId) : ''}
 								onValueChange={(v) => { $form.accountId = v ? Number(v) : ''; }}
 								placeholder={m.transfer_select_account()}
-								items={data.accounts.map(account => ({
+								items={formAccounts.map(account => ({
 									value: String(account.id),
-									label: `${account.name} · ${fmt.format(account.balance)}`,
+									label: `${account.name} · ${moneyFormatter(data.preferences.locale, account.currency, { code: multiCurrency }).format(account.balance)}`,
 								}))}
 								{...triggerProps}
 							/>
@@ -900,14 +940,15 @@
 			{#if availableBalance === null}
 				<PreservedBoxFunding
 					allocations={$form.direction === 'EGRESS' ? $form.boxFunding : []}
-					boxes={data.boxes}
+					boxes={formBoxes}
 					transactionAmount={$form.amount}
 					locale={data.preferences.locale}
+					currency={formCurrency}
 				/>
 			{:else if $form.direction === 'EGRESS'}
 				<BoxAllocationEditor
 					kind="funding"
-					boxes={data.boxes}
+					boxes={formBoxes}
 					allocations={$form.boxFunding}
 					onChange={setBoxFunding}
 					transactionAmount={$form.amount}
@@ -915,6 +956,7 @@
 					{today}
 					availableBefore={availableBalance.availableToSpend}
 					locale={data.preferences.locale}
+					currency={formCurrency}
 					originalAmount={editingTransaction?.amount ?? 0}
 					originalDirection={(editingTransaction?.direction as TransactionDirection | undefined) ?? null}
 					originalFunding={editingTransaction?.boxFunding ?? []}
@@ -928,11 +970,12 @@
 					allocations={$form.boxDistributions}
 					onChange={setBoxDistributions}
 					locale={data.preferences.locale}
+					currency={formCurrency}
 					active={dialogOpen}
 				/>
 				<BoxAllocationEditor
 					kind="distribution"
-					boxes={data.boxes}
+					boxes={formBoxes}
 					allocations={$form.boxDistributions}
 					onChange={setBoxDistributions}
 					transactionAmount={$form.amount}
@@ -940,6 +983,7 @@
 					{today}
 					availableBefore={availableBalance.availableToSpend}
 					locale={data.preferences.locale}
+					currency={formCurrency}
 				/>
 			{/if}
 

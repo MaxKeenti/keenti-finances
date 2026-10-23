@@ -77,6 +77,28 @@ function nullableIsoDate(value: unknown): string | null | undefined {
 	return isoDate(value) ?? undefined;
 }
 
+/**
+ * An ISO 4217 code (ADR-0024).
+ *
+ * Absent means a backend from before currencies existed, and every amount such
+ * a backend reported was MXN, so that one spelling is read as MXN. Anything
+ * present but malformed fails its record: formatting an amount in a guessed
+ * currency would misstate it.
+ */
+function currencyCode(value: unknown): string | null {
+	if (value === undefined) return 'MXN';
+	const text = str(value);
+	return text !== null && /^[A-Z]{3}$/.test(text) ? text : null;
+}
+
+function currencyList(value: unknown): string[] | null {
+	if (value === undefined) return ['MXN'];
+	return parseList(value, (item) => {
+		const code = currencyCode(item);
+		return item === undefined ? null : code;
+	});
+}
+
 function nullableStr(value: unknown): string | null | undefined {
 	if (value === null) return null;
 	return str(value) ?? undefined;
@@ -101,8 +123,22 @@ export function parseBalanceSummary(value: unknown): BalanceSummary | null {
 	const netBalance = num(value.netBalance);
 	const inBoxes = num(value.inBoxes);
 	const availableToSpend = num(value.availableToSpend);
-	if (netBalance === null || inBoxes === null || availableToSpend === null) return null;
-	return { netBalance, inBoxes, availableToSpend };
+	const currency = currencyCode(value.currency);
+	if (netBalance === null || inBoxes === null || availableToSpend === null || currency === null) {
+		return null;
+	}
+	return { currency, netBalance, inBoxes, availableToSpend };
+}
+
+/** The Boxes summary read also lists every currency the User holds. */
+export function parseBalanceSummaryWithCurrencies(
+	value: unknown,
+): (BalanceSummary & { currencies: string[] }) | null {
+	const summary = parseBalanceSummary(value);
+	if (summary === null || !isRecord(value)) return null;
+	const currencies = currencyList(value.currencies ?? undefined);
+	if (currencies === null) return null;
+	return { ...summary, currencies };
 }
 
 function parseMonth(value: unknown): MonthSummary | null {
@@ -114,7 +150,13 @@ function parseMonth(value: unknown): MonthSummary | null {
 	return { month, ingress, egress };
 }
 
-export type AccountSummary = { id: number; name: string; kind: string; balance: number };
+export type AccountSummary = {
+	id: number;
+	name: string;
+	kind: string;
+	currency: string;
+	balance: number;
+};
 
 export function parseAccount(value: unknown): AccountSummary | null {
 	if (!isRecord(value)) return null;
@@ -122,8 +164,11 @@ export function parseAccount(value: unknown): AccountSummary | null {
 	const name = str(value.name);
 	const kind = str(value.kind);
 	const balance = num(value.balance);
-	if (id === null || name === null || kind === null || balance === null) return null;
-	return { id, name, kind, balance };
+	const currency = currencyCode(value.currency);
+	if (id === null || name === null || kind === null || balance === null || currency === null) {
+		return null;
+	}
+	return { id, name, kind, currency, balance };
 }
 
 export function parseAccounts(value: unknown): AccountSummary[] | null {
@@ -330,6 +375,8 @@ export type Subscription = {
 	id: number;
 	name: string;
 	cost: number;
+	/** Member shares and Payment Records are in it. */
+	currency: string;
 	billingCycle: string;
 	type: string;
 	categoryId: number | null;
@@ -354,6 +401,7 @@ export function parseSubscription(value: unknown): Subscription | null {
 	const id = num(value.id);
 	const name = str(value.name);
 	const cost = num(value.cost);
+	const currency = currencyCode(value.currency);
 	const billingCycle = str(value.billingCycle);
 	const type = str(value.type);
 	const nextBillingDate = isoDate(value.nextBillingDate);
@@ -361,6 +409,7 @@ export function parseSubscription(value: unknown): Subscription | null {
 		id === null ||
 		name === null ||
 		cost === null ||
+		currency === null ||
 		billingCycle === null ||
 		type === null
 	) {
@@ -370,6 +419,7 @@ export function parseSubscription(value: unknown): Subscription | null {
 		id,
 		name,
 		cost,
+		currency,
 		billingCycle,
 		type,
 		categoryId: nullableNum(value.categoryId) ?? null,
@@ -508,6 +558,7 @@ export function parsePayments(value: unknown): PaymentRecord[] | null {
 export type TransactionResponse = {
 	id: number;
 	amount: number;
+	currency: string;
 	direction: string;
 	description: string;
 	transactionDate: string;
@@ -524,6 +575,7 @@ export function parseTransactions(value: unknown): TransactionResponse[] | null 
 		if (!isRecord(item)) return null;
 		const id = num(item.id);
 		const amount = num(item.amount);
+		const currency = currencyCode(item.currency);
 		const direction = str(item.direction);
 		const transactionDate = isoDate(item.transactionDate);
 		// A Transaction with no `subscriptionId` is offered as a link candidate,
@@ -532,6 +584,7 @@ export function parseTransactions(value: unknown): TransactionResponse[] | null 
 		if (
 			id === null ||
 			amount === null ||
+			currency === null ||
 			direction === null ||
 			transactionDate === null ||
 			subscriptionId === undefined
@@ -541,6 +594,7 @@ export function parseTransactions(value: unknown): TransactionResponse[] | null 
 		return {
 			id,
 			amount,
+			currency,
 			direction,
 			description: str(item.description) ?? '',
 			transactionDate,
@@ -612,6 +666,8 @@ export type OverviewPosition = {
 export type OverviewStatement = {
 	accountId: number;
 	accountName: string;
+	/** Statements from every currency are listed; each carries its own. */
+	currency: string;
 	statementId: number;
 	periodStart: string;
 	periodEnd: string;
@@ -713,7 +769,24 @@ export type OverviewHistory = {
 	monthly: MonthSummary[];
 };
 
+export type OverviewConvertedPart = { currency: string; netBalance: number; converted: number };
+
+/**
+ * Every currency's Net Balance in the Primary Currency at the latest reference
+ * rate. Display-only (ADR-0024): an estimate, never a ledger figure.
+ */
+export type OverviewConvertedTotal = {
+	currency: string;
+	total: number;
+	ratesDate: string | null;
+	parts: OverviewConvertedPart[];
+};
+
 export type DashboardOverview = {
+	/** The Viewing Currency every total below is stated in. */
+	currency: string;
+	/** Every currency the User holds, Primary Currency first. */
+	currencies: string[];
 	/** The User's calendar day as the backend resolved it, for provenance only. */
 	today: string | null;
 	timeZone: string | null;
@@ -722,6 +795,7 @@ export type DashboardOverview = {
 	plans: Section<OverviewPlans>;
 	expected: Section<OverviewExpected>;
 	history: Section<OverviewHistory>;
+	convertedTotal: Section<OverviewConvertedTotal>;
 };
 
 /**
@@ -797,6 +871,7 @@ function parseAttention(value: unknown): OverviewAttention | null {
 		if (!isRecord(item)) return null;
 		const accountId = num(item.accountId);
 		const accountName = str(item.accountName);
+		const currency = currencyCode(item.currency);
 		const statementId = num(item.statementId);
 		const periodStart = isoDate(item.periodStart);
 		const periodEnd = isoDate(item.periodEnd);
@@ -812,6 +887,7 @@ function parseAttention(value: unknown): OverviewAttention | null {
 		if (
 			accountId === null ||
 			accountName === null ||
+			currency === null ||
 			statementId === null ||
 			periodStart === null ||
 			periodEnd === null ||
@@ -828,6 +904,7 @@ function parseAttention(value: unknown): OverviewAttention | null {
 		return {
 			accountId,
 			accountName,
+			currency,
 			statementId,
 			periodStart,
 			periodEnd,
@@ -1023,6 +1100,23 @@ function parseExpected(value: unknown): OverviewExpected | null {
 	};
 }
 
+function parseConvertedTotal(value: unknown): OverviewConvertedTotal | null {
+	if (!isRecord(value)) return null;
+	const currency = currencyCode(value.currency ?? null);
+	const total = num(value.total);
+	const ratesDate = optionalIsoDate(value.ratesDate);
+	const parts = parseList(value.parts, (item) => {
+		if (!isRecord(item)) return null;
+		const code = currencyCode(item.currency ?? null);
+		const netBalance = num(item.netBalance);
+		const converted = num(item.converted);
+		if (code === null || netBalance === null || converted === null) return null;
+		return { currency: code, netBalance, converted };
+	});
+	if (currency === null || total === null || ratesDate === undefined || parts === null) return null;
+	return { currency, total, ratesDate, parts };
+}
+
 function parseHistory(value: unknown): OverviewHistory | null {
 	if (!isRecord(value)) return null;
 	const totalIngress = num(value.totalIngress);
@@ -1042,7 +1136,13 @@ function parseHistory(value: unknown): OverviewHistory | null {
  */
 export function parseDashboardOverview(value: unknown): DashboardOverview | null {
 	if (!isRecord(value)) return null;
+	const currency = currencyCode(value.currency);
+	const currencies = currencyList(value.currencies);
+	// Every total is in this currency; without it no figure can be formatted.
+	if (currency === null || currencies === null) return null;
 	return {
+		currency,
+		currencies,
 		today: isoDate(value.today),
 		timeZone: str(value.timeZone),
 		position: parseSection(value.position, parsePosition),
@@ -1050,6 +1150,8 @@ export function parseDashboardOverview(value: unknown): DashboardOverview | null
 		plans: parseSection(value.plans, parsePlans),
 		expected: parseSection(value.expected, parseExpected),
 		history: parseSection(value.history, parseHistory),
+		// An older backend has no Converted Total; it is simply unavailable.
+		convertedTotal: parseSection(value.convertedTotal, parseConvertedTotal),
 	};
 }
 

@@ -62,6 +62,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
         entity.user = em.getReference(UserEntity.class, userContext.getUserId());
         entity.name = account.getName();
         entity.kind = account.getKind();
+        entity.currency = account.getCurrency();
         entity.hue = account.getHue();
         entity.openingBalance = account.getOpeningBalance();
         entity.openingDate = account.getOpeningDate();
@@ -122,6 +123,16 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
+    public List<String> findActiveCurrencies() {
+        return em.createQuery("""
+                SELECT DISTINCT account.currency FROM FinancialAccountEntity account
+                WHERE account.user.id = :userId AND account.archived = false
+                """, String.class)
+            .setParameter("userId", userContext.getUserId())
+            .getResultList();
+    }
+
+    @Override
     public boolean isTrackingActive() {
         return getTrackingActivationDate().isPresent();
     }
@@ -152,7 +163,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
     }
 
     @Override
-    public BigDecimal getTotalBalance() {
+    public BigDecimal getTotalBalance(String currency) {
         Object raw = em.createNativeQuery("""
                 SELECT COALESCE(SUM(account.opening_balance + COALESCE((
                     SELECT SUM(CASE WHEN tx.direction = 'INGRESS' THEN tx.amount ELSE -tx.amount END)
@@ -161,7 +172,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                       AND tx.user_id = :userId
                       AND tx.deleted_at IS NULL
                 ), 0) + COALESCE((
-                    SELECT SUM(transfer.amount)
+                    SELECT SUM(transfer.destination_amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
@@ -176,8 +187,10 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                 FROM financial_account account
                 WHERE account.user_id = :userId
                   AND account.archived = FALSE
+                  AND account.currency = :currency
                 """)
             .setParameter("userId", userContext.getUserId())
+            .setParameter("currency", currency)
             .getSingleResult();
         return money(raw);
     }
@@ -193,7 +206,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                       AND tx.deleted_at IS NULL
                       AND tx.transaction_date <= :balanceDate
                 ), 0) + COALESCE((
-                    SELECT SUM(transfer.amount)
+                    SELECT SUM(transfer.destination_amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId
@@ -219,7 +232,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
 
     private FinancialAccount toDomain(FinancialAccountEntity entity) {
         return new FinancialAccount(
-            entity.id, entity.name, entity.kind, entity.hue, entity.openingBalance, entity.openingDate,
+            entity.id, entity.name, entity.kind, entity.currency, entity.hue, entity.openingBalance, entity.openingDate,
             balance(entity.id), entity.archived, entity.createdAt, entity.updatedAt, entity.version);
     }
 
@@ -228,7 +241,7 @@ public class PanacheFinancialAccountRepository implements FinancialAccountReposi
                 SELECT account.opening_balance + COALESCE(SUM(
                     CASE WHEN tx.direction = 'INGRESS' THEN tx.amount ELSE -tx.amount END
                 ), 0) + COALESCE((
-                    SELECT SUM(transfer.amount)
+                    SELECT SUM(transfer.destination_amount)
                     FROM financial_account_transfer transfer
                     WHERE transfer.destination_account_id = account.id
                       AND transfer.user_id = :userId

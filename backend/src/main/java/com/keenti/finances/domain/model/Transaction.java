@@ -15,6 +15,7 @@ public class Transaction {
     private Long contactId;
     private Long subscriptionId;
     private Long accountId;
+    private String currency;
     private List<BoxFunding> boxFunding;
     private List<BoxDistribution> boxDistributions;
 
@@ -42,6 +43,19 @@ public class Transaction {
                        LocalDate transactionDate, Long categoryId, Long contactId, Long subscriptionId,
                        Long accountId, List<BoxFunding> boxFunding,
                        List<BoxDistribution> boxDistributions) {
+        this(id, amount, direction, description, transactionDate, categoryId, contactId,
+            subscriptionId, accountId, null, boxFunding, boxDistributions);
+    }
+
+    /**
+     * @param currency the Transaction's currency. {@code null} on a request
+     *     means "take it from the Financial Account"; a non-null value on a
+     *     request is a requirement the Account must meet (ADR-0024).
+     */
+    public Transaction(Long id, BigDecimal amount, String direction, String description,
+                       LocalDate transactionDate, Long categoryId, Long contactId, Long subscriptionId,
+                       Long accountId, String currency, List<BoxFunding> boxFunding,
+                       List<BoxDistribution> boxDistributions) {
         this.id = id;
         this.amount = amount;
         this.direction = direction;
@@ -51,6 +65,7 @@ public class Transaction {
         this.contactId = contactId;
         this.subscriptionId = subscriptionId;
         this.accountId = accountId;
+        this.currency = currency;
         this.boxFunding = boxFunding == null ? List.of() : List.copyOf(boxFunding);
         this.boxDistributions = boxDistributions == null
             ? List.of()
@@ -66,6 +81,7 @@ public class Transaction {
     public Long getContactId() { return contactId; }
     public Long getSubscriptionId() { return subscriptionId; }
     public Long getAccountId() { return accountId; }
+    public String getCurrency() { return currency; }
     public List<BoxFunding> getBoxFunding() { return boxFunding; }
     public List<BoxDistribution> getBoxDistributions() { return boxDistributions; }
 
@@ -76,13 +92,18 @@ public class Transaction {
         return amount.subtract(boxFunded);
     }
 
+    public Transaction withCurrency(String resolvedCurrency) {
+        return new Transaction(id, amount, direction, description, transactionDate,
+            categoryId, contactId, subscriptionId, accountId, resolvedCurrency, boxFunding, boxDistributions);
+    }
+
     public Transaction withBoxFunding(List<BoxFunding> funding) {
         return new Transaction(id, amount, direction, description, transactionDate,
-            categoryId, contactId, subscriptionId, accountId, funding, boxDistributions);
+            categoryId, contactId, subscriptionId, accountId, currency, funding, boxDistributions);
     }
 
     public Transaction withBoxDistributions(List<BoxDistribution> distributions) {
         return new Transaction(id, amount, direction, description, transactionDate,
-            categoryId, contactId, subscriptionId, accountId, boxFunding, distributions);
+            categoryId, contactId, subscriptionId, accountId, currency, boxFunding, distributions);
     }
 }

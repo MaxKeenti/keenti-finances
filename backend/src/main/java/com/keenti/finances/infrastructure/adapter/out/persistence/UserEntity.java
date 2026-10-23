@@ -33,6 +33,8 @@ public class UserEntity extends PanacheEntityBase {
     public static final boolean DEFAULT_DOCK_MAGNIFICATION = true;
     public static final String DEFAULT_TIME_ZONE = "America/Mexico_City";
     public static final String DEFAULT_THEME_MODE = "system";
+    /** Kept in sync with {@code V37__add_currency.sql}. */
+    public static final String DEFAULT_PRIMARY_CURRENCY = "MXN";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -79,6 +81,9 @@ public class UserEntity extends PanacheEntityBase {
 
     @Column(name = "theme_mode", nullable = false, length = 6)
     public String themeMode = DEFAULT_THEME_MODE;
+
+    @Column(name = "primary_currency", nullable = false, length = 3)
+    public String primaryCurrency = DEFAULT_PRIMARY_CURRENCY;
 
     @Column(name = "account_tracking_activated_at")
     public LocalDate accountTrackingActivatedAt;

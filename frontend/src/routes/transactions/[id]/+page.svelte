@@ -20,7 +20,7 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { CategoryBadge } from '$lib/components/categories';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
 	import { transactionSchema } from '$lib/schemas/transaction';
@@ -43,7 +43,7 @@
 	let editDialogOpen = $state(false);
 	let deleteForm = $state<HTMLFormElement | null>(null);
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.transaction.currency));
 	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 
 	function formatAmount(amount: number, direction: 'INGRESS' | 'EGRESS'): string {
@@ -246,6 +246,7 @@
 					boxDistributions={tx.boxDistributions}
 					availableToSpendAmount={tx.availableToSpendAmount}
 					locale={data.preferences.locale}
+					currency={data.transaction.currency}
 					showEmpty
 				/>
 				{#if tx.boxDistributions.length > 0}
@@ -289,6 +290,7 @@
 						amount={tx.amount}
 						boxDistributions={tx.boxDistributions}
 						locale={data.preferences.locale}
+						currency={data.transaction.currency}
 					/>
 				</Alert.Description>
 			</Alert.Root>
@@ -302,7 +304,7 @@
 				<Form.Field form={sf} name="amount">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Form.Label>{m.common_amount_mxn()}</Form.Label>
+							<Form.Label>{m.common_amount_in({ currency: data.transaction.currency })}</Form.Label>
 							<Input
 								{...props}
 								type="number"
@@ -408,6 +410,7 @@
 					boxes={data.boxes}
 					transactionAmount={$form.amount}
 					locale={data.preferences.locale}
+					currency={data.transaction.currency}
 				/>
 			{:else if $form.direction === 'EGRESS'}
 				<BoxAllocationEditor
@@ -420,6 +423,7 @@
 					{today}
 					availableBefore={availableBalance.availableToSpend}
 					locale={data.preferences.locale}
+					currency={data.transaction.currency}
 					originalAmount={tx.amount}
 					originalDirection={tx.direction as TransactionDirection}
 					originalFunding={tx.boxFunding}

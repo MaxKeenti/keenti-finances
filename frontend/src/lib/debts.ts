@@ -6,7 +6,9 @@
  * In Boxes, or Available to Spend, which count money that actually moved.
  *
  * The two sides are never netted against each other: owing Ana 500 while Ana
- * owes you 300 is two obligations, not one of 200 (ADR-0023).
+ * owes you 300 is two obligations, not one of 200 (ADR-0023). Nor are two
+ * currencies: pesos and euros owed by the same Contact are two balances, and a
+ * side's total is stated once per currency (ADR-0024).
  */
 
 /**
@@ -23,6 +25,8 @@ export type DirectedDebt = {
 	id: number;
 	contactId: number | null;
 	direction: string;
+	/** Absent on a Debt from before currencies existed, which was MXN. */
+	currency?: string;
 	remaining: number;
 	status: string;
 };
@@ -30,6 +34,7 @@ export type DirectedDebt = {
 export type CounterpartSummary = {
 	key: string;
 	direction: DebtDirection;
+	currency: string;
 	contactId: number | null;
 	name: string;
 	outstanding: number;
@@ -39,7 +44,8 @@ export type CounterpartSummary = {
 export type DebtSide = {
 	direction: DebtDirection;
 	counterparts: CounterpartSummary[];
-	totalOutstanding: number;
+	/** One total per currency, never one sum across currencies. */
+	totals: { currency: string; total: number }[];
 	outstandingDebtCount: number;
 };
 
@@ -66,9 +72,18 @@ export function debtDirection(value: string | null | undefined): DebtDirection {
  * own counterpart. The key is what `?counterpart=` carries, which makes an
  * opened counterpart a real URL: linkable, reloadable, Back-navigable.
  */
-export function counterpartKey(debt: Pick<DirectedDebt, 'id' | 'contactId' | 'direction'>): string {
+export function counterpartKey(
+	debt: Pick<DirectedDebt, 'id' | 'contactId' | 'direction' | 'currency'>,
+): string {
 	const side = debtDirection(debt.direction) === 'EGRESS' ? 'out' : 'in';
-	return debt.contactId === null ? `${side}-debt-${debt.id}` : `${side}-contact-${debt.contactId}`;
+	const base = debt.contactId === null ? `${side}-debt-${debt.id}` : `${side}-contact-${debt.contactId}`;
+	// MXN keeps the key it always had, so existing links still resolve.
+	const currency = debtCurrency(debt.currency);
+	return currency === 'MXN' ? base : `${base}-${currency.toLowerCase()}`;
+}
+
+export function debtCurrency(value: string | null | undefined): string {
+	return value ?? 'MXN';
 }
 
 /** A Debt still open: not settled, and with something left to pay. */
@@ -82,7 +97,7 @@ export function parseDirectionFilter(value: string | null | undefined): Directio
 }
 
 function emptySide(direction: DebtDirection): DebtSide {
-	return { direction, counterparts: [], totalOutstanding: 0, outstandingDebtCount: 0 };
+	return { direction, counterparts: [], totals: [], outstandingDebtCount: 0 };
 }
 
 /** Outstanding money per counterpart and in total, on each side separately. */
@@ -98,7 +113,10 @@ export function summarizeDebts<T extends DirectedDebt>(
 		if (!isOutstanding(debt)) continue;
 		const direction = debtDirection(debt.direction);
 		const side = direction === 'EGRESS' ? youOwe : owedToYou;
-		side.totalOutstanding += debt.remaining;
+		const currency = debtCurrency(debt.currency);
+		const total = side.totals.find((entry) => entry.currency === currency);
+		if (total) total.total += debt.remaining;
+		else side.totals.push({ currency, total: debt.remaining });
 		side.outstandingDebtCount += 1;
 
 		const key = counterpartKey(debt);
@@ -110,6 +128,7 @@ export function summarizeDebts<T extends DirectedDebt>(
 			const summary: CounterpartSummary = {
 				key,
 				direction,
+				currency,
 				contactId: debt.contactId,
 				name: nameFor(debt),
 				outstanding: debt.remaining,
@@ -126,4 +145,9 @@ export function summarizeDebts<T extends DirectedDebt>(
 	youOwe.counterparts.sort(byOutstanding);
 
 	return { owedToYou, youOwe };
+}
+
+/** The total of one currency on a side, or zero when nothing is owed in it. */
+export function sideTotal(side: DebtSide, currency: string): number {
+	return side.totals.find((entry) => entry.currency === currency)?.total ?? 0;
 }

@@ -18,6 +18,7 @@ type Account = {
 	id: number;
 	name: string;
 	kind: string;
+	currency: string;
 	hue: number;
 	openingBalance: number;
 	openingDate: string;
@@ -42,6 +43,8 @@ type Transfer = {
 	sourceAccountName: string | null;
 	destinationAccountName: string | null;
 	amount: number;
+	/** Absent from a backend older than ADR-0024, where it always equalled `amount`. */
+	destinationAmount?: number;
 	transferDate: string;
 	notes: string | null;
 };
@@ -141,7 +144,9 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 						? m.account_activity_transfer_to({ name: transfer.destinationAccountName ?? m.transfer_archived_account() })
 						: m.account_activity_transfer_from({ name: transfer.sourceAccountName ?? m.transfer_archived_account() }),
 					detail: transfer.notes,
-					amount: outgoing ? -transfer.amount : transfer.amount,
+					// An exchange arrives as a different amount in this Account's
+					// currency; `destinationAmount` is what landed here.
+					amount: outgoing ? -transfer.amount : (transfer.destinationAmount ?? transfer.amount),
 				};
 			}),
 	].sort((left, right) => right.date.localeCompare(left.date));

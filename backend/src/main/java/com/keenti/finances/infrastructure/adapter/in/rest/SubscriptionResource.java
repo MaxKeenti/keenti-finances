@@ -114,13 +114,13 @@ public class SubscriptionResource {
     }
 
     private Subscription toSubscription(Long id, SubscriptionRequest r) {
-        return new Subscription(id, r.name(), r.cost(), r.billingCycle(), r.type(),
+        return new Subscription(id, r.name(), r.cost(), r.currency(), r.billingCycle(), r.type(),
             r.categoryId(), r.nextBillingDate(), null, null, r.ownerParticipatesOrDefault());
     }
 
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(
-            s.getId(), s.getName(), s.getCost(), s.getBillingCycle(), s.getType(),
+            s.getId(), s.getName(), s.getCost(), s.getCurrency(), s.getBillingCycle(), s.getType(),
             s.getCategoryId(), s.getNextBillingDate(), s.getTokenUuid(), s.getCreatedAt(),
             s.isOwnerParticipates()
         );
@@ -139,6 +139,7 @@ public class SubscriptionResource {
             t.getId(), t.getAmount(), t.getDirection(), t.getDescription(),
             t.getTransactionDate(), t.getCategoryId(), categoryName, categoryHue,
             t.getContactId(), contactName, t.getSubscriptionId(),
+            t.getAccountId(), null, null,
             t.getBoxFunding().stream()
                 .map(f -> new BoxFundingResponse(
                     f.boxId(), f.boxName(), f.amount(), f.lineOrder()))
@@ -147,7 +148,8 @@ public class SubscriptionResource {
                 .map(d -> new BoxDistributionResponse(
                     d.boxId(), d.boxName(), d.amount(), d.lineOrder(), d.effectiveDate()))
                 .toList(),
-            t.getAvailableToSpendAmount()
+            t.getAvailableToSpendAmount(),
+            t.getCurrency()
         );
     }
 

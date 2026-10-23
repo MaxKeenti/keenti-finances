@@ -15,8 +15,9 @@ public interface TransactionRepository {
     Transaction save(Transaction transaction);
     Transaction update(Transaction transaction);
     void deleteById(Long id);
-    List<MonthSummary> findMonthlySummary(int year);
-    BigDecimal getNetBalance();
+    List<MonthSummary> findMonthlySummary(int year, String currency);
+    /** All-time INGRESS minus EGRESS in one currency (ADR-0020's pre-activation Net Balance). */
+    BigDecimal getNetBalance(String currency);
     List<Transaction> findBySubscriptionId(Long subscriptionId);
     void softDeleteById(Long id);
     void restoreById(Long id);

@@ -30,5 +30,7 @@ public record UserPreferencesRequest(
     String timeZone,
     @NotBlank @Pattern(regexp = "light|dark|system",
         message = "themeMode must be one of the allowed modes")
-    String themeMode
+    String themeMode,
+    /** Optional for older clients: an omitted value keeps the stored one. */
+    String primaryCurrency
 ) {}

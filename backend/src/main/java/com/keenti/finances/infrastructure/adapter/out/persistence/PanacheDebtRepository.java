@@ -59,6 +59,7 @@ public class PanacheDebtRepository implements DebtRepository {
         DebtEntity entity = DebtEntity.findById(debt.getId());
         entity.contact = ContactEntity.findById(debt.getContactId());
         entity.direction = debt.getDirection();
+        entity.currency = debt.getCurrency();
         entity.description = debt.getDescription();
         entity.totalAmount = debt.getTotalAmount();
         entity.status = debt.getStatus();
@@ -127,6 +128,7 @@ public class PanacheDebtRepository implements DebtRepository {
         DebtEntity e = new DebtEntity();
         e.contact = ContactEntity.findById(d.getContactId());
         e.direction = d.getDirection();
+        e.currency = d.getCurrency();
         e.description = d.getDescription();
         e.totalAmount = d.getTotalAmount();
         e.status = d.getStatus() != null ? d.getStatus() : "ACTIVE";
@@ -140,6 +142,7 @@ public class PanacheDebtRepository implements DebtRepository {
             e.id,
             e.contact != null ? e.contact.id : null,
             e.direction,
+            e.currency,
             e.description,
             e.totalAmount,
             e.status,

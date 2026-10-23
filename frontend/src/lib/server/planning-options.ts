@@ -19,6 +19,10 @@
  *   in the Subscription list, so their records are never offered.
  *
  * Every request here is a GET. Nothing is generated, linked or settled.
+ *
+ * The preview runs in one Viewing Currency (ADR-0024), so every catalog keeps
+ * only what is denominated in it: a euro Box cannot fund a peso cost, and a
+ * peso receipt cannot raise euro Available to Spend.
  */
 
 import { loadSection, type SectionFetch } from '$lib/server/section-load';
@@ -105,7 +109,7 @@ function num(value: unknown): number | null {
 }
 
 /** Active Boxes, including those with no Box Plan. An unreadable row fails the list. */
-export function parseBoxOptions(value: unknown): PlanningBoxOption[] | null {
+export function parseBoxOptions(value: unknown, currency = 'MXN'): PlanningBoxOption[] | null {
 	if (!Array.isArray(value)) return null;
 	const boxes: PlanningBoxOption[] = [];
 	for (const item of value) {
@@ -114,6 +118,7 @@ export function parseBoxOptions(value: unknown): PlanningBoxOption[] | null {
 		const balance = num(item.balance);
 		if (id === null || balance === null || typeof item.name !== 'string') return null;
 		if (item.archived === true) continue;
+		if ((item.currency ?? 'MXN') !== currency) continue;
 		boxes.push({ id, name: item.name, balance });
 	}
 	return boxes;
@@ -125,7 +130,7 @@ export function parseBoxOptions(value: unknown): PlanningBoxOption[] | null {
  * Direction, status and remaining are all required to decide eligibility, so
  * an unreadable one fails the list rather than hiding one Debt.
  */
-export function parseDebtOptions(value: unknown): PlanningDebtOption[] | null {
+export function parseDebtOptions(value: unknown, currency = 'MXN'): PlanningDebtOption[] | null {
 	if (!Array.isArray(value)) return null;
 	const debts: PlanningDebtOption[] = [];
 	for (const item of value) {
@@ -136,6 +141,7 @@ export function parseDebtOptions(value: unknown): PlanningDebtOption[] | null {
 		if (id === null || remaining === null) return null;
 		if (typeof direction !== 'string' || typeof status !== 'string') return null;
 		if (direction !== 'INGRESS' || status !== 'ACTIVE' || !isPreviewAmount(remaining)) continue;
+		if ((item.currency ?? 'MXN') !== currency) continue;
 		debts.push({
 			id,
 			description: typeof item.description === 'string' ? item.description : '',
@@ -150,6 +156,7 @@ async function loadPaymentRecordOptions(
 	fetchFn: SectionFetch,
 	backend: string,
 	headers: Record<string, string>,
+	currency: string,
 ): Promise<Section<PlanningPaymentRecordOption[]>> {
 	const subscriptions = await loadSection(fetchFn, `${backend}/api/subscriptions`, {
 		parse: parseSubscriptions,
@@ -159,7 +166,7 @@ async function loadPaymentRecordOptions(
 	if (subscriptions.status !== 'ok') return sectionUnavailable(subscriptions.reason);
 
 	const perSubscription = await mapWithConcurrency(
-		subscriptions.data,
+		subscriptions.data.filter((subscription) => subscription.currency === currency),
 		SUBSCRIPTION_READ_CONCURRENCY,
 		async (subscription) => {
 			const [payments, members] = await Promise.all([
@@ -215,19 +222,20 @@ export async function loadPlanningOptions(
 	fetchFn: SectionFetch,
 	backend: string,
 	headers: Record<string, string>,
+	currency = 'MXN',
 ): Promise<PlanningOptions> {
 	const [boxes, debts, paymentRecords] = await Promise.all([
 		loadSection(fetchFn, `${backend}/api/boxes`, {
-			parse: parseBoxOptions,
+			parse: (value) => parseBoxOptions(value, currency),
 			headers,
 			label: 'planning/boxes',
 		}),
 		loadSection(fetchFn, `${backend}/api/debts`, {
-			parse: parseDebtOptions,
+			parse: (value) => parseDebtOptions(value, currency),
 			headers,
 			label: 'planning/debts',
 		}),
-		loadPaymentRecordOptions(fetchFn, backend, headers),
+		loadPaymentRecordOptions(fetchFn, backend, headers, currency),
 	]);
 	return { boxes, debts, paymentRecords };
 }

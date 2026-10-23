@@ -19,9 +19,9 @@ public interface DebtUseCase {
                               Long categoryId, Long accountId, String notes,
                               List<BoxFunding> boxFunding);
     List<DebtPayment> listPayments(Long debtId);
-    BulkPaymentResult bulkPayment(Long contactId, String direction, BigDecimal totalAmount,
-                                  LocalDate paymentDate, Long categoryId, Long accountId,
-                                  String notes);
+    BulkPaymentResult bulkPayment(Long contactId, String direction, String currency,
+                                  BigDecimal totalAmount, LocalDate paymentDate, Long categoryId,
+                                  Long accountId, String notes);
     void restore(Long id);
     void permanentDelete(Long id);
     List<TrashItem> listDeleted();
@@ -29,6 +29,7 @@ public interface DebtUseCase {
     record BulkPaymentResult(
         Long contactId,
         String direction,
+        String currency,
         BigDecimal totalAmount,
         BigDecimal totalApplied,
         BigDecimal totalUnused,

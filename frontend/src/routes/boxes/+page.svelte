@@ -28,7 +28,10 @@
 	import { ColorPicker } from '$lib/components/color-picker';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
+	import { currencyItems } from '$lib/currency-labels';
+	import { CurrencySwitcher } from '$lib/components/currency-switcher';
+	import { NativeSelect } from '$lib/components/native-select';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
 	import { boxPlanState } from '$lib/types/box-plans';
@@ -43,6 +46,7 @@
 		hue: z.coerce.number().int().min(0).max(359),
 		icon: z.string().trim().max(16, m.validation_box_icon_too_long()).optional(),
 		description: z.string().trim().max(500, m.validation_box_description_too_long()).optional(),
+		currency: z.string().regex(/^[A-Z]{3}$/).optional(),
 	});
 
 	let { data }: { data: PageData } = $props();
@@ -55,14 +59,20 @@
 	let reorderForm = $state<HTMLFormElement | null>(null);
 	let reorderedIds = $state('');
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
 	// Unavailable balance totals are shown as unavailable, not as 0.00.
-	const balance = $derived(sectionValue(data.balanceSummary));
+	const balance = $derived(sectionValue(data.summary));
+	const viewingCurrency = $derived(balance?.currency ?? data.preferences.primaryCurrency);
+	const fmt = $derived(moneyFormatter(data.preferences.locale, viewingCurrency));
+	// Once the User holds several currencies every Box names its own, since
+	// `$` alone no longer says pesos.
+	const multiCurrency = $derived((balance?.currencies.length ?? 1) > 1);
 	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
 	const tracking = $derived(sectionValue(data.accountTracking));
 	// The real Box balances, so the shortfall explanation only offers a
 	// withdrawal when some Box actually holds money to withdraw.
-	const boxBalances = $derived(data.boxes.map((box: BoxDto) => box.balance));
+	const boxBalances = $derived(
+		data.boxes.filter((box: BoxDto) => (box.currency ?? 'MXN') === viewingCurrency).map((box: BoxDto) => box.balance),
+	);
 
 	const sf = superForm(untrack(() => data.form), {
 		validators: zod4Client(boxSchema),
@@ -81,7 +91,9 @@
 
 	function openCreate() {
 		editMode = false;
-		sf.reset({ data: { name: '', hue: 220, icon: '', description: '' } });
+		sf.reset({
+			data: { name: '', hue: 220, icon: '', description: '', currency: data.preferences.primaryCurrency },
+		});
 		dialogOpen = true;
 	}
 
@@ -93,6 +105,7 @@
 			hue: box.hue,
 			icon: box.icon ?? '',
 			description: box.description ?? '',
+			currency: box.currency,
 		});
 		dialogOpen = true;
 	}
@@ -168,6 +181,7 @@
 	{#if balance === null}
 		<SectionUnavailable title={m.section_balance_unavailable()} />
 	{:else}
+		<CurrencySwitcher currencies={balance.currencies} current={balance.currency} />
 		<section aria-label={m.balance_summary()} class="grid gap-3 sm:grid-cols-3">
 			<Card.Root size="sm">
 				<Card.Header>
@@ -239,7 +253,7 @@
 			{#each (showArchived ? data.archivedBoxes : data.boxes) as box, index (box.id)}
 				<BoxCard
 					box={box}
-					formattedBalance={fmt.format(box.balance)}
+					formattedBalance={moneyFormatter(data.preferences.locale, box.currency, { code: multiCurrency }).format(box.balance)}
 					archived={showArchived}
 					planState={boxPlanState(data.planSections[box.id])}
 				>
@@ -355,6 +369,24 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			<div class="grid gap-2">
+				<label class="text-sm font-medium" for="box-currency">{m.currency_label()}</label>
+				{#if editMode}
+					<!-- Fixed at creation: a Box's balance means an amount of one currency. -->
+					<p id="box-currency" class="text-sm text-muted-foreground">{$form.currency}</p>
+				{:else}
+					<input type="hidden" name="currency" value={$form.currency} />
+					<NativeSelect
+						id="box-currency"
+						name="currency-picker"
+						value={$form.currency ?? data.preferences.primaryCurrency}
+						onValueChange={(value) => ($form.currency = value)}
+						items={currencyItems(data.preferences.supportedCurrencies)}
+					/>
+					<p class="text-xs text-muted-foreground">{m.currency_fixed_hint()}</p>
+				{/if}
+			</div>
 
 			<div class="grid gap-1.5">
 				<span class="text-sm font-medium">{m.common_colour()}</span>

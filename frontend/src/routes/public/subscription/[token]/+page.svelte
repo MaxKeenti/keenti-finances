@@ -1,13 +1,13 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.subscription.currency ?? 'MXN'));
 
 	const cycleBadgeVariant: Record<string, 'info' | 'highlight'> = {
 		MONTHLY: 'info',

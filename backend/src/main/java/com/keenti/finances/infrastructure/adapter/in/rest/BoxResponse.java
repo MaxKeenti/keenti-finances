@@ -14,5 +14,6 @@ public record BoxResponse(
     boolean archived,
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
-    long version
+    long version,
+    String currency
 ) {}

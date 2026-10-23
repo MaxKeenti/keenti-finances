@@ -15,7 +15,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type {
 		FundingTriggerDto,
@@ -35,11 +35,14 @@
 		archived = false,
 		hasActivePlan = false,
 		locale,
+		currency,
 	}: {
 		boxId: number;
 		archived?: boolean;
 		hasActivePlan?: boolean;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 	} = $props();
 
 	let triggers = $state<FundingTriggerDto[]>([]);
@@ -57,7 +60,7 @@
 	let saving = $state(false);
 	let formError = $state<string | null>(null);
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const availableCategories = $derived(
 		categories.filter(
 			(category) =>
@@ -415,7 +418,7 @@
 
 			{#if strategy === 'FIXED_AMOUNT'}
 				<div class="grid gap-2">
-					<Label for="funding-trigger-fixed">{m.funding_trigger_fixed_amount()}</Label>
+					<Label for="funding-trigger-fixed">{m.funding_trigger_fixed_amount({ currency })}</Label>
 					<Input
 						id="funding-trigger-fixed"
 						type="number"

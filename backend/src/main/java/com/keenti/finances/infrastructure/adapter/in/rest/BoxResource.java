@@ -37,8 +37,15 @@ public class BoxResource {
 
     @GET
     @Path("/summary")
-    public Response summary() {
-        return Response.ok(toResponse(boxUseCase.summary())).build();
+    public Response summary(@QueryParam("currency") String currency) {
+        BoxBalanceSummary summary = boxUseCase.summary(currency);
+        return Response.ok(new BoxBalanceSummaryResponse(
+            summary.currency(),
+            summary.netBalance(),
+            summary.inBoxes(),
+            summary.availableToSpend(),
+            boxUseCase.currenciesInUse()
+        )).build();
     }
 
     @GET
@@ -140,7 +147,8 @@ public class BoxResource {
             false,
             null,
             null,
-            0
+            0,
+            request.currency()
         );
     }
 
@@ -156,7 +164,8 @@ public class BoxResource {
             box.isArchived(),
             box.getCreatedAt(),
             box.getUpdatedAt(),
-            box.getVersion()
+            box.getVersion(),
+            box.getCurrency()
         );
     }
 
@@ -179,9 +188,11 @@ public class BoxResource {
 
     private static BoxBalanceSummaryResponse toResponse(BoxBalanceSummary summary) {
         return new BoxBalanceSummaryResponse(
+            summary.currency(),
             summary.netBalance(),
             summary.inBoxes(),
-            summary.availableToSpend()
+            summary.availableToSpend(),
+            null
         );
     }
 

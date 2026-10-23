@@ -10,6 +10,7 @@ public class FinancialAccount {
     private final Long id;
     private final String name;
     private final String kind;
+    private final String currency;
     private final int hue;
     private final BigDecimal openingBalance;
     private final LocalDate openingDate;
@@ -22,9 +23,18 @@ public class FinancialAccount {
     public FinancialAccount(Long id, String name, String kind, int hue, BigDecimal openingBalance,
                             LocalDate openingDate, BigDecimal balance, boolean archived,
                             LocalDateTime createdAt, LocalDateTime updatedAt, long version) {
+        this(id, name, kind, Currencies.DEFAULT, hue, openingBalance, openingDate, balance, archived,
+            createdAt, updatedAt, version);
+    }
+
+    public FinancialAccount(Long id, String name, String kind, String currency, int hue,
+                            BigDecimal openingBalance, LocalDate openingDate, BigDecimal balance,
+                            boolean archived, LocalDateTime createdAt, LocalDateTime updatedAt,
+                            long version) {
         this.id = id;
         this.name = name;
         this.kind = kind;
+        this.currency = currency;
         this.hue = hue;
         this.openingBalance = openingBalance;
         this.openingDate = openingDate;
@@ -38,6 +48,8 @@ public class FinancialAccount {
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getKind() { return kind; }
+    /** Fixed at creation; every amount on this Account is in it (ADR-0024). */
+    public String getCurrency() { return currency; }
     public int getHue() { return hue; }
     public BigDecimal getOpeningBalance() { return openingBalance; }
     public LocalDate getOpeningDate() { return openingDate; }

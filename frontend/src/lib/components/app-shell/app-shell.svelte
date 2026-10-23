@@ -5,7 +5,7 @@
 	import { AdaptiveConfirm } from '$lib/components/adaptive-confirm';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import { AlertTriangle, WalletCards } from '@lucide/svelte';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { page } from '$app/stores';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { BalanceSummary } from '$lib/types/boxes';
@@ -25,11 +25,13 @@
 	// While a page registers a contextual bulk action (e.g. trash selection),
 	// the dock is swapped for its action bar.
 	const dockAction = $derived(dockActionStore.current);
-	const fmt = $derived(mxnFormatter(locale));
 	// The header used to render a failed summary as 0.00 Available to Spend on
 	// every page of the app. When it is unavailable the chip says so and offers
 	// a retry instead of stating an amount nobody computed.
 	const balance = $derived(sectionValue(balanceSummary));
+	// The layout reads the summary without a currency, so it arrives in the
+	// Primary Currency and says so.
+	const fmt = $derived(moneyFormatter(locale, balance?.currency ?? 'MXN'));
 	const isUnreconciled = $derived(balance !== null && balance.availableToSpend < 0);
 	// The dashboard already states this twice — a banner that explains it and
 	// offers the action, and the Disponible para gastar card that carries the

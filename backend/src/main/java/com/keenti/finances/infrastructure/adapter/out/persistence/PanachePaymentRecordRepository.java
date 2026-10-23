@@ -43,7 +43,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
     @SuppressWarnings("unchecked")
     public List<PendingContribution> findPendingContributions() {
         List<Object[]> rows = em.createNativeQuery(
-            "SELECT pr.id, s.id, s.name, m.id, c.id, c.name, pr.amount, pr.billing_date "
+            "SELECT pr.id, s.id, s.name, m.id, c.id, c.name, pr.amount, pr.billing_date, s.currency "
             + "FROM payment_record pr "
             + "JOIN subscription s ON pr.subscription_id = s.id "
             + "JOIN subscription_member m ON pr.member_id = m.id "
@@ -58,7 +58,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
             .map(row -> new PendingContribution(
                 toLong(row[0]), toLong(row[1]), (String) row[2], toLong(row[3]),
                 toLong(row[4]), (String) row[5],
-                toBigDecimal(row[6]), toLocalDate(row[7])))
+                toBigDecimal(row[6]), toLocalDate(row[7]), currency(row[8])))
             .toList();
     }
 
@@ -69,7 +69,7 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
         // out because no Hibernate filter applies. A trashed Subscription's
         // records are excluded, so they read as unknown, like a trashed Debt.
         List<Object[]> rows = em.createNativeQuery(
-            "SELECT pr.id, pr.status, pr.amount, pr.member_id "
+            "SELECT pr.id, pr.status, pr.amount, pr.member_id, s.currency "
             + "FROM payment_record pr "
             + "JOIN subscription s ON pr.subscription_id = s.id "
             + "WHERE s.user_id = :userId AND s.deleted_at IS NULL AND pr.id IN (:ids)")
@@ -79,8 +79,13 @@ public class PanachePaymentRecordRepository implements PaymentRecordRepository {
 
         return rows.stream()
             .map(row -> new PaymentRecordReceiptCandidate(toLong(row[0]), (String) row[1],
-                toBigDecimal(row[2]), toLong(row[3])))
+                toBigDecimal(row[2]), toLong(row[3]), currency(row[4])))
             .toList();
+    }
+
+    /** CHAR(3) reads back as a String or a Character array depending on the driver path. */
+    private static String currency(Object raw) {
+        return raw == null ? null : raw.toString().trim();
     }
 
     private static Long toLong(Object raw) {

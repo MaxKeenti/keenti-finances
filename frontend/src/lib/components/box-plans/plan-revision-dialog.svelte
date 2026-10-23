@@ -9,7 +9,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { formatLocale, mxnFormatter } from '$lib/formatting';
+	import { formatLocale, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type {
 		BoxPlan,
@@ -23,11 +23,14 @@
 		open = $bindable(false),
 		plan,
 		locale,
+		currency,
 		onApplied,
 	}: {
 		open?: boolean;
 		plan: BoxPlan;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		onApplied: (plan: BoxPlan) => void | Promise<void>;
 	} = $props();
 
@@ -44,7 +47,7 @@
 	let previewError = $state('');
 	let submitting = $state(false);
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const dateFmt = $derived(
 		new Intl.DateTimeFormat(formatLocale(locale), { dateStyle: 'medium', timeZone: 'UTC' }),
 	);

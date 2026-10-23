@@ -8,6 +8,7 @@ public class Debt {
     private Long id;
     private Long contactId;
     private String direction;
+    private String currency;
     private String description;
     private BigDecimal totalAmount;
     private String status;
@@ -15,9 +16,15 @@ public class Debt {
 
     public Debt(Long id, Long contactId, String direction, String description, BigDecimal totalAmount,
                 String status, LocalDateTime createdAt) {
+        this(id, contactId, direction, Currencies.DEFAULT, description, totalAmount, status, createdAt);
+    }
+
+    public Debt(Long id, Long contactId, String direction, String currency, String description,
+                BigDecimal totalAmount, String status, LocalDateTime createdAt) {
         this.id = id;
         this.contactId = contactId;
         this.direction = direction;
+        this.currency = currency;
         this.description = description;
         this.totalAmount = totalAmount;
         this.status = status;
@@ -33,6 +40,8 @@ public class Debt {
      * Debt Payment creates, so no mapping is needed at payment time.
      */
     public String getDirection() { return direction; }
+    /** Frozen once a Debt Payment exists, like the Direction (ADR-0024). */
+    public String getCurrency() { return currency; }
     public String getDescription() { return description; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public String getStatus() { return status; }

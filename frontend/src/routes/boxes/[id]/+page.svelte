@@ -34,7 +34,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { formatLocale, mxnFormatter, shortDateFormatter } from '$lib/formatting';
+	import { formatLocale, moneyFormatter, shortDateFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { sectionValue } from '$lib/types/section';
 	import { availableToSpendExplanation } from '$lib/balance-presentation';
@@ -92,7 +92,7 @@
 	let planCreationOpen = $state(false);
 	let archiveForm = $state<HTMLFormElement | null>(null);
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.box.currency));
 	const dateFmt = $derived(shortDateFormatter(data.preferences.locale));
 	const dateTimeFmt = $derived(
 		new Intl.DateTimeFormat(formatLocale(data.preferences.locale), {
@@ -417,6 +417,7 @@
 				plan={data.planDetail}
 				movements={data.history}
 				locale={data.preferences.locale}
+				currency={data.box.currency}
 				timeZone={data.preferences.timeZone}
 				viewingHistorical={data.viewingHistorical}
 				onChanged={refreshPlan}
@@ -467,6 +468,7 @@
 		archived={data.box.archived}
 		hasActivePlan={Boolean(activePlanSummary)}
 		locale={data.preferences.locale}
+		currency={data.box.currency}
 	/>
 
 	<section class="space-y-3" aria-labelledby="box-history-title">
@@ -657,7 +659,7 @@
 			<Form.Field form={sf} name="amount">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>{m.common_amount_mxn()}</Form.Label>
+						<Form.Label>{m.common_amount_in({ currency: data.box.currency })}</Form.Label>
 						<Input
 							{...props}
 							type="number"
@@ -778,7 +780,7 @@
 
 				<div class="grid gap-2">
 					<label for="box-correction-amount" class="text-sm font-medium">
-						{m.common_amount_mxn()}
+						{m.common_amount_in({ currency: data.box.currency })}
 					</label>
 					<Input
 						id="box-correction-amount"
@@ -833,6 +835,7 @@
 	boxBalance={data.box.balance}
 	today={data.today}
 	locale={data.preferences.locale}
+	currency={data.box.currency}
 	onCreated={refreshPlan}
 />
 

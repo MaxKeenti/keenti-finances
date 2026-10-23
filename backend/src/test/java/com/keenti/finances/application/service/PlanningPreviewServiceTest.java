@@ -82,20 +82,23 @@ class PlanningPreviewServiceTest {
         PlanningPreviewService service = new PlanningPreviewService();
         service.clock = () -> AT;
         service.reader = new PlanningSnapshotReader() {
-            @Override public ProjectionSnapshot readProjection(Collection<ReceiptKey> receipts) {
+            @Override public ProjectionSnapshot readProjection(Collection<ReceiptKey> receipts, String currency) {
                 calls.add("projection");
                 lookedUp = List.copyOf(receipts);
                 return projection.get();
             }
-            @Override public Timing readTiming(Window window) {
+            @Override public Timing readTiming(Window window, String currency) {
                 calls.add("timing");
                 timingWindow = window;
                 return timing.get();
             }
-            @Override public List<UndatedDebt> readUndatedDebts() {
+            @Override public List<UndatedDebt> readUndatedDebts(String currency) {
                 calls.add("debts");
                 return debts.get();
             }
+        };
+        service.netBalanceReader = new NetBalanceReader() {
+            @Override public String viewingCurrency(String requested) { return "MXN"; }
         };
         service.userTimeZoneProvider = port(UserTimeZoneProvider.class, Map.of("getTimeZone", () -> zone.get()));
         service.boxRepository = port(BoxRepository.class, Map.of("findAll", () -> List.of(

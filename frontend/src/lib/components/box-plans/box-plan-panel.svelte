@@ -18,7 +18,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import * as Table from '$lib/components/ui/table';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import { formatLocale, mxnFormatter } from '$lib/formatting';
+	import { formatLocale, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { BoxMovementDto } from '$lib/types/boxes';
 	import {
@@ -36,6 +36,7 @@
 		plan,
 		movements,
 		locale,
+		currency,
 		timeZone,
 		viewingHistorical,
 		onChanged,
@@ -46,6 +47,8 @@
 		plan: BoxPlan;
 		movements: BoxMovementDto[];
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		timeZone: string;
 		viewingHistorical: boolean;
 		onChanged: (plan: BoxPlan) => void | Promise<void>;
@@ -59,7 +62,7 @@
 	let lifecycleLoading = $state(false);
 	let selectedTab = $state('overview');
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const dateFmt = $derived(
 		new Intl.DateTimeFormat(formatLocale(locale), { dateStyle: 'medium', timeZone: 'UTC' }),
 	);
@@ -351,5 +354,5 @@
 </Card.Root>
 
 {#if active}
-	<PlanRevisionDialog bind:open={revisionOpen} {plan} {locale} onApplied={onChanged} />
+	<PlanRevisionDialog bind:open={revisionOpen} {plan} {locale} {currency} onApplied={onChanged} />
 {/if}

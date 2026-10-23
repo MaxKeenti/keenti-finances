@@ -2,6 +2,7 @@ package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.BoxDistribution;
 import com.keenti.finances.domain.model.BoxFunding;
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.model.PagedResult;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.model.Transaction;
@@ -66,6 +67,9 @@ public class TransactionService implements TransactionUseCase {
     @Inject
     UserTimeZoneProvider userTimeZoneProvider;
 
+    @Inject
+    NetBalanceReader netBalanceReader;
+
     @Override
     public List<Transaction> list() {
         List<Transaction> transactions = transactionRepository.findAll().stream()
@@ -97,14 +101,14 @@ public class TransactionService implements TransactionUseCase {
 
     @Override
     @Transactional
-    public Transaction create(Transaction transaction) {
-        validateAccount(transaction);
+    public Transaction create(Transaction requested) {
+        Transaction transaction = requested.withCurrency(validateAccount(requested, null));
         List<BoxFunding> funding = normalizeAndValidateFunding(transaction);
         List<BoxDistribution> distributions = normalizeAndValidateDistributions(transaction);
         validateFundingTransition(
             List.of(), false, transaction.getTransactionDate(),
-            funding, true, transaction.getTransactionDate());
-        lockDistributionBoxes(distributions);
+            funding, true, transaction.getTransactionDate(), transaction.getCurrency());
+        lockDistributionBoxes(distributions, transaction.getCurrency());
         LocalDateTime fundingCreatedAt = LocalDateTime.now();
         validateDebits(funding, transaction.getTransactionDate(), fundingCreatedAt);
 
@@ -113,7 +117,7 @@ public class TransactionService implements TransactionUseCase {
             created.getId(), created.getTransactionDate(), fundingCreatedAt, funding);
         if (!distributions.isEmpty()) {
             boxFundingRepository.flush();
-            validatePostIngressAvailableToSpend(distributions);
+            validatePostIngressAvailableToSpend(distributions, transaction.getCurrency());
             boxDistributionRepository.saveForTransaction(
                 created.getId(), created.getTransactionDate(),
                 LocalDateTime.now(), distributions);
@@ -128,10 +132,16 @@ public class TransactionService implements TransactionUseCase {
 
     @Override
     @Transactional
-    public Transaction update(Long id, Transaction transaction) {
+    public Transaction update(Long id, Transaction requested) {
         Transaction existing = transactionRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Transaction not found: " + id));
-        validateAccount(transaction, existing.getAccountId());
+        // A Transaction's currency is fixed when it is recorded: it may move
+        // only to another Financial Account in the same currency (ADR-0024).
+        if (requested.getCurrency() != null && !requested.getCurrency().equals(existing.getCurrency())) {
+            throw new BadRequestException("A Transaction's currency cannot change");
+        }
+        Transaction transaction = requested.withCurrency(existing.getCurrency());
+        validateAccount(transaction, existing.getCurrency(), existing.getAccountId());
         creditMsiPlanRepository.findByTransactionId(id)
             .ifPresent(plan -> validateMsiSourceChange(transaction, plan));
         if (!transaction.getBoxDistributions().isEmpty()) {
@@ -143,7 +153,7 @@ public class TransactionService implements TransactionUseCase {
 
         validateFundingTransition(
             oldFunding, true, existing.getTransactionDate(),
-            newFunding, true, transaction.getTransactionDate());
+            newFunding, true, transaction.getTransactionDate(), existing.getCurrency());
 
         boolean fundingChanges = !sameFunding(oldFunding, newFunding)
             || !existing.getTransactionDate().equals(transaction.getTransactionDate());
@@ -157,7 +167,8 @@ public class TransactionService implements TransactionUseCase {
         Transaction updated = transactionRepository.update(new Transaction(
             id, transaction.getAmount(), transaction.getDirection(), transaction.getDescription(),
             transaction.getTransactionDate(), transaction.getCategoryId(), transaction.getContactId(),
-            existing.getSubscriptionId(), transaction.getAccountId(), newFunding, List.of()));
+            existing.getSubscriptionId(), transaction.getAccountId(), existing.getCurrency(),
+            newFunding, List.of()));
         creditMsiPlanRepository.findByTransactionId(id).ifPresent(plan ->
             creditMsiPlanRepository.updateSource(plan.id(), transaction.getAccountId(), transaction.getAmount()));
         if (fundingChanges) {
@@ -182,7 +193,7 @@ public class TransactionService implements TransactionUseCase {
         List<BoxFunding> funding = boxFundingRepository.findByTransactionId(id);
         validateFundingTransition(
             funding, true, existing.getTransactionDate(),
-            List.of(), false, existing.getTransactionDate());
+            List.of(), false, existing.getTransactionDate(), existing.getCurrency());
         // An MSI plan is derived from this source Transaction. Removing the source
         // also removes the plan so a later permanent delete cannot violate its FK
         // and a restore cannot resurrect stale installment metadata.
@@ -201,7 +212,7 @@ public class TransactionService implements TransactionUseCase {
         List<BoxFunding> funding = boxFundingRepository.findByTransactionId(id);
         validateFundingTransition(
             List.of(), false, deleted.getTransactionDate(),
-            funding, true, deleted.getTransactionDate());
+            funding, true, deleted.getTransactionDate(), deleted.getCurrency());
         for (BoxFunding line : funding) {
             LocalDateTime eventTimestamp = line.createdAt() != null
                 ? line.createdAt()
@@ -246,13 +257,17 @@ public class TransactionService implements TransactionUseCase {
             if (!"INGRESS".equals(existing.getDirection())) {
                 throw new BadRequestException("Only INGRESS transactions can be linked to subscriptions");
             }
-            subscriptionRepository.findById(subscriptionId).orElseThrow(() ->
+            var subscription = subscriptionRepository.findById(subscriptionId).orElseThrow(() ->
                 new NotFoundException("Subscription not found: " + subscriptionId));
+            if (!subscription.getCurrency().equals(existing.getCurrency())) {
+                throw new BadRequestException(
+                    "A Transaction can only be linked to a Subscription in its own currency");
+            }
         }
         Transaction updated = transactionRepository.update(new Transaction(
             existing.getId(), existing.getAmount(), existing.getDirection(), existing.getDescription(),
             existing.getTransactionDate(), existing.getCategoryId(), existing.getContactId(),
-            subscriptionId, existing.getAccountId(), List.of(), List.of()));
+            subscriptionId, existing.getAccountId(), existing.getCurrency(), List.of(), List.of()));
         LOG.infof("transaction.link transactionId=%d subscriptionId=%s", transactionId,
             subscriptionId != null ? subscriptionId.toString() : "null");
         return withBoxAllocations(updated);
@@ -315,7 +330,15 @@ public class TransactionService implements TransactionUseCase {
         return List.copyOf(normalized);
     }
 
-    private void validateAccount(Transaction transaction, Long... relatedAccountIds) {
+    /**
+     * Checks the Financial Account and returns the Transaction's currency: the
+     * Account's, or MXN for a legacy Transaction recorded without one.
+     *
+     * @param requiredCurrency the currency the Account must be in, or
+     *     {@code null} to accept the Account's own
+     */
+    private String validateAccount(Transaction transaction, String requiredCurrency,
+                                   Long... relatedAccountIds) {
         // Serialize the activation check with activation itself. Without this lock,
         // a request that observed inactive tracking could commit an unassigned
         // Transaction after the Account ledger has been activated.
@@ -344,6 +367,14 @@ public class TransactionService implements TransactionUseCase {
                 throw conflict("Financial Account must be restored before recording activity: " + account.getId());
             }
         }
+        String currency = transaction.getAccountId() == null
+            ? Currencies.DEFAULT
+            : financialAccountRepository.findById(transaction.getAccountId()).orElseThrow().getCurrency();
+        String expected = requiredCurrency != null ? requiredCurrency : transaction.getCurrency();
+        if (expected != null && !expected.equals(currency)) {
+            throw new BadRequestException("The Financial Account must be in " + expected);
+        }
+        return currency;
     }
 
     private void validateExistingActivityAccount(Transaction transaction) {
@@ -373,7 +404,7 @@ public class TransactionService implements TransactionUseCase {
         try {
             transaction.getAmount().divide(BigDecimal.valueOf(plan.installmentCount()));
         } catch (ArithmeticException exception) {
-            throw new BadRequestException("An MSI purchase amount must divide exactly into MXN-cent installments");
+            throw new BadRequestException("An MSI purchase amount must divide exactly into whole-cent installments");
         }
     }
 
@@ -413,7 +444,7 @@ public class TransactionService implements TransactionUseCase {
         return List.copyOf(normalized);
     }
 
-    private void lockDistributionBoxes(List<BoxDistribution> distributions) {
+    private void lockDistributionBoxes(List<BoxDistribution> distributions, String currency) {
         if (distributions.isEmpty()) {
             return;
         }
@@ -422,17 +453,24 @@ public class TransactionService implements TransactionUseCase {
                 .map(BoxDistribution::boxId)
                 .sorted()
                 .toList()) {
-            boxRepository.lockActiveById(boxId).orElseThrow(() ->
+            var box = boxRepository.lockActiveById(boxId).orElseThrow(() ->
                 new NotFoundException("Box not found: " + boxId));
+            requireSameCurrency(box, currency);
         }
     }
 
-    private void validatePostIngressAvailableToSpend(List<BoxDistribution> distributions) {
+    private void requireSameCurrency(com.keenti.finances.domain.model.Box box, String currency) {
+        if (!box.getCurrency().equals(currency)) {
+            throw new BadRequestException(
+                "Box " + box.getId() + " holds " + box.getCurrency() + " but the Transaction is in " + currency);
+        }
+    }
+
+    private void validatePostIngressAvailableToSpend(List<BoxDistribution> distributions, String currency) {
         BigDecimal distributionTotal = distributions.stream()
             .map(BoxDistribution::amount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal availableToSpend = transactionRepository.getNetBalance()
-            .subtract(boxRepository.getTotalBalance());
+        BigDecimal availableToSpend = netBalanceReader.summary(currency).availableToSpend();
         if (distributionTotal.compareTo(availableToSpend) > 0) {
             throw new BadRequestException(
                 "Box distributions exceed Available to Spend after the INGRESS Transaction");
@@ -455,7 +493,7 @@ public class TransactionService implements TransactionUseCase {
      */
     private void validateFundingTransition(
             List<BoxFunding> oldFunding, boolean oldApplied, LocalDate oldDate,
-            List<BoxFunding> newFunding, boolean newApplied, LocalDate newDate) {
+            List<BoxFunding> newFunding, boolean newApplied, LocalDate newDate, String currency) {
         Map<Long, BigDecimal> oldAmounts = amountsByBox(oldFunding, oldApplied);
         Map<Long, BigDecimal> newAmounts = amountsByBox(newFunding, newApplied);
         Set<Long> affectedIds = new HashSet<>(oldAmounts.keySet());
@@ -475,6 +513,9 @@ public class TransactionService implements TransactionUseCase {
 
             if ((amountChanges || dateChanges) && box.isArchived()) {
                 throw conflict("Box must be restored before changing its funding: " + boxId);
+            }
+            if (newAmount.signum() > 0) {
+                requireSameCurrency(box, currency);
             }
         }
     }

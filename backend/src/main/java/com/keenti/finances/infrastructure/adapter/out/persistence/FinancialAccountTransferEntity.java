@@ -42,6 +42,9 @@ public class FinancialAccountTransferEntity extends PanacheEntityBase {
     @Column(nullable = false, precision = 12, scale = 2)
     public BigDecimal amount;
 
+    @Column(name = "destination_amount", nullable = false, precision = 12, scale = 2)
+    public BigDecimal destinationAmount;
+
     @Column(name = "transfer_date", nullable = false)
     public LocalDate transferDate;
 

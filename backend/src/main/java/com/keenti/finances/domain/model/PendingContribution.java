@@ -22,5 +22,14 @@ public record PendingContribution(
     Long contactId,
     String contactName,
     BigDecimal amount,
-    LocalDate billingDate
-) {}
+    LocalDate billingDate,
+    /** The Subscription's currency. */
+    String currency
+) {
+    public PendingContribution(Long paymentRecordId, Long subscriptionId, String subscriptionName,
+                               Long memberId, Long contactId, String contactName, BigDecimal amount,
+                               LocalDate billingDate) {
+        this(paymentRecordId, subscriptionId, subscriptionName, memberId, contactId, contactName,
+            amount, billingDate, Currencies.DEFAULT);
+    }
+}

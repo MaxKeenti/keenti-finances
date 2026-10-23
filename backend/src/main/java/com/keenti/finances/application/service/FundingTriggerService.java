@@ -123,14 +123,27 @@ public class FundingTriggerService implements FundingTriggerUseCase {
         LOG.infof("fundingTrigger.delete id=%d boxId=%d", triggerId, boxId);
     }
 
+    @Inject
+    NetBalanceReader netBalanceReader;
+
     @Override
     @Transactional
-    public FundingSuggestionSet suggestions(Long categoryId, BigDecimal requestedIngressAmount) {
+    public FundingSuggestionSet suggestions(Long categoryId, BigDecimal requestedIngressAmount,
+                                            String requestedCurrency) {
         requireIngressCategory(categoryId);
         BigDecimal ingressAmount = validMoney(requestedIngressAmount, "ingressAmount");
+        String currency = netBalanceReader.viewingCurrency(requestedCurrency);
         List<FundingSuggestion> suggestions = new ArrayList<>();
 
         for (FundingTrigger trigger : fundingTriggerRepository.findEnabledByCategoryId(categoryId)) {
+            // Money arriving in one currency can only be allocated to Boxes that
+            // hold it; a Box in another currency is not offered (ADR-0024).
+            boolean sameCurrency = boxRepository.findActiveById(trigger.boxId())
+                .map(box -> box.getCurrency().equals(currency))
+                .orElse(false);
+            if (!sameCurrency) {
+                continue;
+            }
             suggestedAmount(trigger, ingressAmount)
                 .filter(amount -> amount.signum() > 0)
                 .ifPresent(amount -> suggestions.add(new FundingSuggestion(
