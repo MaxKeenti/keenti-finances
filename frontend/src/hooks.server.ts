@@ -3,6 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { getTextDirection } from '$lib/paraglide/runtime';
 import { fetchBackendWithWakeRetry } from '$lib/server/backend-fetch';
+import { movedAddress } from '$lib/server/moved';
 import { getWorkOS, getAuthorizationUrl } from '$lib/server/workos';
 import {
 	getSession,
@@ -103,8 +104,15 @@ const authHandle: Handle = async ({ event, resolve }) => {
 	redirect(303, authUrl);
 };
 
-export const handle: Handle = ({ event, resolve }) =>
-	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
+// Where the app has moved to, when it has (ADR-0025). Every address then goes there, reads and
+// writes alike, so nothing changes here any more. `/health` stays for the platform's checks.
+const MOVED_TO = process.env.MOVED_TO;
+
+export const handle: Handle = ({ event, resolve }) => {
+	if (MOVED_TO && event.url.pathname !== '/health') {
+		redirect(307, movedAddress(MOVED_TO, event.url));
+	}
+	return paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
 		event.request = localizedRequest;
 		return authHandle({
 			event,
@@ -130,6 +138,7 @@ export const handle: Handle = ({ event, resolve }) =>
 			},
 		});
 	});
+};
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080';
 

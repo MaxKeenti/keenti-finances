@@ -66,6 +66,7 @@ In the Railway dashboard, open the PostgreSQL plugin → **Connect** tab. Use th
 | `WORKOS_CLIENT_ID` | `client_...` | WorkOS Dashboard → API Keys |
 | `WORKOS_COOKIE_PASSWORD` | `<random 32+ char string>` | Signs the encrypted WorkOS session cookie. Generate with `openssl rand -hex 32` (must be ≥ 32 chars) |
 | `ORIGIN` | `https://your-app.up.railway.app` | **⚠️ CRITICAL** — SvelteKit builds the OAuth callback URL from this. Without it, WorkOS returns a redirect-URI-mismatch error and auth fails silently. No trailing slash. |
+| `MOVED_TO` | unset | Where the app has moved to. Set, every address redirects to the same page there and nothing can be changed here (ADR-0025). Unset it to take the move back. |
 | `NODE_ENV` | `production` | Standard production flag for the Node adapter |
 | `PORT` | `3000` | Port the Node.js server listens on |
 
