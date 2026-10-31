@@ -8,6 +8,7 @@ public record SubscriptionResponse(
     Long id,
     String name,
     BigDecimal cost,
+    String currency,
     String billingCycle,
     String type,
     Long categoryId,

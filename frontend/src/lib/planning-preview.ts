@@ -284,6 +284,8 @@ export type PlanningPreviewRequest = {
 		notYetRecordedConfirmed: boolean;
 	}>;
 	expectedReceipts: Array<{ recordId: number; recordKind: ReceiptKind; date: string }>;
+	/** The Viewing Currency; `null` asks for the Primary Currency (ADR-0024). */
+	currency: string | null;
 };
 
 /**
@@ -293,7 +295,10 @@ export type PlanningPreviewRequest = {
  * binary float — decides whether a value has fractional cents. A receipt
  * carries identity and date only: the server reloads its amount.
  */
-export function buildPreviewRequest(draft: PlanningDraft): PlanningPreviewRequest {
+export function buildPreviewRequest(
+	draft: PlanningDraft,
+	currency: string | null = null,
+): PlanningPreviewRequest {
 	return {
 		horizonDays: PLANNING_HORIZON_DAYS,
 		essentialsReviewed: draft.essentialsReviewed,
@@ -314,6 +319,7 @@ export function buildPreviewRequest(draft: PlanningDraft): PlanningPreviewReques
 			recordKind: receipt.recordKind,
 			date: receipt.date,
 		})),
+		currency,
 	};
 }
 
@@ -432,6 +438,7 @@ export type PlanningPreviewResponse = {
  */
 export const PREVIEW_RESPONSE_FIELDS = {
 	envelope: [
+		'currency',
 		'generatedAt',
 		'timeZone',
 		'window',
@@ -489,7 +496,7 @@ export const PREVIEW_RESPONSE_FIELDS = {
 
 /** The request fields this page sends, for the same contract comparison. */
 export const PREVIEW_REQUEST_FIELDS = {
-	envelope: ['horizonDays', 'essentialsReviewed', 'items', 'expectedReceipts'],
+	envelope: ['horizonDays', 'essentialsReviewed', 'items', 'expectedReceipts', 'currency'],
 	item: ['amount', 'date', 'description', 'boxId', 'boxAmount', 'notYetRecordedConfirmed'],
 	expectedReceipt: ['recordId', 'recordKind', 'date'],
 } as const;
@@ -915,7 +922,11 @@ export class PlanningPreviewSession {
 	 * Requests a fresh preview for `draft`. Resolves once this call's outcome
 	 * is known; returns whether its response was the one applied.
 	 */
-	async calculate(draft: PlanningDraft, fetchFn: PreviewFetch): Promise<boolean> {
+	async calculate(
+		draft: PlanningDraft,
+		fetchFn: PreviewFetch,
+		currency: string | null = null,
+	): Promise<boolean> {
 		this.#controller?.abort();
 		const controller = new AbortController();
 		this.#controller = controller;
@@ -936,7 +947,7 @@ export class PlanningPreviewSession {
 			response = await fetchFn('/api/planning/preview', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json', accept: 'application/json' },
-				body: JSON.stringify(buildPreviewRequest(submitted)),
+				body: JSON.stringify(buildPreviewRequest(submitted, currency)),
 				cache: 'no-store',
 				signal: controller.signal,
 			});

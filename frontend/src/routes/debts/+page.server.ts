@@ -14,12 +14,16 @@ const debtSchema = z.object({
 	direction: z.enum(['INGRESS', 'EGRESS']),
 	description: z.string().min(1, m.validation_description_required()),
 	totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
+	// Frozen by the backend once a Debt Payment exists (ADR-0024).
+	currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 	createdAt: z.string().min(1, m.validation_date_required()),
 });
 
 const bulkPaymentSchema = z.object({
 	contactId: z.coerce.number().positive(m.validation_contact_required()),
 	direction: z.enum(['INGRESS', 'EGRESS']),
+	// One lump sum settles one currency; the Account must hold it too.
+	currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 	totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
 	paymentDate: z.string().min(1, m.validation_payment_date_required()),
 	categoryId: z.coerce.number().positive(m.validation_category_required()),
@@ -35,6 +39,7 @@ type Debt = {
 	contactId: number | null;
 	contactName: string | null;
 	direction: string;
+	currency: string;
 	description: string;
 	totalAmount: number;
 	totalPaid: number;
@@ -43,7 +48,7 @@ type Debt = {
 	createdAt: string;
 };
 type Category = { id: number; name: string; type: string };
-type FinancialAccount = { id: number; name: string; kind: string; balance: number };
+type FinancialAccount = { id: number; name: string; kind: string; currency: string; balance: number };
 
 export const load: PageServerLoad = async ({ fetch, cookies, parent, url }) => {
 	const session = getSession(cookies);
@@ -94,13 +99,21 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent, url }) => {
 	const today = dateInTimeZone(preferences.timeZone);
 	const [form, bulkForm] = await Promise.all([
 		superValidate(
-			{ contactId: 0, direction: 'INGRESS' as const, description: '', totalAmount: 0, createdAt: today },
+			{
+				contactId: 0,
+				direction: 'INGRESS' as const,
+				description: '',
+				totalAmount: 0,
+				currency: preferences.primaryCurrency,
+				createdAt: today,
+			},
 			zod4(debtSchema),
 		),
 		superValidate(
 			{
 				contactId: 0,
 				direction: 'INGRESS' as const,
+				currency: preferences.primaryCurrency,
 				totalAmount: 0,
 				paymentDate: today,
 				categoryId: 0,
@@ -158,6 +171,7 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					contactId: form.data.contactId,
 					direction: form.data.direction,
+					currency: form.data.currency,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
 					createdAt: form.data.createdAt || null,
@@ -207,6 +221,7 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					contactId: form.data.contactId,
 					direction: form.data.direction,
+					currency: form.data.currency,
 					description: form.data.description,
 					totalAmount: form.data.totalAmount,
 					createdAt: form.data.createdAt || null,
@@ -252,6 +267,7 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					contactId: form.data.contactId,
 					direction: form.data.direction,
+					currency: form.data.currency,
 					totalAmount: form.data.totalAmount,
 					paymentDate: form.data.paymentDate,
 					categoryId: form.data.categoryId,

@@ -87,18 +87,18 @@ public class PlanningSnapshotReader {
      * ------------------------------------------------------------------ */
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public ProjectionSnapshot readProjection(Collection<ReceiptKey> receipts) {
+    public ProjectionSnapshot readProjection(Collection<ReceiptKey> receipts, String currency) {
         try {
             Baseline baseline;
             try {
                 readScope.begin();
-                baseline = baseline();
+                baseline = baseline(currency);
             } catch (RuntimeException e) {
                 LOG.errorf(e, "planning.preview baseline unavailable");
                 return ProjectionSnapshot.UNREADABLE;
             }
             try {
-                return new ProjectionSnapshot(baseline, resolve(receipts), true);
+                return new ProjectionSnapshot(baseline, resolve(receipts, currency), true);
             } catch (RuntimeException e) {
                 LOG.errorf(e, "planning.preview receipts unavailable");
                 return new ProjectionSnapshot(baseline, Map.of(), false);
@@ -108,25 +108,27 @@ public class PlanningSnapshotReader {
         }
     }
 
-    private Baseline baseline() {
+    private Baseline baseline(String currency) {
         // The dashboard's branch (D5): tracking active sums non-archived Account
         // balances; otherwise all Transactions. Neither filters by date, so
         // recorded future-dated Transactions and full MSI purchases are already in.
         boolean trackingActive = financialAccountRepository.isTrackingActive();
         BigDecimal netBalance = trackingActive
-            ? financialAccountRepository.getTotalBalance()
-            : transactionRepository.getNetBalance();
+            ? financialAccountRepository.getTotalBalance(currency)
+            : transactionRepository.getNetBalance(currency);
         // Every active Box, with or without a plan, from the authoritative Box
         // read; the total is the dashboard's own In Boxes query, so the calculator
         // compares two independent reads of the same snapshot.
         List<BoxBalance> boxes = boxRepository.findAll(false).stream()
+            .filter(box -> currency.equals(box.getCurrency()))
             .map(box -> new BoxBalance(box.getId(), box.getName(), box.getBalance()))
             .toList();
-        BigDecimal inBoxes = boxRepository.getTotalBalance();
+        BigDecimal inBoxes = boxRepository.getTotalBalance(currency);
         BigDecimal creditInFavor = null;
         if (trackingActive) {
             creditInFavor = financialAccountRepository.findAll(false).stream()
                 .filter(FinancialAccount::isCredit)
+                .filter(account -> currency.equals(account.getCurrency()))
                 .map(FinancialAccount::getBalance)
                 .filter(balance -> balance.signum() > 0)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -134,7 +136,7 @@ public class PlanningSnapshotReader {
         return new Baseline(trackingActive, netBalance, inBoxes, boxes, creditInFavor);
     }
 
-    private Map<ReceiptKey, Resolution> resolve(Collection<ReceiptKey> receipts) {
+    private Map<ReceiptKey, Resolution> resolve(Collection<ReceiptKey> receipts, String currency) {
         Map<ReceiptKey, Resolution> resolved = new HashMap<>();
         Set<Long> debtIds = ids(receipts, ReceiptKind.DEBT);
         Set<Long> recordIds = ids(receipts, ReceiptKind.PAYMENT_RECORD);
@@ -157,8 +159,11 @@ public class PlanningSnapshotReader {
                         .subtract(paid.getOrDefault(id, BigDecimal.ZERO));
                     // The calculator's own money bound: a remaining amount the
                     // preview cannot carry is ineligible, not a User input error.
+                    // Money arriving in another currency cannot raise this
+                    // currency's Available to Spend (ADR-0024).
                     boolean eligible = "ACTIVE".equals(debt.getStatus())
                         && "INGRESS".equals(debt.getDirection())
+                        && currency.equals(debt.getCurrency())
                         && PlanningPreviewCalculator.validAmount(remaining);
                     resolution = eligible ? new Resolution(Eligibility.ELIGIBLE, remaining)
                         : new Resolution(Eligibility.INELIGIBLE, null);
@@ -176,7 +181,7 @@ public class PlanningSnapshotReader {
                 // PAID is ineligible with or without a linked Transaction.
                 Resolution resolution = candidate == null
                     ? new Resolution(Eligibility.NOT_FOUND, null)
-                    : candidate.eligible()
+                    : candidate.eligible() && currency.equals(candidate.currency())
                         ? new Resolution(Eligibility.ELIGIBLE, candidate.amount())
                         : new Resolution(Eligibility.INELIGIBLE, null);
                 resolved.put(new ReceiptKey(ReceiptKind.PAYMENT_RECORD, id), resolution);
@@ -195,7 +200,7 @@ public class PlanningSnapshotReader {
      * ------------------------------------------------------------------ */
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public Timing readTiming(Window window) {
+    public Timing readTiming(Window window, String currency) {
         try {
             readScope.begin();
             // Checked before the zone: without tracking there are no statements to
@@ -206,7 +211,7 @@ public class PlanningSnapshotReader {
             if (window == null) {
                 return Timing.withoutData(TimingStatus.UNAVAILABLE, TimingReasonCode.ZONE_UNAVAILABLE);
             }
-            return timing(window);
+            return timing(window, currency);
         } catch (RuntimeException e) {
             // Unavailable, never an empty list: a failed or incomplete read cannot
             // say the User owes nothing.
@@ -217,7 +222,7 @@ public class PlanningSnapshotReader {
         }
     }
 
-    private Timing timing(Window window) {
+    private Timing timing(Window window, String currency) {
         List<StatementDue> dated = new ArrayList<>();
         List<StatementDue> overdue = new ArrayList<>();
         List<StatementEstimate> estimates = new ArrayList<>();
@@ -225,7 +230,7 @@ public class PlanningSnapshotReader {
 
         // Same account scope as the baseline: archived accounts are excluded.
         for (FinancialAccount account : financialAccountRepository.findAll(false)) {
-            if (!account.isCredit()) continue;
+            if (!account.isCredit() || !currency.equals(account.getCurrency())) continue;
             // The full, uncapped statement list for the account — not the
             // dashboard's 50-item attention section.
             List<CreditStatement> statements = creditStatementUseCase.list(account.getId());
@@ -302,11 +307,13 @@ public class PlanningSnapshotReader {
 
     /** Null when unreadable; an empty list means no outstanding Debt. */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
-    public List<UndatedDebt> readUndatedDebts() {
+    public List<UndatedDebt> readUndatedDebts(String currency) {
         try {
             readScope.begin();
             List<Debt> active = debtRepository.findAll().stream()
-                .filter(debt -> "ACTIVE".equals(debt.getStatus())).toList();
+                .filter(debt -> "ACTIVE".equals(debt.getStatus()))
+                .filter(debt -> currency.equals(debt.getCurrency()))
+                .toList();
             if (active.isEmpty()) return List.of();
             Map<Long, BigDecimal> paid = debtPaymentRepository.sumByDebtIds(
                 active.stream().map(Debt::getId).toList());

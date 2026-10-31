@@ -26,7 +26,8 @@ public class DashboardResource {
 
     @GET
     @Path("/summary")
-    public Response getSummary(@QueryParam("year") @DefaultValue("current") String yearParam) {
+    public Response getSummary(@QueryParam("year") @DefaultValue("current") String yearParam,
+                               @QueryParam("currency") String currency) {
         int year;
         if ("current".equalsIgnoreCase(yearParam)) {
             year = Year.now().getValue();
@@ -45,7 +46,7 @@ public class DashboardResource {
             }
         }
 
-        DashboardSummary summary = dashboardUseCase.getSummary(year);
+        DashboardSummary summary = dashboardUseCase.getSummary(year, currency);
         return Response.ok(summary).build();
     }
 
@@ -60,11 +61,14 @@ public class DashboardResource {
      * <p>Sections are independently available: a failure inside one arrives as
      * {@code {"status":"unavailable"}} with no data, and the rest of the
      * response still carries its figures. The year parameter scopes the history
-     * section only — the current-position totals are all-time.
+     * section only — the current-position totals are all-time. The currency
+     * parameter is the Viewing Currency (ADR-0024); it defaults to the Primary
+     * Currency.
      */
     @GET
     @Path("/overview")
-    public Response getOverview(@QueryParam("year") @DefaultValue("current") String yearParam) {
+    public Response getOverview(@QueryParam("year") @DefaultValue("current") String yearParam,
+                                @QueryParam("currency") String currency) {
         Integer year = null;
         // Resolve "current" inside the overview's guarded calendar read so a
         // missing zone cannot hide unrelated balances and expected receipts.
@@ -83,7 +87,7 @@ public class DashboardResource {
             }
         }
 
-        DashboardOverview overview = dashboardOverviewUseCase.getOverview(year);
+        DashboardOverview overview = dashboardOverviewUseCase.getOverview(year, currency);
         return Response.ok(overview).build();
     }
 }

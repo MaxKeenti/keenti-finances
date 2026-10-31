@@ -169,7 +169,7 @@ public class PaymentRecordService implements PaymentRecordUseCase {
         if (billingDate.isBefore(subscription.getNextBillingDate())) {
             subscriptionRepository.update(new Subscription(
                 subscription.getId(), subscription.getName(), subscription.getCost(),
-                subscription.getBillingCycle(), subscription.getType(), subscription.getCategoryId(),
+                subscription.getCurrency(), subscription.getBillingCycle(), subscription.getType(), subscription.getCategoryId(),
                 billingDate, subscription.getTokenUuid(), subscription.getCreatedAt(),
                 subscription.isOwnerParticipates()));
         }

@@ -1,9 +1,12 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.model.Subscription;
 import com.keenti.finances.domain.model.SubscriptionMember;
 import com.keenti.finances.domain.model.TrashItem;
 import com.keenti.finances.domain.port.in.SubscriptionUseCase;
+import com.keenti.finances.domain.port.out.PaymentRecordRepository;
+import com.keenti.finances.domain.port.out.PrimaryCurrencyProvider;
 import com.keenti.finances.domain.port.out.SubscriptionMemberRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,6 +36,12 @@ public class SubscriptionService implements SubscriptionUseCase {
     @Inject
     SubscriptionMemberRepository subscriptionMemberRepository;
 
+    @Inject
+    PaymentRecordRepository paymentRecordRepository;
+
+    @Inject
+    PrimaryCurrencyProvider primaryCurrencyProvider;
+
     @Override
     public List<Subscription> list() {
         List<Subscription> subs = subscriptionRepository.findAll();
@@ -51,9 +60,10 @@ public class SubscriptionService implements SubscriptionUseCase {
     @Transactional
     public Subscription create(Subscription subscription) {
         validate(subscription);
+        String currency = resolveCurrency(subscription.getCurrency());
         String token = "SHARED".equals(subscription.getType()) ? UUID.randomUUID().toString() : null;
         Subscription toSave = new Subscription(
-            null, subscription.getName(), subscription.getCost(),
+            null, subscription.getName(), subscription.getCost(), currency,
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
             token, LocalDateTime.now(), subscription.isOwnerParticipates()
@@ -81,8 +91,18 @@ public class SubscriptionService implements SubscriptionUseCase {
         // split (cost or the owner flag) must re-spread it across members.
         // Otherwise Billing copies a stale share into the new Payment Records.
         boolean costChanged = existing.getCost().compareTo(subscription.getCost()) != 0;
+        String currency = subscription.getCurrency() == null
+            ? existing.getCurrency()
+            : resolveCurrency(subscription.getCurrency());
+        // Payment Records already state amounts in the old currency; re-labelling
+        // them would silently change what Members owe (ADR-0024).
+        if (!existing.getCurrency().equals(currency)
+                && !paymentRecordRepository.findBySubscriptionId(id).isEmpty()) {
+            throw new BadRequestException(
+                "Cannot change the currency of a subscription that has payment records: " + id);
+        }
         Subscription updated = subscriptionRepository.update(new Subscription(
-            id, subscription.getName(), subscription.getCost(),
+            id, subscription.getName(), subscription.getCost(), currency,
             subscription.getBillingCycle(), subscription.getType(),
             subscription.getCategoryId(), subscription.getNextBillingDate(),
             token, existing.getCreatedAt(), subscription.isOwnerParticipates()
@@ -203,6 +223,17 @@ public class SubscriptionService implements SubscriptionUseCase {
         subscriptionMemberRepository.updateShareAmounts(subscriptionId, share);
         LOG.infof("subscription.shares.recalculate subscriptionId=%d oldDivisor=%d newDivisor=%d newShare=%s ownerParticipates=%b",
             subscriptionId, oldDivisor, newDivisor, share, sub.isOwnerParticipates());
+    }
+
+    private String resolveCurrency(String requested) {
+        String currency = Currencies.normalize(requested);
+        if (currency == null) {
+            currency = primaryCurrencyProvider.primaryCurrency();
+        }
+        if (!Currencies.isSupported(currency)) {
+            throw new BadRequestException("Unsupported currency: " + requested);
+        }
+        return currency;
     }
 
     private void validate(Subscription s) {

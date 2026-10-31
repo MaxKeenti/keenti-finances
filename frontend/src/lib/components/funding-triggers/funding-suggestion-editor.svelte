@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import {
 		fundingExcess,
@@ -27,6 +27,7 @@
 		allocations,
 		onChange,
 		locale,
+		currency,
 		active = true,
 	}: {
 		categoryId: number;
@@ -35,6 +36,8 @@
 		allocations: BoxAllocationInput[];
 		onChange: (allocations: BoxAllocationInput[]) => void;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		active?: boolean;
 	} = $props();
 
@@ -48,7 +51,7 @@
 	let dismissedKey = $state<string | null>(null);
 	let retryNonce = $state(0);
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const availableAfterIngress = $derived(
 		Math.max(0, Number(availableBefore) + Math.max(0, Number(ingressAmount) || 0)),
 	);

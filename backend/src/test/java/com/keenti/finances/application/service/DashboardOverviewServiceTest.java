@@ -20,6 +20,7 @@ import com.keenti.finances.domain.port.out.ContactRepository;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import com.keenti.finances.domain.port.out.DebtPaymentRepository;
 import com.keenti.finances.domain.port.out.DebtRepository;
+import com.keenti.finances.domain.port.out.ExchangeRateProvider;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.PaymentRecordRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
@@ -116,6 +117,14 @@ class DashboardOverviewServiceTest {
         service.savingGoalUseCase = proxy(SavingGoalUseCase.class);
         service.spendingBudgetUseCase = proxy(SpendingBudgetUseCase.class);
         service.userTimeZoneProvider = proxy(UserTimeZoneProvider.class);
+        service.primaryCurrencyProvider = () -> "MXN";
+        service.exchangeRateProvider = proxy(ExchangeRateProvider.class);
+        NetBalanceReader reader = new NetBalanceReader();
+        reader.financialAccountRepository = service.financialAccountRepository;
+        reader.transactionRepository = service.transactionRepository;
+        reader.boxRepository = service.boxRepository;
+        reader.primaryCurrencyProvider = service.primaryCurrencyProvider;
+        service.netBalanceReader = reader;
         return service;
     }
 
@@ -132,6 +141,8 @@ class DashboardOverviewServiceTest {
         on(TransactionRepository.class, "findMonthlySummary", List.of());
         on(BoxRepository.class, "getTotalBalance", money("0.00"));
         on(BoxRepository.class, "findAll", List.of());
+        on(BoxRepository.class, "findActiveCurrencies", List.of());
+        on(FinancialAccountRepository.class, "findActiveCurrencies", List.of());
         on(SubscriptionRepository.class, "findAll", List.of());
         on(DebtRepository.class, "findAll", List.of());
         on(DebtPaymentRepository.class, "sumByDebtIds", Map.of());

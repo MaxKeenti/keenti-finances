@@ -55,6 +55,7 @@ public class PublicSubscriptionViewService implements PublicSubscriptionViewUseC
             subscription.getId(),
             subscription.getName(),
             subscription.getCost(),
+            subscription.getCurrency(),
             subscription.getBillingCycle(),
             subscription.getNextBillingDate(),
             memberViews

@@ -38,19 +38,26 @@
 		position,
 		today,
 		format,
+		formatIn,
 		locale,
 	}: {
 		attention: OverviewAttention;
 		/** `null` when the position section is unavailable; no alert is invented. */
 		position: OverviewPosition | null;
 		today: DayResolution;
+		/** Formats a figure in the Viewing Currency (position-derived alerts). */
 		format: (value: number) => string;
+		/**
+		 * Formats a figure in a given currency. Statements are listed from every
+		 * currency, each in its own Account's (ADR-0024).
+		 */
+		formatIn: (value: number, currency: string) => string;
 		locale: string | undefined;
 	} = $props();
 
 	/** Statements grouped per Credit Financial Account, as decision D2 evaluates them. */
 	const byAccount = $derived.by(() => {
-		const groups = new Map<number, { accountId: number; accountName: string; statements: typeof attention.statements }>();
+		const groups = new Map<number, { accountId: number; accountName: string; currency: string; statements: typeof attention.statements }>();
 		for (const statement of attention.statements) {
 			const group = groups.get(statement.accountId);
 			if (group) group.statements.push(statement);
@@ -58,6 +65,7 @@
 				groups.set(statement.accountId, {
 					accountId: statement.accountId,
 					accountName: statement.accountName,
+					currency: statement.currency,
 					statements: [statement],
 				});
 		}
@@ -236,8 +244,8 @@
 			<AlertTriangle aria-hidden="true" />
 			<Alert.Title>{group.accountName} · {statementStateLabel(group.status.state)}</Alert.Title>
 			<Alert.Description class="space-y-1">
-				{#if statementAmountLabel(group.status, format, locale)}
-					<p>{statementAmountLabel(group.status, format, locale)}</p>
+				{#if statementAmountLabel(group.status, (value) => formatIn(value, group.currency), locale)}
+					<p>{statementAmountLabel(group.status, (value) => formatIn(value, group.currency), locale)}</p>
 				{/if}
 				<!-- The purchases behind it already changed Net Balance. -->
 				<p>{m.statement_not_subtracted_note()}</p>
@@ -255,7 +263,7 @@
 			<AlertTriangle aria-hidden="true" />
 			<Alert.Title>{m.balance_mismatch_title({ name: group.accountName })}</Alert.Title>
 			<Alert.Description>
-				{m.balance_mismatch_description({ amount: format(Math.abs(status.mismatchAmount ?? 0)) })}
+				{m.balance_mismatch_description({ amount: formatIn(Math.abs(status.mismatchAmount ?? 0), group.currency) })}
 			</Alert.Description>
 			<Alert.Action>
 				<Button href="/accounts/{group.accountId}" size="sm" variant="outline">

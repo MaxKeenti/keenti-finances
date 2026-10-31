@@ -2,6 +2,7 @@
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -17,7 +18,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { SectionUnavailable } from '$lib/components/section-status';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
+	import { currencyItems } from '$lib/currency-labels';
+	import { groupByCurrency } from '$lib/currency-totals';
 	import { creditPosition } from '$lib/balance-presentation';
 	import { sectionValue } from '$lib/types/section';
 	import { m } from '$lib/paraglide/messages.js';
@@ -27,7 +30,9 @@
 	const accounts = $derived(data.accounts as Account[]);
 	const archivedAccounts = $derived(data.archivedAccounts as Account[]);
 	const transfers = $derived(data.transfers as Transfer[]);
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const locale = $derived(data.preferences.locale);
+	const primaryCurrency = $derived(data.preferences.primaryCurrency);
+	const money = (amount: number, currency: string) => moneyFormatter(locale, currency).format(amount);
 	const today = $derived(dateInTimeZone(data.preferences.timeZone));
 	const kindItems = $derived([
 		{ value: 'DEBIT', label: m.account_kind_debit() },
@@ -42,14 +47,17 @@
 	const ASSET_KINDS = ['CASH', 'DEBIT', 'CHECKING', 'SAVINGS'];
 	const assetAccounts = $derived(accounts.filter((a) => ASSET_KINDS.includes(a.kind)));
 	const creditAccounts = $derived(accounts.filter((a) => a.kind === 'CREDIT'));
-	const heldTotal = $derived(assetAccounts.reduce((sum, a) => sum + a.balance, 0));
-	// The signed Credit position: negative is debt, positive is a credit in the
-	// User's favour. Reporting only the debt half left the summary looking like
-	// it did not add up — held $2,817.75, owed $0.00, net $2,889.75 — whenever a
-	// Credit Financial Account carried a positive balance.
-	const creditTotal = $derived(creditAccounts.reduce((sum, a) => sum + a.balance, 0));
-	const creditInFavour = $derived(creditTotal > 0);
-	const netTotal = $derived(heldTotal + creditTotal);
+	// One summary row per currency: pesos and euros are never added together
+	// (ADR-0024). Within a currency, the signed Credit position — negative is
+	// debt, positive is a credit in the User's favour — sits beside the assets
+	// so held, owed and net visibly add up.
+	const summaries = $derived(
+		groupByCurrency(accounts, primaryCurrency).map(({ currency, items }) => {
+			const heldTotal = items.filter((a) => ASSET_KINDS.includes(a.kind)).reduce((sum, a) => sum + a.balance, 0);
+			const creditTotal = items.filter((a) => a.kind === 'CREDIT').reduce((sum, a) => sum + a.balance, 0);
+			return { currency, heldTotal, creditTotal, netTotal: heldTotal + creditTotal };
+		}),
+	);
 
 	// The authoritative tracking status. An unreadable one is unavailable, not
 	// "not activated": offering the activation flow off a failed read would ask
@@ -80,6 +88,7 @@
 	let addAccountError = $state('');
 	let newAccountName = $state('');
 	let newAccountKind = $state('DEBIT');
+	let newAccountCurrency = $state(untrack(() => data.preferences.primaryCurrency));
 	let newAccountHue = $state(220);
 	let newOpeningBalance = $state<string | number>(0);
 
@@ -91,14 +100,15 @@
 	// sign is not repeated on a figure already labeled as owed.
 	function accountBalance(account: Account) {
 		return account.kind === 'CREDIT' && creditPosition(account.balance) === 'debt'
-			? fmt.format(Math.abs(account.balance))
-			: fmt.format(account.balance);
+			? money(Math.abs(account.balance), account.currency)
+			: money(account.balance, account.currency);
 	}
 
 	function openAddAccount() {
 		addAccountError = '';
 		newAccountName = '';
 		newAccountKind = 'DEBIT';
+		newAccountCurrency = primaryCurrency;
 		newAccountHue = (220 + accounts.length * 137) % 360;
 		newOpeningBalance = 0;
 		addAccountOpen = true;
@@ -145,33 +155,40 @@
 			     cannot state the target, and a zero would be a fabricated one. -->
 			<SectionUnavailable title={m.section_balance_unavailable()} />
 		{:else}
-			<AccountSetupForm transactionNetBalance={status.transactionNetBalance} locale={data.preferences.locale} {today} />
+			<AccountSetupForm transactionNetBalance={status.transactionNetBalance} locale={data.preferences.locale} {today} {primaryCurrency} />
 		{/if}
 	{:else}
 		<!-- The page's whole job is "where is my money", and it never answered
 		     it: five cards, no total anywhere. -->
 		<Card.Root>
-			<Card.Content class="grid gap-4 sm:grid-cols-3">
-				<div>
-					<p class="text-xs text-muted-foreground">{m.accounts_summary_assets()}</p>
-					<p class="text-2xl font-semibold tabular-nums">{fmt.format(heldTotal)}</p>
-				</div>
-				<div>
-					<p class="text-xs text-muted-foreground">
-						{creditInFavour
-							? m.credit_label_in_favor()
-							: creditTotal === 0
-								? m.credit_label_settled()
-								: m.credit_label_debt()}
-					</p>
-					<p class="text-2xl font-semibold tabular-nums {creditTotal < 0 ? 'text-money-negative' : ''}">
-						{fmt.format(Math.abs(creditTotal))}
-					</p>
-				</div>
-				<div class="sm:border-l sm:pl-4">
-					<p class="text-xs text-muted-foreground">{m.accounts_summary_net()}</p>
-					<p class="text-2xl font-semibold tabular-nums">{fmt.format(netTotal)}</p>
-				</div>
+			<Card.Content class="divide-y">
+				{#each summaries as summary (summary.currency)}
+					<div class="grid gap-4 py-4 first:pt-0 last:pb-0 sm:grid-cols-3">
+						{#if summaries.length > 1}
+							<p class="text-sm font-medium sm:col-span-3">{summary.currency}</p>
+						{/if}
+						<div>
+							<p class="text-xs text-muted-foreground">{m.accounts_summary_assets()}</p>
+							<p class="text-2xl font-semibold tabular-nums">{money(summary.heldTotal, summary.currency)}</p>
+						</div>
+						<div>
+							<p class="text-xs text-muted-foreground">
+								{summary.creditTotal > 0
+									? m.credit_label_in_favor()
+									: summary.creditTotal === 0
+										? m.credit_label_settled()
+										: m.credit_label_debt()}
+							</p>
+							<p class="text-2xl font-semibold tabular-nums {summary.creditTotal < 0 ? 'text-money-negative' : ''}">
+								{money(Math.abs(summary.creditTotal), summary.currency)}
+							</p>
+						</div>
+						<div class="sm:border-l sm:pl-4">
+							<p class="text-xs text-muted-foreground">{m.accounts_summary_net()}</p>
+							<p class="text-2xl font-semibold tabular-nums">{money(summary.netTotal, summary.currency)}</p>
+						</div>
+					</div>
+				{/each}
 			</Card.Content>
 		</Card.Root>
 
@@ -207,7 +224,12 @@
 								<Accordion.Trigger class="no-underline hover:no-underline">
 									<div class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 pr-3">
 										<div class="min-w-0 text-left"><p class="truncate">{transfer.sourceAccountName ?? m.transfer_archived_account()} → {transfer.destinationAccountName ?? m.transfer_archived_account()}</p><p class="font-normal text-muted-foreground">{formatDateOnly(transfer.transferDate, data.preferences.locale)}{transfer.notes ? ` · ${transfer.notes}` : ''}</p></div>
-										<span class="tabular-nums">{fmt.format(transfer.amount)}</span>
+										{#if transfer.sourceCurrency !== transfer.destinationCurrency}
+											<!-- An exchange: what left and what arrived, each in its own currency. -->
+											<span class="tabular-nums">{money(transfer.amount, transfer.sourceCurrency)} → {money(transfer.destinationAmount, transfer.destinationCurrency)}</span>
+										{:else}
+											<span class="tabular-nums">{money(transfer.amount, transfer.sourceCurrency)}</span>
+										{/if}
 									</div>
 								</Accordion.Trigger>
 								<Accordion.Content class="space-y-3 border-t pt-4">
@@ -270,7 +292,12 @@
 			<form method="POST" action="?/create" use:enhance={enhanceCreateAccount} class="grid gap-4">
 				<div class="grid gap-2"><Label for="account-name">{m.account_name()}</Label><Input id="account-name" name="name" bind:value={newAccountName} required maxlength={100} placeholder={m.account_name_placeholder()} /></div>
 				<div class="grid gap-2"><Label for="account-kind">{m.account_kind()}</Label><NativeSelect id="account-kind" name="kind" value={newAccountKind} onValueChange={(value) => (newAccountKind = value)} items={kindItems} /></div>
-				<div class="grid gap-2"><Label for="account-opening-balance">{m.account_opening_balance()}</Label><CurrencyInput id="account-opening-balance" name="openingBalance" bind:value={newOpeningBalance} locale={data.preferences.locale} /></div>
+				<div class="grid gap-2">
+					<Label for="account-currency">{m.currency_label()}</Label>
+					<NativeSelect id="account-currency" name="currency" value={newAccountCurrency} onValueChange={(value) => (newAccountCurrency = value)} items={currencyItems(data.preferences.supportedCurrencies)} />
+					<p class="text-xs text-muted-foreground">{m.currency_fixed_hint()}</p>
+				</div>
+				<div class="grid gap-2"><Label for="account-opening-balance">{m.account_opening_balance()}</Label><CurrencyInput id="account-opening-balance" name="openingBalance" bind:value={newOpeningBalance} locale={data.preferences.locale} currency={newAccountCurrency} /></div>
 				<div class="grid gap-1.5"><span class="text-sm font-medium">{m.common_colour()}</span><input type="hidden" name="hue" value={newAccountHue} /><ColorPicker name={newAccountName || m.common_sample()} hue={newAccountHue} onchange={(hue) => (newAccountHue = hue)} /></div>
 				<Dialog.Footer><Button type="button" variant="outline" onclick={() => (addAccountOpen = false)}>{m.common_cancel()}</Button><Button type="submit">{m.accounts_add()}</Button></Dialog.Footer>
 			</form>

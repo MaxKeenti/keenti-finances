@@ -187,7 +187,7 @@ public class PanacheCreditStatementRepository implements CreditStatementReposito
         em.flush();
 
         List<Object[]> transfers = em.createNativeQuery("""
-                SELECT transfer.id, transfer.transfer_date, transfer.amount
+                SELECT transfer.id, transfer.transfer_date, transfer.destination_amount
                 FROM financial_account_transfer transfer
                 WHERE transfer.destination_account_id = :accountId
                   AND transfer.user_id = :userId

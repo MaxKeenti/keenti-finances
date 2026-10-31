@@ -35,7 +35,11 @@ async function runLoader(backend, timeZone = 'America/Mexico_City') {
 	const data = await planningLoad({
 		fetch: backend.fetch,
 		cookies: cookies(),
-		parent: async () => ({ obligationToday: userToday(timeZone, instantOf(backend.scenario.clock)) }),
+		url: new URL('http://localhost/planning'),
+		parent: async () => ({
+			obligationToday: userToday(timeZone, instantOf(backend.scenario.clock)),
+			preferences: { primaryCurrency: 'MXN' },
+		}),
 	});
 	backend.assertNoUndeclaredRoutes();
 	// Loading the page reads; it never posts a preview or writes anything.

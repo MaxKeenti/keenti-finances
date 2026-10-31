@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { Input } from '$lib/components/ui/input';
+	import { moneyFormatter } from '$lib/formatting';
 
 	let {
 		id,
 		name,
 		value = $bindable(''),
 		locale = 'es',
-		placeholder = '$0.00',
+		currency,
+		placeholder,
 		required = false,
 		disabled = false,
 		ariaLabel,
@@ -16,6 +18,8 @@
 		name?: string;
 		value?: string | number;
 		locale?: string;
+		/** The amount's currency: it decides the symbol shown around the value. */
+		currency: string;
 		placeholder?: string;
 		required?: boolean;
 		disabled?: boolean;
@@ -25,7 +29,8 @@
 
 	let focused = $state(false);
 	let displayValue = $state('');
-	const formatter = $derived(new Intl.NumberFormat(locale, { style: 'currency', currency: 'MXN' }));
+	const formatter = $derived(moneyFormatter(locale, currency));
+	const effectivePlaceholder = $derived(placeholder ?? formatter.format(0));
 	const canonicalValue = $derived(value === '' || value === null || value === undefined ? '' : String(value));
 
 	$effect(() => {
@@ -64,7 +69,7 @@
 	type="text"
 	inputmode="decimal"
 	value={displayValue}
-	{placeholder}
+	placeholder={effectivePlaceholder}
 	{required}
 	{disabled}
 	aria-label={ariaLabel}

@@ -16,7 +16,7 @@ import {
 	load as debtDetailLoad,
 	actions as debtActions,
 } from '../src/routes/debts/[id]/+page.server';
-import { counterpartKey, summarizeDebts } from '../src/lib/debts';
+import { counterpartKey, sideTotal, summarizeDebts } from '../src/lib/debts';
 
 function cookies() {
 	const store = new Map();
@@ -80,7 +80,7 @@ describe('outstanding money owed to the User', () => {
 		const data = await runDebtsLoad(backend);
 		const owedToYou = data.summary.owedToYou;
 
-		expect(owedToYou.totalOutstanding).toBe(expected.totalOutstanding);
+		expect(sideTotal(owedToYou, 'MXN')).toBe(expected.totalOutstanding);
 		expect(owedToYou.outstandingDebtCount).toBe(expected.outstandingDebtCount);
 		expect(owedToYou.counterparts).toHaveLength(expected.debtorCount);
 
@@ -99,7 +99,7 @@ describe('outstanding money owed to the User', () => {
 
 		// Nothing is owed by the User in this scenario, and an empty side is
 		// zero rather than a total borrowed from the other one.
-		expect(data.summary.youOwe.totalOutstanding).toBe(0);
+		expect(sideTotal(data.summary.youOwe, 'MXN')).toBe(0);
 		expect(data.summary.youOwe.counterparts).toHaveLength(0);
 
 		backend.assertNoUndeclaredRoutes();
@@ -146,7 +146,7 @@ describe('counterpart drill-down', () => {
 		expect(data.counterpartFilter).toBe(expected.groupedDebtorKey);
 		// Drilling down is a view of the same records: the headline total still
 		// describes everything owed, not the opened counterpart alone.
-		expect(data.summary.owedToYou.totalOutstanding).toBe(expected.totalOutstanding);
+		expect(sideTotal(data.summary.owedToYou, 'MXN')).toBe(expected.totalOutstanding);
 		expect(data.debts).toHaveLength(5);
 	});
 
@@ -177,16 +177,16 @@ describe('debts in both directions', () => {
 		const data = await runDebtsLoad(backend);
 		const { owedToYou, youOwe } = data.summary;
 
-		expect(owedToYou.totalOutstanding).toBe(expected.owedToYouTotal);
+		expect(sideTotal(owedToYou, 'MXN')).toBe(expected.owedToYouTotal);
 		expect(owedToYou.outstandingDebtCount).toBe(expected.owedToYouDebtCount);
 		expect(owedToYou.counterparts).toHaveLength(expected.owedToYouCounterpartCount);
 
-		expect(youOwe.totalOutstanding).toBe(expected.youOweTotal);
+		expect(sideTotal(youOwe, 'MXN')).toBe(expected.youOweTotal);
 		expect(youOwe.outstandingDebtCount).toBe(expected.youOweDebtCount);
 		expect(youOwe.counterparts).toHaveLength(expected.youOweCounterpartCount);
 
 		// The two sides are never netted into one figure.
-		expect(owedToYou.totalOutstanding).not.toBe(
+		expect(sideTotal(owedToYou, 'MXN')).not.toBe(
 			expected.youOweTotal - expected.owedToYouTotal,
 		);
 
@@ -247,8 +247,8 @@ describe('debts in both directions', () => {
 		const expected = backend.scenario.expected;
 		const data = await runDebtsLoad(backend, '?direction=EGRESS');
 
-		expect(data.summary.owedToYou.totalOutstanding).toBe(expected.owedToYouTotal);
-		expect(data.summary.youOwe.totalOutstanding).toBe(expected.youOweTotal);
+		expect(sideTotal(data.summary.owedToYou, 'MXN')).toBe(expected.owedToYouTotal);
+		expect(sideTotal(data.summary.youOwe, 'MXN')).toBe(expected.youOweTotal);
 	});
 });
 
@@ -383,8 +383,8 @@ describe('grouping debts by counterpart', () => {
 			() => 'Contacto',
 		);
 
-		expect(summary.owedToYou.totalOutstanding).toBe(100);
-		expect(summary.youOwe.totalOutstanding).toBe(0);
+		expect(sideTotal(summary.owedToYou, 'MXN')).toBe(100);
+		expect(sideTotal(summary.youOwe, 'MXN')).toBe(0);
 		expect(summary.owedToYou.counterparts[0].direction).toBe('INGRESS');
 	});
 

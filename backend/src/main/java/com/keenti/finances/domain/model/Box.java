@@ -8,6 +8,7 @@ public class Box {
     private final Long id;
     private final String name;
     private final int hue;
+    private final String currency;
     private final String icon;
     private final String description;
     private final int displayOrder;
@@ -20,9 +21,17 @@ public class Box {
     public Box(Long id, String name, int hue, String icon, String description,
                int displayOrder, BigDecimal balance, boolean archived,
                LocalDateTime createdAt, LocalDateTime updatedAt, long version) {
+        this(id, name, hue, icon, description, displayOrder, balance, archived,
+            createdAt, updatedAt, version, Currencies.DEFAULT);
+    }
+
+    public Box(Long id, String name, int hue, String icon, String description,
+               int displayOrder, BigDecimal balance, boolean archived,
+               LocalDateTime createdAt, LocalDateTime updatedAt, long version, String currency) {
         this.id = id;
         this.name = name;
         this.hue = hue;
+        this.currency = currency;
         this.icon = icon;
         this.description = description;
         this.displayOrder = displayOrder;
@@ -36,6 +45,8 @@ public class Box {
     public Long getId() { return id; }
     public String getName() { return name; }
     public int getHue() { return hue; }
+    /** Fixed at creation; the Box only ever holds this currency (ADR-0024). */
+    public String getCurrency() { return currency; }
     public String getIcon() { return icon; }
     public String getDescription() { return description; }
     public int getDisplayOrder() { return displayOrder; }

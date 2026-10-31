@@ -155,7 +155,7 @@ public class FinancialAccountResource {
         if (creditMsiPlanRepository.existsByTransactionId(request.transactionId())) throw new jakarta.ws.rs.ClientErrorException("This purchase already has an MSI plan", Response.Status.CONFLICT);
         if (request.firstInstallmentDate().isBefore(transaction.getTransactionDate())) throw new jakarta.ws.rs.BadRequestException("The first installment cannot precede the purchase");
         BigDecimal divisor = BigDecimal.valueOf(request.installmentCount());
-        try { transaction.getAmount().divide(divisor); } catch (ArithmeticException e) { throw new jakarta.ws.rs.BadRequestException("The purchase amount must divide exactly into MXN-cent installments"); }
+        try { transaction.getAmount().divide(divisor); } catch (ArithmeticException e) { throw new jakarta.ws.rs.BadRequestException("The purchase amount must divide exactly into whole-cent installments"); }
         CreditMsiPlan saved = creditMsiPlanRepository.save(new CreditMsiPlan(null, id, request.transactionId(),
             transaction.getAmount(), request.installmentCount(), request.firstInstallmentDate(),
             BigDecimal.ZERO, null, null));
@@ -229,7 +229,8 @@ public class FinancialAccountResource {
 
     private static FinancialAccount toDomain(FinancialAccountRequest request, LocalDate openingDate) {
         return new FinancialAccount(
-            null, request.name().trim(), request.kind().trim().toUpperCase(java.util.Locale.ROOT), request.hue(),
+            null, request.name().trim(), request.kind().trim().toUpperCase(java.util.Locale.ROOT),
+            request.currency(), request.hue(),
             request.openingBalance(), openingDate, BigDecimal.ZERO, false, null, null, 0);
     }
 
@@ -251,7 +252,7 @@ public class FinancialAccountResource {
                         plan.remainingAmount().divide(BigDecimal.valueOf(plan.remainingInstallmentCount()));
                     } catch (ArithmeticException e) {
                         throw new jakarta.ws.rs.BadRequestException(
-                            "Opening MSI amount must divide exactly into MXN-cent installments");
+                            "Opening MSI amount must divide exactly into whole-cent installments");
                     }
                 }
             }
@@ -297,7 +298,8 @@ public class FinancialAccountResource {
 
     private static FinancialAccountResponse toResponse(FinancialAccount account) {
         return new FinancialAccountResponse(
-            account.getId(), account.getName(), account.getKind(), account.getHue(), account.getOpeningBalance(),
+            account.getId(), account.getName(), account.getKind(), account.getCurrency(), account.getHue(),
+            account.getOpeningBalance(),
             account.getOpeningDate(), account.getBalance(), account.isArchived(),
             account.getCreatedAt(), account.getUpdatedAt(), account.getVersion());
     }

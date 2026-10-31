@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import {
 		allocationTotal,
@@ -35,6 +35,7 @@
 		today,
 		availableBefore,
 		locale,
+		currency,
 		originalAmount = 0,
 		originalDirection = null,
 		originalFunding = [],
@@ -50,6 +51,8 @@
 		today: string;
 		availableBefore: number;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		originalAmount?: number;
 		originalDirection?: TransactionDirection | null;
 		originalFunding?: BoxFundingDto[];
@@ -57,7 +60,7 @@
 		disabled?: boolean;
 	} = $props();
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const total = $derived(allocationTotal(allocations));
 	const originalFundingTotal = $derived(allocationTotal(originalFunding));
 	const isFutureDated = $derived(Boolean(transactionDate && transactionDate > today));
@@ -307,7 +310,7 @@
 				</div>
 
 				<div class="space-y-1">
-					<label class="text-xs font-medium" for={`${kind}-amount-${index}`}>{m.common_amount_mxn()}</label>
+					<label class="text-xs font-medium" for={`${kind}-amount-${index}`}>{m.common_amount_in({ currency })}</label>
 					<Input
 						id={`${kind}-amount-${index}`}
 						type="number"

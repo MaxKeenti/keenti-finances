@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
+import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.model.FinancialAccountTransfer;
 import com.keenti.finances.domain.port.in.FinancialAccountTransferUseCase;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
@@ -39,7 +40,7 @@ public class FinancialAccountTransferResource {
     public Response create(@Valid FinancialAccountTransferRequest request) {
         FinancialAccountTransfer created = transferUseCase.create(new FinancialAccountTransfer(
             null, request.sourceAccountId(), request.destinationAccountId(), request.amount(),
-            request.transferDate(), request.notes(), null));
+            request.destinationAmount(), request.transferDate(), request.notes(), null));
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
@@ -48,7 +49,7 @@ public class FinancialAccountTransferResource {
     public Response update(@PathParam("id") Long id, @Valid FinancialAccountTransferRequest request) {
         FinancialAccountTransfer updated = transferUseCase.update(id, new FinancialAccountTransfer(
             id, request.sourceAccountId(), request.destinationAccountId(), request.amount(),
-            request.transferDate(), request.notes(), null));
+            request.destinationAmount(), request.transferDate(), request.notes(), null));
         return Response.ok(toResponse(updated)).build();
     }
 
@@ -60,12 +61,15 @@ public class FinancialAccountTransferResource {
     }
 
     private FinancialAccountTransferResponse toResponse(FinancialAccountTransfer transfer) {
-        Optional<String> sourceName = financialAccountUseCase.getById(transfer.sourceAccountId())
-            .map(account -> account.getName());
-        Optional<String> destinationName = financialAccountUseCase.getById(transfer.destinationAccountId())
-            .map(account -> account.getName());
+        Optional<FinancialAccount> source = financialAccountUseCase.getById(transfer.sourceAccountId());
+        Optional<FinancialAccount> destination = financialAccountUseCase.getById(transfer.destinationAccountId());
         return new FinancialAccountTransferResponse(transfer.id(), transfer.sourceAccountId(),
-            sourceName.orElse(null), transfer.destinationAccountId(), destinationName.orElse(null),
-            transfer.amount(), transfer.transferDate(), transfer.notes(), transfer.createdAt());
+            source.map(FinancialAccount::getName).orElse(null),
+            source.map(FinancialAccount::getCurrency).orElse(null),
+            transfer.destinationAccountId(),
+            destination.map(FinancialAccount::getName).orElse(null),
+            destination.map(FinancialAccount::getCurrency).orElse(null),
+            transfer.amount(), transfer.destinationAmount(), transfer.transferDate(), transfer.notes(),
+            transfer.createdAt());
     }
 }

@@ -9,7 +9,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { formatLocale, mxnFormatter } from '$lib/formatting';
+	import { formatLocale, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { BoxPlan, BoxPlanType, PlanCadence } from '$lib/types/box-plans';
 
@@ -19,6 +19,7 @@
 		boxBalance,
 		today,
 		locale,
+		currency,
 		onCreated,
 	}: {
 		open?: boolean;
@@ -26,6 +27,8 @@
 		boxBalance: number;
 		today: string;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		onCreated: (plan: BoxPlan) => void | Promise<void>;
 	} = $props();
 
@@ -40,7 +43,7 @@
 	let submitting = $state(false);
 	let formError = $state('');
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const remaining = $derived(Math.max(targetAmount - boxBalance, 0));
 	const estimatedPeriods = $derived(periodEstimate(today, targetDate, cadence));
 	const estimatedCommitment = $derived(

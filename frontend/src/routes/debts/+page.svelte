@@ -18,7 +18,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
+	import { currencyItems } from '$lib/currency-labels';
 	import { DataTableWrapper } from '$lib/components/ui/data-table';
 	import type { ColumnDef, Row } from '@tanstack/table-core';
 	import { counterpartKey, debtDirection, type DebtDirection } from '$lib/debts';
@@ -31,12 +32,14 @@
 		direction: z.enum(['INGRESS', 'EGRESS']),
 		description: z.string().min(1, m.validation_description_required()),
 		totalAmount: z.coerce.number().positive(m.validation_total_amount_positive()),
+		currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 		createdAt: z.string().min(1, m.validation_date_required()),
 	});
 
 	const bulkPaymentSchema = z.object({
 		contactId: z.coerce.number().positive(m.validation_contact_required()),
 		direction: z.enum(['INGRESS', 'EGRESS']),
+		currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 		totalAmount: z.coerce.number().positive(m.validation_amount_positive()),
 		paymentDate: z.string().min(1, m.validation_payment_date_required()),
 		categoryId: z.coerce.number().positive(m.validation_category_required()),
@@ -48,6 +51,7 @@
 		contactId: number | null;
 		contactName: string | null;
 		direction: string;
+		currency: string;
 		description: string;
 		totalAmount: number;
 		totalPaid: number;
@@ -68,6 +72,7 @@
 		contactId: number;
 		contactName: string | null;
 		direction: DebtDirection;
+		currency: string;
 		totalAmount: number;
 		totalApplied: number;
 		totalUnused: number;
@@ -112,7 +117,7 @@
 				if (r) {
 					bulkResult = r;
 					toast.success(m.debts_bulk_payment_applied({
-						amount: fmt.format(r.totalApplied),
+						amount: money(r.totalApplied, r.currency),
 						count: r.payments.length,
 					}));
 					invalidateAll();
@@ -161,6 +166,7 @@
 				direction: defaultDirection,
 				description: '',
 				totalAmount: 0,
+				currency: data.preferences.primaryCurrency,
 				createdAt: dateInTimeZone(data.preferences.timeZone),
 			},
 		});
@@ -173,6 +179,7 @@
 			data: {
 				contactId: 0,
 				direction: defaultDirection,
+				currency: data.preferences.primaryCurrency,
 				totalAmount: 0,
 				paymentDate: dateInTimeZone(data.preferences.timeZone),
 				categoryId: 0,
@@ -192,6 +199,7 @@
 			direction: debtDirection(debt.direction),
 			description: debt.description,
 			totalAmount: debt.totalAmount,
+			currency: debt.currency,
 			createdAt: existing,
 		});
 		dialogOpen = true;
@@ -208,7 +216,8 @@
 		});
 	}
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const money = (amount: number, currency: string) =>
+		moneyFormatter(data.preferences.locale, currency).format(amount);
 
 	// The backend sends a zoneless `LocalDateTime`; the calendar day is the part
 	// before the `T`, so compare and format that rather than round-tripping
@@ -356,7 +365,11 @@
 				<div class="rounded-lg border p-4">
 					<p class="text-sm font-medium text-muted-foreground">{m.debts_total_owed_to_you()}</p>
 					<p class="text-3xl font-bold tabular-nums text-money-owed-to-you">
-						{fmt.format(owedToYou.totalOutstanding)}
+						{#each owedToYou.totals as total (total.currency)}
+							<span class="block">{money(total.total, total.currency)}</span>
+						{:else}
+							{money(0, data.preferences.primaryCurrency)}
+						{/each}
 					</p>
 					<p class="mt-1 text-sm text-muted-foreground">
 						{m.debts_total_owed_to_you_description({
@@ -370,7 +383,11 @@
 				<div class="rounded-lg border p-4">
 					<p class="text-sm font-medium text-muted-foreground">{m.debts_total_you_owe()}</p>
 					<p class="text-3xl font-bold tabular-nums text-money-negative">
-						{fmt.format(youOwe.totalOutstanding)}
+						{#each youOwe.totals as total (total.currency)}
+							<span class="block">{money(total.total, total.currency)}</span>
+						{:else}
+							{money(0, data.preferences.primaryCurrency)}
+						{/each}
 					</p>
 					<p class="mt-1 text-sm text-muted-foreground">
 						{m.debts_total_you_owe_description({
@@ -431,7 +448,7 @@
 					<p class="text-sm text-muted-foreground">{counterpart.debtCount === 1 ? m.debts_one_active_debt() : m.debts_active_debt_count({ count: counterpart.debtCount })}</p>
 					<div class="border-t pt-2">
 						<p class="text-xs font-medium text-muted-foreground">{amountLabel}</p>
-						<p class="text-xl font-bold tabular-nums {amountClass}">{fmt.format(counterpart.outstanding)}</p>
+						<p class="text-xl font-bold tabular-nums {amountClass}">{money(counterpart.outstanding, counterpart.currency)}</p>
 					</div>
 				</Card.Content>
 			</Card.Root>
@@ -518,15 +535,15 @@
 	</span>
 {/snippet}
 
-{#snippet totalCell(row: Row<Debt>)}<span class="tabular-nums">{fmt.format(row.original.totalAmount)}</span>{/snippet}
+{#snippet totalCell(row: Row<Debt>)}<span class="tabular-nums">{money(row.original.totalAmount, row.original.currency)}</span>{/snippet}
 
 {#snippet paidCell(row: Row<Debt>)}
-	<span class="tabular-nums text-money-positive">{fmt.format(row.original.totalPaid)}</span>
+	<span class="tabular-nums text-money-positive">{money(row.original.totalPaid, row.original.currency)}</span>
 {/snippet}
 
 {#snippet remainingCell(row: Row<Debt>)}
 	<span class="font-medium tabular-nums {remainingClass(row.original)}">
-		{fmt.format(row.original.remaining)}
+		{money(row.original.remaining, row.original.currency)}
 	</span>
 {/snippet}
 
@@ -585,18 +602,18 @@
 						{/if}
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">{m.common_total()}</span>
-							<span class="font-medium">{fmt.format(debt.totalAmount)}</span>
+							<span class="font-medium">{money(debt.totalAmount, debt.currency)}</span>
 						</div>
 						<div class="flex justify-between">
 							<span class="text-muted-foreground">{m.common_paid()}</span>
 							<span class="font-medium text-money-positive">
-								{fmt.format(debt.totalPaid)}
+								{money(debt.totalPaid, debt.currency)}
 							</span>
 						</div>
 						<div class="flex justify-between border-t pt-1">
 							<span class="text-muted-foreground font-medium">{m.common_remaining()}</span>
 							<span class="font-bold {remainingClass(debt)}">
-								{fmt.format(debt.remaining)}
+								{money(debt.remaining, debt.currency)}
 							</span>
 						</div>
 					</div>
@@ -696,10 +713,34 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
+			<Form.Field form={sf} name="currency">
+				<Form.Control>
+					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
+						<Form.Label>{m.currency_label()}</Form.Label>
+						<!-- Recorded payments moved money in this currency, so it is
+						     frozen with them, like the Direction (ADR-0024). -->
+						<input type="hidden" name={fieldName} value={$form.currency} />
+						<NativeSelect
+							name="debt-currency-picker"
+							value={$form.currency}
+							onValueChange={(v) => { $form.currency = v; }}
+							items={currencyItems(data.preferences.supportedCurrencies)}
+							disabled={editDirectionLocked}
+							{...triggerProps}
+						/>
+						{#if editDirectionLocked}
+							<p class="text-xs text-muted-foreground">{m.debts_currency_locked()}</p>
+						{/if}
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<Form.Field form={sf} name="totalAmount">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>{m.debts_total_amount_mxn()}</Form.Label>
+						<Form.Label>{m.debts_total_amount_in({ currency: $form.currency })}</Form.Label>
 						<Input {...props} type="number" step="0.01" min="0.01" bind:value={$form.totalAmount} />
 					{/snippet}
 				</Form.Control>
@@ -746,15 +787,15 @@
 				<div class="grid grid-cols-3 gap-3 text-sm">
 					<div>
 						<p class="text-muted-foreground">{m.common_total()}</p>
-						<p class="font-semibold">{fmt.format(bulkResult.totalAmount)}</p>
+						<p class="font-semibold">{money(bulkResult.totalAmount, bulkResult.currency)}</p>
 					</div>
 					<div>
 						<p class="text-muted-foreground">{m.common_applied()}</p>
-						<p class="font-semibold text-money-positive">{fmt.format(bulkResult.totalApplied)}</p>
+						<p class="font-semibold text-money-positive">{money(bulkResult.totalApplied, bulkResult.currency)}</p>
 					</div>
 					<div>
 						<p class="text-muted-foreground">{m.common_unused()}</p>
-						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-warning-text' : ''}">{fmt.format(bulkResult.totalUnused)}</p>
+						<p class="font-semibold {bulkResult.totalUnused > 0 ? 'text-warning-text' : ''}">{money(bulkResult.totalUnused, bulkResult.currency)}</p>
 					</div>
 				</div>
 
@@ -773,10 +814,10 @@
 								<Table.Row>
 									<Table.Cell class="text-sm max-w-45 truncate">{item.description}</Table.Cell>
 									<Table.Cell class="text-right tabular-nums text-money-positive font-medium">
-										{fmt.format(item.applied)}
+										{money(item.applied, bulkResult.currency)}
 									</Table.Cell>
 									<Table.Cell class="text-right tabular-nums">
-										{fmt.format(item.remaining)}
+										{money(item.remaining, bulkResult.currency)}
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant={item.debtStatus === 'PAID' ? 'success' : 'warning'} class="text-xs">
@@ -839,11 +880,29 @@
 					<Form.FieldErrors />
 				</Form.Field>
 
+				<Form.Field form={bulkSf} name="currency">
+					<Form.Control>
+						{#snippet children({ props })}
+							{@const { name: fieldName, ...triggerProps } = props}
+							<Form.Label>{m.currency_label()}</Form.Label>
+							<!-- A lump sum settles the Contact's Debts in one currency. -->
+							<NativeSelect
+								name={fieldName}
+								value={$bulkForm.currency}
+								onValueChange={(v) => { $bulkForm.currency = v; $bulkForm.accountId = ''; }}
+								items={currencyItems(data.preferences.supportedCurrencies)}
+								{...triggerProps}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
 				<div class="grid gap-4 sm:grid-cols-2">
 					<Form.Field form={bulkSf} name="totalAmount">
 						<Form.Control>
 							{#snippet children({ props })}
-								<Form.Label>{m.debts_total_amount_mxn()}</Form.Label>
+								<Form.Label>{m.debts_total_amount_in({ currency: $bulkForm.currency })}</Form.Label>
 								<Input {...props} type="number" step="0.01" min="0.01" bind:value={$bulkForm.totalAmount} />
 							{/snippet}
 						</Form.Control>
@@ -891,7 +950,7 @@
 							{#snippet children({ props })}
 								{@const { name: fieldName, ...triggerProps } = props}
 								<Form.Label>{$bulkForm.direction === 'EGRESS' ? m.debts_paying_account() : m.debts_receiving_account()}</Form.Label>
-								<NativeSelect name={fieldName} value={$bulkForm.accountId ? String($bulkForm.accountId) : ''} onValueChange={(v) => { $bulkForm.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
+								<NativeSelect name={fieldName} value={$bulkForm.accountId ? String($bulkForm.accountId) : ''} onValueChange={(v) => { $bulkForm.accountId = v ? Number(v) : ''; }} placeholder={m.transfer_select_account()} items={data.accounts.filter(account => (account.currency ?? 'MXN') === $bulkForm.currency).map(account => ({ value: String(account.id), label: account.name }))} {...triggerProps} />
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />

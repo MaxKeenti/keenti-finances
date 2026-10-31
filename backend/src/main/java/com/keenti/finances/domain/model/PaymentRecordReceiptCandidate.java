@@ -10,7 +10,11 @@ import java.math.BigDecimal;
  * owned but ineligible record is distinguishable from an unknown one.
  */
 public record PaymentRecordReceiptCandidate(Long id, String status, BigDecimal amount,
-                                            Long memberId) {
+                                            Long memberId, String currency) {
+    public PaymentRecordReceiptCandidate(Long id, String status, BigDecimal amount, Long memberId) {
+        this(id, status, amount, memberId, Currencies.DEFAULT);
+    }
+
     /** PENDING, owed by a Subscription Member, within the preview's money bound. */
     public boolean eligible() {
         return "PENDING".equals(status) && memberId != null

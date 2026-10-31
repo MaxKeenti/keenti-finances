@@ -20,9 +20,10 @@ public class FundingSuggestionResource {
 
     @GET
     public Response suggestions(@QueryParam("categoryId") Long categoryId,
-                                @QueryParam("ingressAmount") BigDecimal ingressAmount) {
+                                @QueryParam("ingressAmount") BigDecimal ingressAmount,
+                                @QueryParam("currency") String currency) {
         return Response.ok(toResponse(
-            fundingTriggerUseCase.suggestions(categoryId, ingressAmount))).build();
+            fundingTriggerUseCase.suggestions(categoryId, ingressAmount, currency))).build();
     }
 
     static FundingSuggestionSetResponse toResponse(FundingSuggestionSet result) {

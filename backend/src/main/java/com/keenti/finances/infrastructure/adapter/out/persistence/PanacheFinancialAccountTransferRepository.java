@@ -52,6 +52,7 @@ public class PanacheFinancialAccountTransferRepository implements FinancialAccou
         entity.sourceAccount = em.getReference(FinancialAccountEntity.class, transfer.sourceAccountId());
         entity.destinationAccount = em.getReference(FinancialAccountEntity.class, transfer.destinationAccountId());
         entity.amount = transfer.amount();
+        entity.destinationAmount = transfer.destinationAmount();
         entity.transferDate = transfer.transferDate();
         entity.notes = transfer.notes();
         entity.createdAt = LocalDateTime.now();
@@ -68,6 +69,7 @@ public class PanacheFinancialAccountTransferRepository implements FinancialAccou
         entity.sourceAccount = em.getReference(FinancialAccountEntity.class, transfer.sourceAccountId());
         entity.destinationAccount = em.getReference(FinancialAccountEntity.class, transfer.destinationAccountId());
         entity.amount = transfer.amount();
+        entity.destinationAmount = transfer.destinationAmount();
         entity.transferDate = transfer.transferDate();
         entity.notes = transfer.notes();
         em.flush();
@@ -112,7 +114,7 @@ public class PanacheFinancialAccountTransferRepository implements FinancialAccou
 
     private FinancialAccountTransfer toDomain(FinancialAccountTransferEntity entity) {
         return new FinancialAccountTransfer(entity.id, entity.sourceAccount.id,
-            entity.destinationAccount.id, entity.amount, entity.transferDate,
+            entity.destinationAccount.id, entity.amount, entity.destinationAmount, entity.transferDate,
             entity.notes, entity.createdAt);
     }
 

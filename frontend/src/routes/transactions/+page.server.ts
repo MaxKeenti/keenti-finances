@@ -6,7 +6,10 @@ import { getSession } from '$lib/server/workos-session';
 import { m } from '$lib/paraglide/messages.js';
 import { transactionSchema } from '$lib/schemas/transaction';
 import { dateInTimeZone } from '$lib/formatting';
-import type { BoxDto } from '$lib/types/boxes';
+import type { BalanceSummary, BoxDto } from '$lib/types/boxes';
+import type { Section } from '$lib/types/section';
+import { parseBalanceSummary } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 import {
 	normalizeTransactionBoxFields,
 	type BoxDistributionDto,
@@ -18,11 +21,13 @@ const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8080';
 
 type Category = { id: number; name: string; type: string; color?: string };
 type Contact = { id: number; name: string; phone: string | null; email: string | null };
-type FinancialAccount = { id: number; name: string; kind: string; balance: number; archived: boolean };
+type FinancialAccount = { id: number; name: string; kind: string; currency: string; balance: number; archived: boolean };
 type AccountTracking = { active: boolean; setupRequired: boolean; activatedAt: string | null };
 type Transaction = {
 	id: number;
 	amount: number;
+	/** Taken from the Financial Account when recorded; fixed afterwards. */
+	currency: string;
 	direction: string;
 	description: string | null;
 	transactionDate: string;
@@ -48,7 +53,17 @@ type TransactionPage = {
 	sortBy: TransactionSortBy;
 	sortDirection: TransactionSortDirection;
 };
-type Transfer = { id: number; sourceAccountName: string | null; destinationAccountName: string | null; amount: number; transferDate: string; notes: string | null };
+type Transfer = {
+	id: number;
+	sourceAccountName: string | null;
+	destinationAccountName: string | null;
+	sourceCurrency: string;
+	destinationCurrency: string;
+	amount: number;
+	destinationAmount: number;
+	transferDate: string;
+	notes: string | null;
+};
 
 type TransactionSortBy =
 	| 'transactionDate'
@@ -191,6 +206,23 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 		console.error('[transactions] load: backend unreachable');
 	}
 
+	// Box funding and distribution are checked against Available to Spend in
+	// the Transaction's own currency, which is its Account's (ADR-0024). One
+	// summary per currency held, each its own section.
+	const heldCurrencies = [...new Set([preferences.primaryCurrency, ...accounts.map((account) => account.currency ?? 'MXN')])];
+	const balanceSummaries: Record<string, Section<BalanceSummary>> = Object.fromEntries(
+		await Promise.all(
+			heldCurrencies.map(async (currency) => [
+				currency,
+				await loadSection(fetch, `${BACKEND}/api/boxes/summary?currency=${encodeURIComponent(currency)}`, {
+					parse: parseBalanceSummary,
+					headers: authHeaders,
+					label: `transactions/summary/${currency}`,
+				}),
+			]),
+		),
+	);
+
 	const today = dateInTimeZone(preferences.timeZone);
 	const form = await superValidate(
 		{
@@ -209,7 +241,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, url, parent }) => {
 
 	return {
 		transactions: transactionPage.items ?? [], transactionPage, categories, contacts, boxes,
-		accounts, accountTracking, transfers, activityTransactions, form,
+		accounts, accountTracking, transfers, activityTransactions, form, balanceSummaries,
 		activityLoadFailed, filters: readTransactionFilters(url.searchParams), requestedPageIndex: pageIndex,
 		draftBoxId: boxes.find(box => !box.archived && box.id === Number(url.searchParams.get('expenseFromBox')))?.id ?? null,
 	};

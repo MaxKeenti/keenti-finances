@@ -21,6 +21,7 @@ import java.util.Locale;
  * the contract's spelling; reason and note codes are stable identifiers.
  */
 public record PlanningPreviewResponse(
+    String currency,
     Instant generatedAt,
     String timeZone,
     Window window,
@@ -49,6 +50,7 @@ public record PlanningPreviewResponse(
         var projected = result.projected();
         var timing = result.timing();
         return new PlanningPreviewResponse(
+            result.currency(),
             result.generatedAt(),
             result.timeZone(),
             result.window() == null ? null : new Window(result.window().from(), result.window().to()),

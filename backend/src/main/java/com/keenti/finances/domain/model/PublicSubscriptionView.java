@@ -8,6 +8,7 @@ public record PublicSubscriptionView(
     Long subscriptionId,
     String subscriptionName,
     BigDecimal cost,
+    String currency,
     String billingCycle,
     LocalDate nextBillingDate,
     List<SubscriptionMemberView> members

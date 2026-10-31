@@ -21,8 +21,15 @@ public record PlanningPreviewRequest(
     @NotNull @Min(30) @Max(30) Integer horizonDays,
     @NotNull Boolean essentialsReviewed,
     @NotNull @Size(max = 50) List<@NotNull @Valid Item> items,
-    @NotNull @Size(max = 50) List<@NotNull @Valid ExpectedReceipt> expectedReceipts
+    @NotNull @Size(max = 50) List<@NotNull @Valid ExpectedReceipt> expectedReceipts,
+    /** The Viewing Currency; defaults to the Primary Currency. */
+    @Size(max = 3) String currency
 ) {
+    public PlanningPreviewRequest(Integer horizonDays, Boolean essentialsReviewed, List<Item> items,
+                                  List<ExpectedReceipt> expectedReceipts) {
+        this(horizonDays, essentialsReviewed, items, expectedReceipts, null);
+    }
+
     public record Item(
         @NotNull BigDecimal amount,
         @NotNull LocalDate date,
@@ -44,6 +51,7 @@ public record PlanningPreviewRequest(
                 item.description(), item.boxId(), item.boxAmount(), item.notYetRecordedConfirmed()))
                 .toList(),
             expectedReceipts.stream().map(receipt -> new PlanningPreview.ReceiptSelection(
-                receipt.recordKind(), receipt.recordId(), receipt.date())).toList());
+                receipt.recordKind(), receipt.recordId(), receipt.date())).toList(),
+            currency);
     }
 }

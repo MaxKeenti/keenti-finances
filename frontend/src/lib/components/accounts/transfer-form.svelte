@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { dateInTimeZone } from '$lib/formatting';
+	import { dateInTimeZone, formatLocale } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Account, Transfer } from './types';
 
@@ -42,7 +42,9 @@
 
 	const initialTransfer = untrack(() => initial);
 	const fieldPrefix = initialTransfer ? `transfer-${initialTransfer.id}` : 'transfer-new';
-	const accountItems = $derived(accounts.map((account) => ({ value: String(account.id), label: account.name })));
+	const accountItems = $derived(
+		accounts.map((account) => ({ value: String(account.id), label: `${account.name} · ${account.currency}` })),
+	);
 	const initialPrefill = untrack(() => prefill);
 	let sourceAccountId = $state(initialTransfer ? String(initialTransfer.sourceAccountId) : '');
 	let destinationAccountId = $state(
@@ -56,6 +58,33 @@
 	// the money actually came from, and guessing one would be a claim about a
 	// movement that has not happened.
 	let amount = $state<string | number>(initialTransfer?.amount ?? initialPrefill?.amount ?? '');
+	let destinationAmount = $state<string | number>(
+		initialTransfer && initialTransfer.sourceCurrency !== initialTransfer.destinationCurrency
+			? initialTransfer.destinationAmount
+			: '',
+	);
+	const source = $derived(accounts.find((account) => String(account.id) === sourceAccountId));
+	const destination = $derived(accounts.find((account) => String(account.id) === destinationAccountId));
+	// Until an Account is chosen the amount has no currency; the destination's
+	// is the better guess for a card payment prefilled from its statement.
+	const sourceCurrency = $derived(source?.currency ?? destination?.currency ?? accounts[0]?.currency ?? 'MXN');
+	// An exchange: the rate is whatever the User's statement says arrived, never
+	// looked up (ADR-0024).
+	const isExchange = $derived(
+		source !== undefined && destination !== undefined && source.currency !== destination.currency,
+	);
+	const impliedRate = $derived.by(() => {
+		const sent = Number(amount);
+		const received = Number(destinationAmount);
+		if (!isExchange || !(sent > 0) || !(received > 0)) return null;
+		// Quoted as "1 <stronger unit> = n <weaker unit>" so it reads like a bank's rate.
+		const [unit, per, rate] =
+			received / sent < 1
+				? [destination!.currency, source!.currency, sent / received]
+				: [source!.currency, destination!.currency, received / sent];
+		const figure = new Intl.NumberFormat(formatLocale(locale), { maximumFractionDigits: 4 }).format(rate);
+		return m.transfer_implied_rate({ unit, rate: figure, per });
+	});
 	// `toISOString()` yields the UTC date. For a User at UTC-6 that is already
 	// tomorrow after 18:00 local, and the backend rejects future-dated
 	// Transfers — so every evening Transfer failed with a generic error.
@@ -72,6 +101,7 @@
 			sourceAccountId = '';
 			destinationAccountId = '';
 			amount = '';
+			destinationAmount = '';
 			notes = '';
 			onSuccess?.();
 		}
@@ -105,9 +135,25 @@
 		/>
 	</div>
 	<div class="grid gap-2">
-		<Label for={`${fieldPrefix}-amount`}>{m.common_amount_mxn()}</Label>
-		<CurrencyInput id={`${fieldPrefix}-amount`} name="amount" bind:value={amount} {locale} required />
+		<Label for={`${fieldPrefix}-amount`}>
+			{isExchange ? m.transfer_amount_sent({ currency: sourceCurrency }) : m.common_amount_in({ currency: sourceCurrency })}
+		</Label>
+		<CurrencyInput id={`${fieldPrefix}-amount`} name="amount" bind:value={amount} {locale} currency={sourceCurrency} required />
 	</div>
+	{#if isExchange && destination}
+		<div class="grid gap-2">
+			<Label for={`${fieldPrefix}-destination-amount`}>{m.transfer_amount_received({ currency: destination.currency })}</Label>
+			<CurrencyInput
+				id={`${fieldPrefix}-destination-amount`}
+				name="destinationAmount"
+				bind:value={destinationAmount}
+				{locale}
+				currency={destination.currency}
+				required
+			/>
+			<p class="text-xs text-muted-foreground">{impliedRate ?? m.transfer_exchange_hint()}</p>
+		</div>
+	{/if}
 	<div class="grid gap-2">
 		<Label for={`${fieldPrefix}-date`}>{m.common_date()}</Label>
 		<NativeDatePicker

@@ -116,13 +116,13 @@ class PlanningSnapshotReaderTest {
     @Test
     void baselineFollowsTheTrackingBranchAndCountsOnlyCreditInFavor() {
         baseline(true);
-        ProjectionSnapshot tracked = reader().readProjection(List.of());
+        ProjectionSnapshot tracked = reader().readProjection(List.of(), "MXN");
         assertEquals(new BigDecimal("10000.00"), tracked.baseline().netBalance());
         assertEquals(new BigDecimal("55.50"), tracked.baseline().creditInFavor());
         assertEquals(List.of(1L, 2L), tracked.baseline().boxes().stream().map(b -> b.boxId()).toList());
 
         baseline(false);
-        ProjectionSnapshot legacy = reader().readProjection(List.of());
+        ProjectionSnapshot legacy = reader().readProjection(List.of(), "MXN");
         assertEquals(new BigDecimal("400.00"), legacy.baseline().netBalance());
         assertNull(legacy.baseline().creditInFavor());
         assertEquals(List.of("begin", "discard", "begin", "discard"), scope);
@@ -132,7 +132,7 @@ class PlanningSnapshotReaderTest {
     void aFailedBaselineReadIsUnreadableAndStillDiscardsTheSnapshot() {
         baseline(true);
         throwing(BoxRepository.class, "getTotalBalance");
-        assertSame(ProjectionSnapshot.UNREADABLE, reader().readProjection(List.of()));
+        assertSame(ProjectionSnapshot.UNREADABLE, reader().readProjection(List.of(), "MXN"));
         assertEquals(List.of("begin", "discard"), scope);
     }
 
@@ -143,7 +143,7 @@ class PlanningSnapshotReaderTest {
             @Override public void begin() { throw BOOM; }
             @Override public void discard() { scope.add("discard"); }
         };
-        assertSame(ProjectionSnapshot.UNREADABLE, reader.readProjection(List.of()));
+        assertSame(ProjectionSnapshot.UNREADABLE, reader.readProjection(List.of(), "MXN"));
         assertEquals(List.of("discard"), scope);
     }
 
@@ -152,7 +152,7 @@ class PlanningSnapshotReaderTest {
         baseline(true);
         throwing(PaymentRecordRepository.class, "findReceiptCandidates");
         ProjectionSnapshot snapshot = reader().readProjection(
-            List.of(new ReceiptKey(ReceiptKind.PAYMENT_RECORD, 5)));
+            List.of(new ReceiptKey(ReceiptKind.PAYMENT_RECORD, 5)), "MXN");
         assertNotNull(snapshot.baseline());
         assertFalse(snapshot.receiptsReadable());
         assertTrue(snapshot.receipts().isEmpty());
@@ -179,7 +179,7 @@ class PlanningSnapshotReaderTest {
         var keys = new ArrayList<ReceiptKey>();
         for (long id : List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L)) keys.add(new ReceiptKey(ReceiptKind.DEBT, id));
         for (long id : List.of(20L, 21L, 22L, 23L, 24L, 25L)) keys.add(new ReceiptKey(ReceiptKind.PAYMENT_RECORD, id));
-        var resolved = reader().readProjection(keys).receipts();
+        var resolved = reader().readProjection(keys, "MXN").receipts();
 
         assertEquals(new BigDecimal("4000.00"), resolved.get(keys.get(0)).amount());
         assertEquals(Eligibility.INELIGIBLE, resolved.get(keys.get(1)).eligibility());   // EGRESS
@@ -227,7 +227,7 @@ class PlanningSnapshotReaderTest {
             statement(4, TODAY.plusDays(30), "400.00", "0.00"),       // after window
             statement(5, TODAY.plusDays(3), "90.00", "90.00"));       // settled
         card(statements, true, BigDecimal.ZERO);
-        Timing timing = reader().readTiming(WINDOW);
+        Timing timing = reader().readTiming(WINDOW, "MXN");
         assertEquals(TimingStatus.COMPLETE, timing.status());
         assertEquals(List.of(1L), timing.overdue().stream().map(s -> s.statementId()).toList());
         assertEquals(List.of(2L, 3L), timing.dated().stream().map(s -> s.statementId()).toList());
@@ -243,7 +243,7 @@ class PlanningSnapshotReaderTest {
         card(List.of(noDue, mismatched), true, new BigDecimal("640.00"));
         on(CreditStatementUseCase.class, "estimateOutstandingBalance", args -> new BigDecimal("1.00"));
 
-        Timing timing = reader().readTiming(WINDOW);
+        Timing timing = reader().readTiming(WINDOW, "MXN");
         assertEquals(TimingStatus.PARTIAL, timing.status());
         var codes = timing.reasons().stream().map(r -> r.code()).toList();
         assertTrue(codes.contains(TimingReasonCode.STATEMENT_DUE_DATE_MISSING));
@@ -258,7 +258,7 @@ class PlanningSnapshotReaderTest {
     @Test
     void aMissingScheduleIsPartialNotComplete() {
         card(List.of(), false, BigDecimal.ZERO);
-        Timing timing = reader().readTiming(WINDOW);
+        Timing timing = reader().readTiming(WINDOW, "MXN");
         assertEquals(TimingStatus.PARTIAL, timing.status());
         assertEquals(TimingReasonCode.STATEMENT_SCHEDULE_MISSING, timing.reasons().getFirst().code());
     }
@@ -267,7 +267,7 @@ class PlanningSnapshotReaderTest {
     void anyFailedStatementReadMakesTimingUnavailableRatherThanShort() {
         card(List.of(statement(1, TODAY, "10.00", "0.00")), true, BigDecimal.ZERO);
         throwing(CreditStatementUseCase.class, "estimateCurrentStatement");
-        Timing timing = reader().readTiming(WINDOW);
+        Timing timing = reader().readTiming(WINDOW, "MXN");
         assertEquals(TimingStatus.UNAVAILABLE, timing.status());
         assertEquals(TimingReasonCode.READ_FAILED, timing.reasons().getFirst().code());
         assertTrue(timing.dated().isEmpty());
@@ -277,9 +277,9 @@ class PlanningSnapshotReaderTest {
     @Test
     void trackingOffIsNotApplicableEvenWithoutAZoneAndReadsNoStatements() {
         on(FinancialAccountRepository.class, "isTrackingActive", false);
-        assertEquals(TimingStatus.NOT_APPLICABLE, reader().readTiming(null).status());
+        assertEquals(TimingStatus.NOT_APPLICABLE, reader().readTiming(null, "MXN").status());
         on(FinancialAccountRepository.class, "isTrackingActive", true);
-        Timing zoneless = reader().readTiming(null);
+        Timing zoneless = reader().readTiming(null, "MXN");
         assertEquals(TimingStatus.UNAVAILABLE, zoneless.status());
         assertEquals(TimingReasonCode.ZONE_UNAVAILABLE, zoneless.reasons().getFirst().code());
     }
@@ -295,7 +295,7 @@ class PlanningSnapshotReaderTest {
             debt(4, "INGRESS", "ACTIVE", "10.00")));
         on(DebtPaymentRepository.class, "sumByDebtIds", Map.of(4L, new BigDecimal("10.00")));
         on(ContactRepository.class, "findAll", List.of());
-        List<UndatedDebt> debts = reader().readUndatedDebts();
+        List<UndatedDebt> debts = reader().readUndatedDebts("MXN");
         assertEquals(List.of(1L, 2L), debts.stream().map(UndatedDebt::debtId).toList());
         assertEquals(List.of("INGRESS", "EGRESS"), debts.stream().map(UndatedDebt::direction).toList());
     }
@@ -303,7 +303,7 @@ class PlanningSnapshotReaderTest {
     @Test
     void aFailedDebtReadIsUnavailableNotEmpty() {
         throwing(DebtRepository.class, "findAll");
-        assertNull(reader().readUndatedDebts());
+        assertNull(reader().readUndatedDebts("MXN"));
         assertEquals(List.of("begin", "discard"), scope);
     }
 

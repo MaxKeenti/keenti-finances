@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.model.MonthSummary;
 import com.keenti.finances.domain.model.PagedResult;
 import com.keenti.finances.domain.model.TrashItem;
@@ -91,6 +92,9 @@ public class PanacheTransactionRepository implements TransactionRepository {
         entity.account = transaction.getAccountId() != null
                 ? FinancialAccountEntity.findById(transaction.getAccountId())
                 : null;
+        if (transaction.getCurrency() != null) {
+            entity.currency = transaction.getCurrency();
+        }
         return toDomain(entity);
     }
 
@@ -101,15 +105,17 @@ public class PanacheTransactionRepository implements TransactionRepository {
 
     @Override
     @SuppressWarnings("unchecked")
-    public List<MonthSummary> findMonthlySummary(int year) {
+    public List<MonthSummary> findMonthlySummary(int year, String currency) {
         List<Object[]> rows = em.createNativeQuery(
             "SELECT EXTRACT(MONTH FROM transaction_date) AS month, direction, SUM(amount) AS total " +
             "FROM transaction " +
             "WHERE EXTRACT(YEAR FROM transaction_date) = :year AND user_id = :userId AND deleted_at IS NULL " +
+            "AND currency = :currency " +
             "GROUP BY EXTRACT(MONTH FROM transaction_date), direction " +
             "ORDER BY EXTRACT(MONTH FROM transaction_date)")
             .setParameter("year", year)
             .setParameter("userId", userContext.getUserId())
+            .setParameter("currency", currency)
             .getResultList();
 
         Map<Integer, BigDecimal[]> byMonth = new HashMap<>();
@@ -134,11 +140,12 @@ public class PanacheTransactionRepository implements TransactionRepository {
     }
 
     @Override
-    public BigDecimal getNetBalance() {
+    public BigDecimal getNetBalance(String currency) {
         Object raw = em.createNativeQuery(
             "SELECT COALESCE(SUM(CASE WHEN direction='INGRESS' THEN amount ELSE -amount END), 0) " +
-            "FROM transaction WHERE user_id = :userId AND deleted_at IS NULL")
+            "FROM transaction WHERE user_id = :userId AND deleted_at IS NULL AND currency = :currency")
             .setParameter("userId", userContext.getUserId())
+            .setParameter("currency", currency)
             .getSingleResult();
         return raw instanceof BigDecimal ? (BigDecimal) raw : new BigDecimal(raw.toString());
     }
@@ -236,6 +243,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
         e.account = t.getAccountId() != null
                 ? FinancialAccountEntity.findById(t.getAccountId())
                 : null;
+        e.currency = t.getCurrency() != null ? t.getCurrency() : Currencies.DEFAULT;
         e.user = UserEntity.findById(userContext.getUserId());
         return e;
     }
@@ -265,6 +273,7 @@ public class PanacheTransactionRepository implements TransactionRepository {
             e.contact != null ? e.contact.id : null,
             e.subscription != null ? e.subscription.id : null,
             e.account != null ? e.account.id : null,
+            e.currency,
             java.util.List.of(), java.util.List.of()
         );
     }

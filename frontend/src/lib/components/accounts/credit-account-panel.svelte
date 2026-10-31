@@ -21,7 +21,7 @@
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, moneyFormatter } from '$lib/formatting';
 	import { statementStateLabel } from '$lib/statement-labels';
 	import { statementPaymentStatus, type DayResolution } from '$lib/obligation-status';
 	import { m } from '$lib/paraglide/messages.js';
@@ -33,7 +33,7 @@
 		locale,
 		today,
 	}: { account: Account; detail?: CreditDetail; locale: string; today: DayResolution } = $props();
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, account.currency));
 	const initialDetail = untrack(() => detail);
 	const settings = $derived(detail?.settings.status === 'ok' ? detail.settings.data : null);
 	// "Could not be read" and "never configured" are different claims: only the
@@ -112,9 +112,9 @@
 								<form method="POST" action="?/reconfirmCreditStatement" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
 									<input type="hidden" name="accountId" value={account.id} /><input type="hidden" name="statementId" value={statement.id} /><input type="hidden" name="periodStart" value={statement.periodStart} /><input type="hidden" name="periodEnd" value={statement.periodEnd} />
 									<div class="grid gap-2"><Label>{m.account_due_date()}</Label><NativeDatePicker name="dueDate" value={reconfirmDueDates[statement.id] ?? statement.dueDate ?? ''} onValueChange={(value) => (reconfirmDueDates = { ...reconfirmDueDates, [statement.id]: value })} /></div>
-									<div class="grid gap-2"><Label>{m.account_official_balance()}</Label><CurrencyInput name="officialBalance" value={statement.officialBalance} {locale} /></div>
-									<div class="grid gap-2"><Label>{m.account_minimum_payment()}</Label><CurrencyInput name="officialMinimumPayment" value={statement.officialMinimumPayment} {locale} /></div>
-									<div class="grid gap-2"><Label>{m.account_avoid_interest()}</Label><CurrencyInput name="officialAvoidInterest" value={statement.officialAvoidInterest} {locale} /></div>
+									<div class="grid gap-2"><Label>{m.account_official_balance()}</Label><CurrencyInput name="officialBalance" value={statement.officialBalance} {locale} currency={account.currency} /></div>
+									<div class="grid gap-2"><Label>{m.account_minimum_payment()}</Label><CurrencyInput name="officialMinimumPayment" value={statement.officialMinimumPayment} {locale} currency={account.currency} /></div>
+									<div class="grid gap-2"><Label>{m.account_avoid_interest()}</Label><CurrencyInput name="officialAvoidInterest" value={statement.officialAvoidInterest} {locale} currency={account.currency} /></div>
 									<div class="grid gap-2 md:col-span-2"><Label>{m.common_notes()} {m.common_optional()}</Label><Input name="officialNote" value={statement.officialNote ?? ''} /></div>
 									<div class="flex justify-end md:col-span-2"><Button type="submit" variant="outline">{m.credit_reconfirm_submit()}</Button></div>
 								</form>
@@ -140,7 +140,7 @@
 					{:else}
 						<form method="POST" action="?/saveCreditSettings" use:enhance class="grid gap-4 rounded-lg bg-muted/30 p-4 md:grid-cols-2">
 							<input type="hidden" name="accountId" value={account.id} />
-							<div class="grid gap-2"><Label for={`credit-limit-${account.id}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`credit-limit-${account.id}`} name="creditLimit" bind:value={creditLimit} {locale} required /></div>
+							<div class="grid gap-2"><Label for={`credit-limit-${account.id}`}>{m.account_credit_limit()}</Label><CurrencyInput id={`credit-limit-${account.id}`} name="creditLimit" bind:value={creditLimit} {locale} currency={account.currency} required /></div>
 							<div class="grid gap-2"><Label for={`closing-day-${account.id}`}>{m.account_statement_closing_day()}</Label><Input id={`closing-day-${account.id}`} name="statementClosingDay" type="number" min="1" max="31" required value={settings?.statementClosingDay ?? ''} /></div>
 							<div class="grid gap-2"><Label for={`payment-day-${account.id}`}>{m.account_payment_due_day()}</Label><Input id={`payment-day-${account.id}`} name="paymentDueDay" type="number" min="1" max="31" required value={settings?.paymentDueDay ?? ''} /></div>
 							<div class="flex items-end justify-end"><Button type="submit" variant="outline">{m.credit_save_settings()}</Button></div>
@@ -165,9 +165,9 @@
 							<div class="rounded-lg bg-muted/30 p-4">
 								<h4 class="mb-3 text-sm font-medium">{m.account_statement_figures()}</h4>
 								<div class="grid gap-4 md:grid-cols-3">
-									<div class="grid gap-2"><Label for={`official-balance-${account.id}`}>{m.account_official_balance()}</Label><CurrencyInput id={`official-balance-${account.id}`} name="officialBalance" bind:value={officialBalance} {locale} required /></div>
-									<div class="grid gap-2"><Label for={`minimum-payment-${account.id}`}>{m.account_minimum_payment()}</Label><CurrencyInput id={`minimum-payment-${account.id}`} name="officialMinimumPayment" bind:value={officialMinimumPayment} {locale} required /></div>
-									<div class="grid gap-2"><Label for={`avoid-interest-${account.id}`}>{m.account_avoid_interest()}</Label><CurrencyInput id={`avoid-interest-${account.id}`} name="officialAvoidInterest" bind:value={officialAvoidInterest} {locale} required /></div>
+									<div class="grid gap-2"><Label for={`official-balance-${account.id}`}>{m.account_official_balance()}</Label><CurrencyInput id={`official-balance-${account.id}`} name="officialBalance" bind:value={officialBalance} {locale} currency={account.currency} required /></div>
+									<div class="grid gap-2"><Label for={`minimum-payment-${account.id}`}>{m.account_minimum_payment()}</Label><CurrencyInput id={`minimum-payment-${account.id}`} name="officialMinimumPayment" bind:value={officialMinimumPayment} {locale} currency={account.currency} required /></div>
+									<div class="grid gap-2"><Label for={`avoid-interest-${account.id}`}>{m.account_avoid_interest()}</Label><CurrencyInput id={`avoid-interest-${account.id}`} name="officialAvoidInterest" bind:value={officialAvoidInterest} {locale} currency={account.currency} required /></div>
 									<div class="grid gap-2 md:col-span-3"><Label for={`official-note-${account.id}`}>{m.common_notes()} {m.common_optional()}</Label><Input id={`official-note-${account.id}`} name="officialNote" /></div>
 								</div>
 							</div>

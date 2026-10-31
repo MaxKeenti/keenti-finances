@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.out.persistence;
 
+import com.keenti.finances.domain.model.Currencies;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,6 +36,9 @@ public class DebtEntity extends PanacheEntityBase {
     /** INGRESS when the Contact owes the User, EGRESS when the User owes them. */
     @Column(nullable = false, length = 10)
     public String direction;
+
+    @Column(nullable = false, length = 3)
+    public String currency = Currencies.DEFAULT;
 
     @Column(nullable = false, length = 500)
     public String description;

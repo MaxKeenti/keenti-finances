@@ -19,6 +19,8 @@ public interface FinancialAccountRepository {
     Optional<LocalDate> getTrackingActivationDate();
     void lockTrackingScope();
     void activateTracking(LocalDate activationDate);
-    BigDecimal getTotalBalance();
+    /** Net Balance in one currency: signed active Account balances (ADR-0022, ADR-0024). */
+    BigDecimal getTotalBalance(String currency);
+    List<String> findActiveCurrencies();
     BigDecimal getBalanceAt(Long accountId, LocalDate date);
 }

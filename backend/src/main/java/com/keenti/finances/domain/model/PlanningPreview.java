@@ -21,8 +21,14 @@ public final class PlanningPreview {
 
     /* Request, already structurally valid. Client-side totals do not exist here. */
 
+    /** currency: the Viewing Currency, or null for the Primary Currency (ADR-0024). */
     public record Request(boolean essentialsReviewed, List<CostInput> items,
-                          List<ReceiptSelection> expectedReceipts) {}
+                          List<ReceiptSelection> expectedReceipts, String currency) {
+        public Request(boolean essentialsReviewed, List<CostInput> items,
+                       List<ReceiptSelection> expectedReceipts) {
+            this(essentialsReviewed, items, expectedReceipts, null);
+        }
+    }
     public record CostInput(BigDecimal amount, LocalDate date, String description, Long boxId,
                             BigDecimal boxAmount, boolean notYetRecordedConfirmed) {}
     /** Identity and scenario date only; the amount is always reloaded by the server. */
@@ -108,7 +114,8 @@ public final class PlanningPreview {
      * baseline and projected are null when unreadable/unavailable, never zero.
      * undatedDebts is null when its read failed; an empty list means none recorded.
      */
-    public record Result(Instant generatedAt, String timeZone, Window window, Baseline baselineSource,
+    public record Result(String currency, Instant generatedAt, String timeZone, Window window,
+                         Baseline baselineSource,
                          Totals baseline, Projection projected, Status status,
                          List<MissingInput> missingInputs, List<IncludedReceipt> receipts,
                          Timing timing, List<UndatedDebt> undatedDebts, List<Note> notes) {}

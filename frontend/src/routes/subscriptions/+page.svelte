@@ -18,7 +18,9 @@
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
 	import * as Select from '$lib/components/ui/select';
-	import { dateInTimeZone, formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { dateInTimeZone, formatDateOnly, moneyFormatter } from '$lib/formatting';
+	import { currencyItems } from '$lib/currency-labels';
+	import { groupByCurrency } from '$lib/currency-totals';
 	import { SectionUnavailable } from '$lib/components/section-status';
 	import { sectionValue } from '$lib/types/section';
 	import { priceEquivalents } from '$lib/subscription-summary';
@@ -31,6 +33,7 @@
 		id: z.coerce.number().optional(),
 		name: z.string().min(1, m.validation_name_required()),
 		cost: z.coerce.number().positive(m.validation_cost_positive()),
+		currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 		billingCycle: z.enum(['MONTHLY', 'YEARLY']),
 		type: z.enum(['PERSONAL', 'SHARED']),
 		categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
@@ -51,6 +54,7 @@
 		id: number;
 		name: string;
 		cost: number;
+		currency: string;
 		billingCycle: string;
 		type: string;
 		categoryId: number | null;
@@ -123,6 +127,7 @@
 			data: {
 				name: '',
 				cost: 0,
+				currency: data.preferences.primaryCurrency,
 				billingCycle: 'MONTHLY',
 				type: 'PERSONAL',
 				categoryId: '',
@@ -143,6 +148,7 @@
 			id: sub.id,
 			name: sub.name,
 			cost: sub.cost,
+			currency: sub.currency,
 			billingCycle: sub.billingCycle as 'MONTHLY' | 'YEARLY',
 			type: sub.type as 'PERSONAL' | 'SHARED',
 			categoryId: sub.categoryId ?? '',
@@ -202,7 +208,8 @@
 		}
 	});
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const money = (amount: number, currency: string) =>
+		moneyFormatter(data.preferences.locale, currency).format(amount);
 
 	// A failed member list cannot tell which Contacts are already Members, so
 	// offering "every Contact" would invite a duplicate the backend rejects.
@@ -227,7 +234,15 @@
 	// and it is a *price* equivalent: yearly plans are normalised to a twelfth
 	// so the two figures are comparable, which is not the cash due in any
 	// single month. A failed list yields `null` rather than a confident 0.00.
-	const totals = $derived(priceEquivalents(subscriptions));
+	// One pair of figures per currency: pesos and euros are never summed (ADR-0024).
+	const totals = $derived(
+		subscriptions === null
+			? null
+			: groupByCurrency(subscriptions, data.preferences.primaryCurrency).map((group) => ({
+					currency: group.currency,
+					...priceEquivalents(group.items)!,
+				})),
+	);
 </script>
 
 <svelte:head><title>{m.subscriptions_title()} · Keenti</title></svelte:head>
@@ -250,23 +265,25 @@
 		<Card.Root>
 			<Card.Content class="space-y-3">
 				<p class="text-sm font-medium">{m.subscriptions_price_equivalents_title()}</p>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div>
-						<p class="text-xs text-muted-foreground">{m.subscriptions_monthly_total()}</p>
-						<p class="text-2xl font-semibold tabular-nums">{fmt.format(totals.monthly)}</p>
-						<p class="mt-1 text-xs text-muted-foreground">{m.subscriptions_monthly_total_description()}</p>
+				{#each totals as total (total.currency)}
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<p class="text-xs text-muted-foreground">{m.subscriptions_monthly_total()}</p>
+							<p class="text-2xl font-semibold tabular-nums">{money(total.monthly, total.currency)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{m.subscriptions_monthly_total_description()}</p>
+						</div>
+						<div class="sm:border-l sm:pl-4">
+							<p class="text-xs text-muted-foreground">{m.subscriptions_yearly_total()}</p>
+							<p class="text-2xl font-semibold tabular-nums">{money(total.yearly, total.currency)}</p>
+						</div>
 					</div>
-					<div class="sm:border-l sm:pl-4">
-						<p class="text-xs text-muted-foreground">{m.subscriptions_yearly_total()}</p>
-						<p class="text-2xl font-semibold tabular-nums">{fmt.format(totals.yearly)}</p>
-					</div>
-				</div>
+					{#if total.excluded > 0}
+						<p class="text-xs text-muted-foreground">{m.subscriptions_totals_excluded({ count: total.excluded })}</p>
+					{/if}
+				{/each}
 				<!-- Gross price equivalents, not cash due and not net of the
 				     contributions the User collects back from Members. -->
 				<p class="text-xs text-muted-foreground">{m.subscriptions_price_equivalents_note()}</p>
-				{#if totals.excluded > 0}
-					<p class="text-xs text-muted-foreground">{m.subscriptions_totals_excluded({ count: totals.excluded })}</p>
-				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}
@@ -293,7 +310,7 @@
 						<div class="flex items-start justify-between gap-2">
 							<div class="min-w-0">
 								<p class="font-semibold text-base truncate">{sub.name}</p>
-								<p class="text-xl font-bold text-foreground mt-0.5">{fmt.format(sub.cost)}</p>
+								<p class="text-xl font-bold text-foreground mt-0.5">{money(sub.cost, sub.currency)}</p>
 							</div>
 							<div class="flex flex-col items-end gap-1 shrink-0">
 								<Badge variant={typeBadgeVariant[sub.type]}>
@@ -381,10 +398,28 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
+			<Form.Field form={sf} name="currency">
+				<Form.Control>
+					{#snippet children({ props })}
+						{@const { name: fieldName, ...triggerProps } = props}
+						<Form.Label>{m.currency_label()}</Form.Label>
+						<input type="hidden" name={fieldName} value={$form.currency} />
+						<NativeSelect
+							name="subscription-currency-picker"
+							value={$form.currency}
+							onValueChange={(v) => { $form.currency = v; }}
+							items={currencyItems(data.preferences.supportedCurrencies)}
+							{...triggerProps}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<Form.Field form={sf} name="cost">
 				<Form.Control>
 					{#snippet children({ props })}
-						<Form.Label>{m.subscriptions_cost_mxn()}</Form.Label>
+						<Form.Label>{m.subscriptions_cost_in({ currency: $form.currency })}</Form.Label>
 						<Input {...props} type="number" step="0.01" min="0.01" bind:value={$form.cost} />
 					{/snippet}
 				</Form.Control>

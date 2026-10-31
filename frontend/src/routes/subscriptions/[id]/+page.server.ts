@@ -87,7 +87,13 @@ export const load: PageServerLoad = async ({ params, fetch, cookies }) => {
 		const linkedIds = new Set(linkedTransactions.data.map((t) => t.id));
 		unlinkedTransactions = sectionOk(
 			allTransactions.data.filter(
-				(t) => t.direction === 'INGRESS' && !t.subscriptionId && !linkedIds.has(t.id),
+				// Only income in the Subscription's currency can settle its
+				// Payment Records (ADR-0024).
+				(t) =>
+					t.direction === 'INGRESS' &&
+					!t.subscriptionId &&
+					!linkedIds.has(t.id) &&
+					t.currency === subscription.currency,
 			),
 		);
 	}

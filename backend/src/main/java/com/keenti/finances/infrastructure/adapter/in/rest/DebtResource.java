@@ -68,8 +68,8 @@ public class DebtResource {
             ? request.createdAt().atStartOfDay()
             : null;
         Debt created = debtUseCase.create(new Debt(
-            null, request.contactId(), request.directionOrDefault(), request.description(),
-            request.totalAmount(), "ACTIVE", createdAtTs));
+            null, request.contactId(), request.directionOrDefault(), request.currency(),
+            request.description(), request.totalAmount(), "ACTIVE", createdAtTs));
         return Response.status(Response.Status.CREATED).entity(toResponse(created)).build();
     }
 
@@ -90,8 +90,8 @@ public class DebtResource {
             ? request.createdAt().atStartOfDay()
             : debt.getCreatedAt();
         Debt updated = debtUseCase.update(id, new Debt(
-            id, request.contactId(), request.directionOrDefault(), request.description(),
-            request.totalAmount(), debt.getStatus(), updatedCreatedAt));
+            id, request.contactId(), request.directionOrDefault(), request.currency(),
+            request.description(), request.totalAmount(), debt.getStatus(), updatedCreatedAt));
         return Response.ok(toResponse(updated)).build();
     }
 
@@ -131,7 +131,7 @@ public class DebtResource {
                         .build()));
 
         BulkPaymentResult result = debtUseCase.bulkPayment(
-            request.contactId(), request.directionOrDefault(), request.totalAmount(),
+            request.contactId(), request.directionOrDefault(), request.currency(), request.totalAmount(),
             request.paymentDate(), request.categoryId(), request.accountId(), request.notes());
 
         String contactName = contactUseCase.getById(request.contactId())
@@ -141,6 +141,7 @@ public class DebtResource {
             result.contactId(),
             contactName,
             result.direction(),
+            result.currency(),
             result.totalAmount(),
             result.totalApplied(),
             result.totalUnused(),
@@ -168,7 +169,7 @@ public class DebtResource {
                 : BigDecimal.ZERO;
         BigDecimal remaining = debtService.getRemainingBalance(d.getId());
         return new DebtResponse(
-            d.getId(), d.getContactId(), contactName, d.getDirection(), d.getDescription(),
+            d.getId(), d.getContactId(), contactName, d.getDirection(), d.getCurrency(), d.getDescription(),
             d.getTotalAmount(), totalPaid, remaining, d.getStatus(), d.getCreatedAt());
     }
 

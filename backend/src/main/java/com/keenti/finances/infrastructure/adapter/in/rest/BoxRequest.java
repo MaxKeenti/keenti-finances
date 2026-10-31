@@ -10,5 +10,11 @@ public record BoxRequest(
     @NotBlank @Size(max = 100) String name,
     @NotNull @Min(0) @Max(359) Integer hue,
     @Size(max = 16) String icon,
-    @Size(max = 500) String description
-) {}
+    @Size(max = 500) String description,
+    /** Fixed at creation; ignored on update. Defaults to the Primary Currency. */
+    @Size(max = 3) String currency
+) {
+    public BoxRequest(String name, Integer hue, String icon, String description) {
+        this(name, hue, icon, description, null);
+    }
+}

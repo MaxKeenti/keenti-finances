@@ -28,7 +28,9 @@ public interface BoxRepository {
     boolean replacementRemainsNonNegative(BoxMovement movement);
     List<BoxHistoryEntry> findHistory(Long boxId);
     BigDecimal getBalance(Long boxId);
-    BigDecimal getTotalBalance();
+    /** In Boxes in one currency: the sum of active Box balances in it (ADR-0024). */
+    BigDecimal getTotalBalance(String currency);
+    List<String> findActiveCurrencies();
     boolean canDebit(Long boxId, BigDecimal amount, LocalDate effectiveDate,
                      LocalDateTime createdAt);
 }

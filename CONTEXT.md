@@ -1,13 +1,13 @@
 # Keenti Finances
 
-A multi-user personal finance tracker. Users record money flowing in and out, group it by Category and Contact, manage shared Subscriptions with cost-splitting, and track Debts with partial payments. All amounts are in MXN.
+A multi-user personal finance tracker. Users record money flowing in and out, group it by Category and Contact, manage shared Subscriptions with cost-splitting, and track Debts with partial payments. Amounts are held in one or more currencies (MXN by default); see Currency.
 
 ## Language
 
 ### Money movement
 
 **Transaction**:
-A single movement of money, in or out. Once a User activates Financial Account tracking, every new Transaction belongs to one Financial Account. It carries a Direction, an MXN amount, a date, a Category, and optionally a Contact and a Subscription link.
+A single movement of money, in or out. Once a User activates Financial Account tracking, every new Transaction belongs to one Financial Account. It carries a Direction, an amount in its Financial Account's Currency, a date, a Category, and optionally a Contact and a Subscription link.
 _Avoid_: Entry, record, line item.
 
 **Direction**:
@@ -23,13 +23,13 @@ The counterparty on the other side of a Transaction — a person or entity from 
 _Avoid_: Party, counterparty (in user-facing copy), payee, payer.
 
 **Net Balance**:
-The headline dashboard figure. Before Financial Account tracking is activated, it is the all-time sum of INGRESS Transactions minus EGRESS Transactions. Afterwards, it is the sum of signed Financial Account balances. Internal Box allocations and Transfers never change it.
+The headline dashboard figure, always stated in one Currency. Before Financial Account tracking is activated, it is the all-time sum of INGRESS Transactions minus EGRESS Transactions. Afterwards, it is the sum of signed Financial Account balances in that Currency. Internal Box allocations and Transfers never change it.
 _Avoid_: Balance (ambiguous — also used colloquially for "money in account"), cash flow (related but distinct; cash flow is the time series, net balance is the scalar).
 
 ### Financial Accounts
 
 **Financial Account**:
-A User-defined record of where money is held or owed. It has an Account Kind, a signed opening balance, dated activity, and a current signed balance. Asset Financial Accounts show money available; Credit Financial Accounts show money owed when their balance is negative and an available credit when they have a limit. A Financial Account may represent a bank account, cash, or a single credit line shared by several physical or virtual cards.
+A User-defined record of where money is held or owed. It has a Currency fixed at creation, an Account Kind, a signed opening balance, dated activity, and a current signed balance. Asset Financial Accounts show money available; Credit Financial Accounts show money owed when their balance is negative and an available credit when they have a limit. A Financial Account may represent a bank account, cash, or a single credit line shared by several physical or virtual cards.
 _Avoid_: Box (a Box is an internal allocation), card (a Financial Account can have multiple cards), wallet.
 
 **Account Kind**:
@@ -41,7 +41,7 @@ The signed balance used to establish a Financial Account at its tracking start d
 _Avoid_: Adjustment, income, expense.
 
 **Transfer**:
-An atomic dated movement of an MXN amount from one Financial Account to another Financial Account of the same User. It subtracts the amount from the source and adds it to the destination. It never changes Net Balance, Box balances, income, expense, Category, or Contact.
+An atomic dated movement from one Financial Account to another Financial Account of the same User. It subtracts its amount from the source and adds its destination amount to the destination; the two are equal unless the Accounts use different Currencies, in which case the Transfer is a currency exchange and its rate is implied by the two amounts. Within one Currency it never changes Net Balance, Box balances, income, expense, Category, or Contact.
 _Avoid_: Transaction, transfer Transaction, payment Transaction.
 
 **Credit Statement**:
@@ -52,18 +52,36 @@ _Avoid_: Transaction, invoice.
 A no-interest installment plan attached to an EGRESS Transaction on a Credit Financial Account. The whole purchase changes Net Balance and the Credit Financial Account immediately; the plan schedules one installment into each relevant Credit Statement.
 _Avoid_: Interest-bearing installment, recurring Transaction.
 
+### Currency
+
+**Currency**:
+The ISO 4217 code an amount is denominated in. Keenti supports `MXN`, `EUR`, `USD`, and `GBP`. A Financial Account, Box, Debt, and Subscription each have one; a Transaction takes its Financial Account's. Amounts in different Currencies are never added together or converted inside the ledger (ADR-0024).
+_Avoid_: Money type, denomination.
+
+**Primary Currency**:
+The User's preferred Currency. It pre-selects the Currency of new Financial Accounts, Boxes, Debts, and Subscriptions, is the default Viewing Currency, and is the Currency a Converted Total is expressed in. Changing it changes no stored amount.
+_Avoid_: Base currency, home currency, default currency (in user-facing copy).
+
+**Viewing Currency**:
+The one Currency a summary screen (dashboard, Boxes overview, planning preview) reports its totals in. Defaults to the Primary Currency; the User can switch to any other Currency they hold.
+_Avoid_: Filter, lens (in user-facing copy).
+
+**Converted Total**:
+An estimate of all Net Balances expressed in the Primary Currency at the latest daily reference rate. Display-only: it never enters a ledger, Box, plan, or validation, and it is unavailable rather than zero when rates cannot be read.
+_Avoid_: Total balance, Net Balance (a Net Balance is always one Currency).
+
 ### Boxes
 
 **Box**:
-A User-defined envelope that reserves part of the Net Balance for a purpose without moving money outside the app. A Box has a non-negative balance, personalized presentation, dated history, and at most one active Box Plan. A Box must have a zero balance and no active Box Plan before it can be archived; the User explicitly completes, abandons, or ends the plan first.
+A User-defined envelope that reserves part of the Net Balance in its Currency (fixed at creation) for a purpose without moving money outside the app. A Box has a non-negative balance, personalized presentation, dated history, and at most one active Box Plan. A Box must have a zero balance and no active Box Plan before it can be archived; the User explicitly completes, abandons, or ends the plan first.
 _Avoid_: Financial Account (a Box does not represent a bank account), Category (describes a Transaction's purpose), wallet, pot, section.
 
 **In Boxes**:
-The sum of the current balances of all active Boxes. Displayed alongside Net Balance and Available to Spend; clicking it opens the Boxes overview.
+The sum of the current balances of all active Boxes in one Currency. Displayed alongside Net Balance and Available to Spend; clicking it opens the Boxes overview.
 _Avoid_: Savings (a Spending Budget also holds money), locked balance (the User may withdraw it).
 
 **Available to Spend**:
-The unallocated part of the Net Balance: `Net Balance - In Boxes`. It may be negative after real spending; that is an unreconciled state, not a reason to reject the Transaction. Depositing more money into Boxes is blocked until the shortfall is reconciled.
+The unallocated part of the Net Balance in one Currency: `Net Balance - In Boxes`. It may be negative after real spending; that is an unreconciled state, not a reason to reject the Transaction. Depositing more money into Boxes is blocked until the shortfall is reconciled.
 _Avoid_: Net Balance (includes money in Boxes), main balance, free balance.
 
 **Box Movement**:
@@ -97,7 +115,7 @@ _Avoid_: Automation, scheduled transfer, recurring Transaction.
 ### Subscriptions
 
 **Subscription**:
-A recurring payment obligation tracked by the app. Has a Subscription Type, a Subscription Owner, an Owner Participation setting, optional Subscription Members, and a billing schedule that generates Payment Records.
+A recurring payment obligation tracked by the app. Has a Currency (frozen once a Payment Record exists), a Subscription Type, a Subscription Owner, an Owner Participation setting, optional Subscription Members, and a billing schedule that generates Payment Records.
 _Avoid_: Plan, recurrence, standing order.
 
 **Subscription Type**:
@@ -127,7 +145,7 @@ _Avoid_: Share link, member portal.
 ### Debts
 
 **Debt**:
-A standalone amount of money owed between the User and a Contact, tracked outside Subscriptions. It carries a Direction, a status (`ACTIVE` / `PAID`), and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled. The Direction is frozen once any Debt Payment exists (ADR-0023).
+A standalone amount of money owed between the User and a Contact, tracked outside Subscriptions. It carries a Direction, a Currency, a status (`ACTIVE` / `PAID`), and supports partial payments via Debt Payments. Auto-transitions to `PAID` when fully settled. The Direction and Currency are frozen once any Debt Payment exists (ADR-0023, ADR-0024).
 _Avoid_: Loan, IOU, invoice, receivable, payable.
 
 **Debt Direction**:
@@ -135,7 +153,7 @@ A Debt's orientation, reusing the Transaction Direction values: `INGRESS` means 
 _Avoid_: Receivable/payable, debt type, sign, positive/negative debt.
 
 **Debt Counterpart**:
-One Contact on one side of the Debts page: every outstanding Debt of a single Direction with a single Contact, added up. A Contact who both owes the User and is owed by them is two Debt Counterparts, never one netted balance. A Debt with no Contact is its own Debt Counterpart.
+One Contact on one side of the Debts page: every outstanding Debt of a single Direction and Currency with a single Contact, added up. A Contact who both owes the User and is owed by them is two Debt Counterparts, never one netted balance. A Debt with no Contact is its own Debt Counterpart.
 _Avoid_: Debtor/creditor in code (both are Debt Counterparts; the two words are fine in user-facing copy for the INGRESS and EGRESS sides respectively), counterparty.
 
 **Debt Payment**:
@@ -145,7 +163,7 @@ _Avoid_: Repayment, instalment.
 ### Identity
 
 **User**:
-The owner of a slice of data in the app. Created just-in-time on the first request from an authenticated WorkOS identity. Holds personalization preferences (primary hue, heading font, body font). Each User's data is fully isolated — Categories, Contacts, Transactions, Financial Accounts, Subscriptions, and Debts are scoped by User.
+The owner of a slice of data in the app. Created just-in-time on the first request from an authenticated WorkOS identity. Holds personalization preferences (primary hue, heading font, body font, Primary Currency). Each User's data is fully isolated — Categories, Contacts, Transactions, Financial Accounts, Subscriptions, and Debts are scoped by User.
 _Avoid_: tenant, customer.
 
 ## Flagged ambiguities

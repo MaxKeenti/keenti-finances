@@ -9,6 +9,8 @@ import { dateInTimeZone } from '$lib/formatting';
 import { boxAllocationSchema } from '$lib/schemas/transaction';
 import { allocationTotal } from '$lib/types/transactions';
 import type { BoxDto } from '$lib/types/boxes';
+import { parseBalanceSummary } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 
 const paymentSchema = z
 	.object({
@@ -50,6 +52,7 @@ type Debt = {
 	contactId: number | null;
 	contactName: string | null;
 	direction: string;
+	currency: string;
 	description: string;
 	totalAmount: number;
 	totalPaid: number;
@@ -69,7 +72,7 @@ type DebtPayment = {
 };
 
 type Category = { id: number; name: string; type: string };
-type FinancialAccount = { id: number; name: string; kind: string; balance: number };
+type FinancialAccount = { id: number; name: string; kind: string; currency: string; balance: number };
 
 export const load: PageServerLoad = async ({ params, fetch, cookies, parent }) => {
 	const id = params.id;
@@ -134,6 +137,18 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, parent }) =
 	// `categoryId: 0` is a placeholder for "not chosen yet", not a mistake the
 	// User made. Suppress validation on load so an untouched form does not open
 	// showing a required-Category error; submitting still validates.
+	// A Debt Payment moves money in the Debt's currency: only Accounts and Boxes
+	// holding it are offered, and Box Funding is limited by Available to Spend
+	// in it (ADR-0024).
+	const currency = debt.currency ?? 'MXN';
+	accounts = accounts.filter((account) => (account.currency ?? 'MXN') === currency);
+	boxes = boxes.filter((box) => (box.currency ?? 'MXN') === currency);
+	const balanceSummary = await loadSection(
+		fetch,
+		`${BACKEND}/api/boxes/summary?currency=${encodeURIComponent(currency)}`,
+		{ parse: parseBalanceSummary, headers: authHeaders, label: `debts/${id}/summary` },
+	);
+
 	const form = await superValidate(
 		{
 			amount: debt.remaining,
@@ -147,7 +162,7 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, parent }) =
 		{ errors: false },
 	);
 
-	return { debt, payments, categories, accounts, boxes, accountTracking, form };
+	return { debt, payments, categories, accounts, boxes, accountTracking, form, balanceSummary };
 };
 
 export const actions: Actions = {

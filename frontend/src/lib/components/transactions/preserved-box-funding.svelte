@@ -10,7 +10,7 @@
 	 * is rejected instead of only disabling the save.
 	 */
 	import { SectionUnavailable } from '$lib/components/section-status';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import {
 		allocationTotal,
@@ -23,14 +23,17 @@
 		boxes,
 		transactionAmount,
 		locale,
+		currency,
 	}: {
 		allocations: BoxAllocationInput[];
 		boxes: Array<{ id: number; name: string }>;
 		transactionAmount: number;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 	} = $props();
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const total = $derived(allocationTotal(allocations));
 	const belowSaved = $derived(amountToCents(total) > amountToCents(transactionAmount));
 

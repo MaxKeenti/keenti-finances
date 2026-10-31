@@ -31,7 +31,8 @@
 	import { SectionUnavailable } from '$lib/components/section-status';
 	import PlanningResult from '$lib/components/planning/planning-result.svelte';
 	import { CircleAlert, Plus, RefreshCw, Trash2 } from '@lucide/svelte';
-	import { formatDateOnly, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, moneyFormatter } from '$lib/formatting';
+	import { CurrencySwitcher } from '$lib/components/currency-switcher';
 	import { sectionValue } from '$lib/types/section';
 	import {
 		MAX_COST_DESCRIPTION,
@@ -75,6 +76,19 @@
 	const session = new PlanningPreviewSession();
 	let preview = $state<PreviewState>(session.state);
 	let draft = $state<PlanningDraft>(emptyDraft());
+	// A draft's amounts, Boxes and receipts are all in one currency. Switching
+	// the Viewing Currency starts a fresh draft instead of reinterpreting
+	// pesos as euros (ADR-0024).
+	let draftCurrency = untrack(() => data.currency);
+	$effect(() => {
+		const currency = data.currency;
+		if (currency === draftCurrency) return;
+		draftCurrency = currency;
+		untrack(() => {
+			draft = emptyDraft();
+			session.clear('edited');
+		});
+	});
 	/** Local problems are shown once the User has tried to calculate. */
 	let attempted = $state(false);
 	let refreshing = $state(false);
@@ -84,7 +98,7 @@
 	let resultHeading = $state<HTMLElement | null>(null);
 
 	const locale = $derived(data.preferences.locale);
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, data.currency));
 	const money = (value: number) => fmt.format(value);
 	const date = (value: string) => formatDateOnly(value, locale);
 
@@ -263,7 +277,7 @@
 			focusFirstLocalIssue();
 			return;
 		}
-		const applied = await session.calculate(draft, fetch);
+		const applied = await session.calculate(draft, fetch, data.currency);
 		if (applied && session.state.kind === 'result') {
 			await tick();
 			resultHeading?.focus();
@@ -391,6 +405,7 @@
 	<header class="space-y-2">
 		<h1 class="font-heading text-2xl font-semibold">{m.planning_title()}</h1>
 		<p class="text-sm text-muted-foreground">{m.planning_subtitle()}</p>
+		<CurrencySwitcher currencies={data.currencies} current={data.currency} />
 		{#if planWindow !== null}
 			<p class="text-sm">
 				{m.planning_window({
@@ -468,7 +483,7 @@
 
 									<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 										<div class="space-y-1.5">
-											<Label for="cost-{cost.key}-amount">{m.planning_cost_amount()}</Label>
+											<Label for="cost-{cost.key}-amount">{m.planning_cost_amount({ currency: data.currency })}</Label>
 											<Input
 												id="cost-{cost.key}-amount"
 												type="text"
@@ -537,7 +552,7 @@
 										</div>
 										{#if cost.boxId !== ''}
 											<div class="space-y-1.5">
-												<Label for="cost-{cost.key}-box-amount">{m.planning_cost_box_amount()}</Label>
+												<Label for="cost-{cost.key}-box-amount">{m.planning_cost_box_amount({ currency: data.currency })}</Label>
 												<Input
 													id="cost-{cost.key}-box-amount"
 													type="text"

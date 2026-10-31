@@ -9,7 +9,7 @@
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import * as ScrollArea from '$lib/components/ui/scroll-area';
 	import { NativeSelect } from '$lib/components/native-select';
-	import { formatDateOnly, formatMonthYear, mxnFormatter } from '$lib/formatting';
+	import { formatDateOnly, formatMonthYear, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import { SectionUnavailable } from '$lib/components/section-status';
 	import { sectionValue } from '$lib/types/section';
@@ -74,7 +74,7 @@
 		sections.some((section) => section === null) && sections.some((section) => section !== null),
 	);
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.subscription.currency));
 
 	function periodLabel(billingDate: string): string {
 		return formatMonthYear(billingDate, data.preferences.locale);

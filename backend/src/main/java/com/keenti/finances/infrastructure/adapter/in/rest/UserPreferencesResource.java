@@ -1,5 +1,6 @@
 package com.keenti.finances.infrastructure.adapter.in.rest;
 
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.infrastructure.adapter.out.persistence.UserEntity;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -49,7 +50,9 @@ public class UserPreferencesResource {
     public Response update(@Valid UserPreferencesRequest request) {
         if (!ALLOWED_TRANSACTION_PAGE_SIZES.contains(request.transactionPageSize())
             || !isValidPinnedNavItems(request.mobilePinnedNavItems())
-            || !isValidTimeZone(request.timeZone())) {
+            || !isValidTimeZone(request.timeZone())
+            || (request.primaryCurrency() != null && !request.primaryCurrency().isBlank()
+                && !Currencies.isSupported(request.primaryCurrency()))) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
 
@@ -70,6 +73,9 @@ public class UserPreferencesResource {
             user.timeZone = request.timeZone();
         }
         user.themeMode = request.themeMode();
+        if (request.primaryCurrency() != null && !request.primaryCurrency().isBlank()) {
+            user.primaryCurrency = request.primaryCurrency();
+        }
         return Response.ok(toResponse(user)).build();
     }
 
@@ -85,7 +91,9 @@ public class UserPreferencesResource {
             user.mobilePinnedNavItems,
             user.dockMagnification,
             user.timeZone,
-            user.themeMode
+            user.themeMode,
+            user.primaryCurrency,
+            Currencies.SUPPORTED
         );
     }
 

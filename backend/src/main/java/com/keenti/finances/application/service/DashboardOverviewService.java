@@ -1,6 +1,10 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.Box;
+import com.keenti.finances.domain.model.BoxBalanceSummary;
+import com.keenti.finances.domain.model.ExchangeRates;
+import com.keenti.finances.domain.model.DashboardOverview.ConvertedPart;
+import com.keenti.finances.domain.model.DashboardOverview.ConvertedTotal;
 import com.keenti.finances.domain.model.BoxPlan;
 import com.keenti.finances.domain.model.Contact;
 import com.keenti.finances.domain.model.CreditAccountSettings;
@@ -34,6 +38,8 @@ import com.keenti.finances.domain.port.out.ContactRepository;
 import com.keenti.finances.domain.port.out.CreditAccountSettingsRepository;
 import com.keenti.finances.domain.port.out.DebtPaymentRepository;
 import com.keenti.finances.domain.port.out.DebtRepository;
+import com.keenti.finances.domain.port.out.ExchangeRateProvider;
+import com.keenti.finances.domain.port.out.PrimaryCurrencyProvider;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.PaymentRecordRepository;
 import com.keenti.finances.domain.port.out.SubscriptionRepository;
@@ -138,8 +144,21 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
     @Inject
     UserTimeZoneProvider userTimeZoneProvider;
 
+    @Inject
+    NetBalanceReader netBalanceReader;
+
+    @Inject
+    PrimaryCurrencyProvider primaryCurrencyProvider;
+
+    @Inject
+    ExchangeRateProvider exchangeRateProvider;
+
     @Override
-    public DashboardOverview getOverview(Integer year) {
+    public DashboardOverview getOverview(Integer year, String requestedCurrency) {
+        // Validated before any section runs: an unsupported currency is a bad
+        // request, not an unavailable section.
+        String currency = netBalanceReader.viewingCurrency(requestedCurrency);
+        List<String> currencies = netBalanceReader.currenciesInUse();
         ZoneId zone = null;
         LocalDate today = null;
         try {
@@ -153,17 +172,20 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
         }
 
         Integer historyYear = year != null ? year : today == null ? null : today.getYear();
-        LOG.infof("dashboard.overview year=%s today=%s", historyYear, today);
+        LOG.infof("dashboard.overview year=%s today=%s currency=%s", historyYear, today, currency);
 
         return new DashboardOverview(
+            currency,
+            currencies,
             today,
             zone == null ? null : zone.getId(),
-            section("position", this::currentPosition),
+            section("position", () -> currentPosition(currency)),
             section("attention", this::needsAttention),
-            section("plans", this::planGuidance),
-            section("expected", this::expectedMoney),
+            section("plans", () -> planGuidance(currency)),
+            section("expected", () -> expectedMoney(currency)),
             historyYear == null ? Section.unavailable("date")
-                : section("history", () -> yearHistory(historyYear)));
+                : section("history", () -> yearHistory(historyYear, currency)),
+            section("converted-total", () -> convertedTotal(currencies)));
     }
 
     /** Runs one section, turning its failure into an unavailable section only. */
@@ -185,16 +207,17 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
      * 1 — Current position
      * ------------------------------------------------------------------ */
 
-    private CurrentPosition currentPosition() {
+    private CurrentPosition currentPosition(String currency) {
         boolean trackingActive = financialAccountRepository.isTrackingActive();
         boolean setupRequired = financialAccountRepository.isTrackingSetupRequired();
-        List<FinancialAccount> accounts = financialAccountRepository.findAll(false);
+        List<FinancialAccount> accounts = financialAccountRepository.findAll(false).stream()
+            .filter(account -> currency.equals(account.getCurrency()))
+            .toList();
 
-        BigDecimal netBalance = trackingActive
-            ? financialAccountRepository.getTotalBalance()
-            : transactionRepository.getNetBalance();
-        BigDecimal inBoxes = boxRepository.getTotalBalance();
-        BigDecimal availableToSpend = netBalance.subtract(inBoxes);
+        BoxBalanceSummary headline = netBalanceReader.summary(currency);
+        BigDecimal netBalance = headline.netBalance();
+        BigDecimal inBoxes = headline.inBoxes();
+        BigDecimal availableToSpend = headline.availableToSpend();
 
         BigDecimal moneyHeld = BigDecimal.ZERO;
         BigDecimal creditDebt = BigDecimal.ZERO;
@@ -239,7 +262,7 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
             }
 
             rows.add(new PositionAccount(account.getId(), account.getName(), account.getKind(),
-                balance, limit, accountCapacity));
+                account.getCurrency(), balance, limit, accountCapacity));
         }
 
         return new CurrentPosition(
@@ -301,7 +324,7 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
         // User's calendar day, which decision D2 resolves once per render.
         List<BillingCursor> billing = new ArrayList<>(subscriptionRepository.findAll().stream()
             .map(subscription -> new BillingCursor(subscription.getId(), subscription.getName(),
-                subscription.getType(), subscription.getNextBillingDate()))
+                subscription.getCurrency(), subscription.getType(), subscription.getNextBillingDate()))
             .toList());
 
         // Which cursors are behind is only knowable with the User's calendar
@@ -333,7 +356,8 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
             .estimateOutstandingBalance(account.getId(), statement.periodEnd())
             .subtract(statement.estimatedBalance());
 
-        return new StatementObligation(account.getId(), account.getName(), statement.id(),
+        return new StatementObligation(account.getId(), account.getName(), account.getCurrency(),
+            statement.id(),
             statement.periodStart(), statement.periodEnd(), statement.dueDate(),
             statement.officialBalance(), paid, outstanding,
             statement.officialMinimumPayment(), statement.officialAvoidInterest(),
@@ -344,8 +368,10 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
      * 3 — Your plans
      * ------------------------------------------------------------------ */
 
-    private PlanGuidance planGuidance() {
-        List<Box> boxes = boxRepository.findAll(false);
+    private PlanGuidance planGuidance(String currency) {
+        List<Box> boxes = boxRepository.findAll(false).stream()
+            .filter(box -> currency.equals(box.getCurrency()))
+            .toList();
         List<BoxPlanGuidance> items = new ArrayList<>();
         BigDecimal reserved = BigDecimal.ZERO;
         int withoutPlan = 0;
@@ -376,7 +402,7 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
             }
         }
 
-        return new PlanGuidance(boxRepository.getTotalBalance(), reserved, List.copyOf(items),
+        return new PlanGuidance(boxRepository.getTotalBalance(currency), reserved, List.copyOf(items),
             withoutPlan, partial);
     }
 
@@ -422,12 +448,13 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
      * 4 — Money expected
      * ------------------------------------------------------------------ */
 
-    private ExpectedMoney expectedMoney() {
+    private ExpectedMoney expectedMoney(String currency) {
         boolean partial = false;
 
         List<Debt> active = debtRepository.findAll().stream()
             .filter(debt -> "ACTIVE".equals(debt.getStatus())
-                && "INGRESS".equals(debt.getDirection()))
+                && "INGRESS".equals(debt.getDirection())
+                && currency.equals(debt.getCurrency()))
             .toList();
         Map<Long, BigDecimal> paidByDebt =
             debtPaymentRepository.sumByDebtIds(active.stream().map(Debt::getId).toList());
@@ -462,6 +489,7 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
         boolean contributionsAvailable = true;
         try {
             for (PendingContribution pending : paymentRecordRepository.findPendingContributions()) {
+                if (!currency.equals(pending.currency())) continue;
                 contributionsOutstanding = contributionsOutstanding.add(pending.amount());
                 contributions.add(new ExpectedContribution(pending.paymentRecordId(),
                     pending.subscriptionId(), pending.subscriptionName(), pending.memberId(),
@@ -496,14 +524,14 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
      * 5 — History
      * ------------------------------------------------------------------ */
 
-    private YearHistory yearHistory(int year) {
+    private YearHistory yearHistory(int year, String currency) {
         // Read straight from the Transaction monthly summary rather than through
         // DashboardUseCase, which would also re-read the accounts and Boxes the
         // position section owns — and would make an unreadable account balance
         // take the year's recorded history down with it, which is exactly the
         // coupling independent sections exist to avoid. The annual totals are
         // the same sum DashboardService performs over the same months.
-        List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year);
+        List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year, currency);
         BigDecimal totalIngress = monthly.stream()
             .map(MonthSummary::getIngress)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -511,5 +539,31 @@ public class DashboardOverviewService implements DashboardOverviewUseCase {
             .map(MonthSummary::getEgress)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new YearHistory(year, totalIngress, totalEgress, monthly);
+    }
+
+    /* ---------------------------------------------------------------------
+     * 6 — Converted Total (display-only)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * ADR-0024: every currency's Net Balance, converted into the Primary
+     * Currency at the latest reference rate and added up. The rate read is the
+     * one outbound call the dashboard makes; when it fails this section alone
+     * is unavailable, and no ledger figure ever depends on it.
+     */
+    private ConvertedTotal convertedTotal(List<String> currencies) {
+        String primary = primaryCurrencyProvider.primaryCurrency();
+        ExchangeRates rates = currencies.stream().allMatch(primary::equals)
+            ? new ExchangeRates(primary, null, Map.of())
+            : exchangeRateProvider.latest(primary);
+        List<ConvertedPart> parts = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        for (String code : currencies) {
+            BigDecimal netBalance = netBalanceReader.netBalance(code);
+            BigDecimal converted = rates.toBase(netBalance, code);
+            parts.add(new ConvertedPart(code, netBalance, converted));
+            total = total.add(converted);
+        }
+        return new ConvertedTotal(primary, total, rates.date(), List.copyOf(parts));
     }
 }

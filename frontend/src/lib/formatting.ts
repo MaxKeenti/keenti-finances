@@ -8,8 +8,46 @@ export function formatLocale(locale: string | undefined): string {
 	return appLocale(locale) === 'en' ? 'en-US' : 'es-MX';
 }
 
-export function mxnFormatter(locale: string | undefined): Intl.NumberFormat {
-	return new Intl.NumberFormat(formatLocale(locale), { style: 'currency', currency: 'MXN' });
+/** The currencies Keenti supports (ADR-0024). The backend is the authority; this mirrors it. */
+export const SUPPORTED_CURRENCIES = ['MXN', 'EUR', 'USD', 'GBP'] as const;
+export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
+export const DEFAULT_CURRENCY: CurrencyCode = 'MXN';
+
+export function isSupportedCurrency(value: unknown): value is CurrencyCode {
+	return typeof value === 'string' && (SUPPORTED_CURRENCIES as readonly string[]).includes(value);
+}
+
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * Formats an amount in its own currency. Every amount carries one (ADR-0024);
+ * never assume MXN.
+ *
+ * `currencyDisplay: 'narrowSymbol'` renders `$` for MXN in es-MX and `€` for
+ * EUR everywhere, so pesos stay as they always looked. When a screen shows
+ * several currencies side by side, pass `{ code: true }` to disambiguate `$`.
+ *
+ * A missing currency can only come from a record written before currencies
+ * existed, and every such amount was MXN; that is the one case the fallback
+ * covers.
+ */
+export function moneyFormatter(
+	locale: string | undefined,
+	currency: string | null | undefined,
+	options: { code?: boolean } = {},
+): Intl.NumberFormat {
+	const code = currency ?? DEFAULT_CURRENCY;
+	const key = `${formatLocale(locale)}|${code}|${options.code ? 'code' : 'symbol'}`;
+	let formatter = moneyFormatters.get(key);
+	if (!formatter) {
+		formatter = new Intl.NumberFormat(formatLocale(locale), {
+			style: 'currency',
+			currency: code,
+			currencyDisplay: options.code ? 'code' : 'narrowSymbol',
+		});
+		moneyFormatters.set(key, formatter);
+	}
+	return formatter;
 }
 
 /**

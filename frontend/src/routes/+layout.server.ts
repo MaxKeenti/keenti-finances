@@ -28,6 +28,8 @@ const DEFAULT_PREFERENCES = {
 	dockMagnification: true,
 	timeZone: 'America/Mexico_City',
 	themeMode: 'system',
+	primaryCurrency: 'MXN',
+	supportedCurrencies: ['MXN', 'EUR', 'USD', 'GBP'],
 } as const;
 
 type Preferences = {
@@ -42,6 +44,9 @@ type Preferences = {
 	dockMagnification: boolean;
 	timeZone: string;
 	themeMode: ThemeMode;
+	/** Pre-selects new Accounts, Boxes, Debts and Subscriptions; the default Viewing Currency. */
+	primaryCurrency: string;
+	supportedCurrencies: readonly string[];
 };
 
 // `preferences` is a cast over untyped JSON, so narrow before trusting it.

@@ -1,4 +1,6 @@
 export type BalanceSummary = {
+	/** Every figure here is in this one currency (ADR-0024). */
+	currency: string;
 	netBalance: number;
 	inBoxes: number;
 	availableToSpend: number;
@@ -8,6 +10,8 @@ export type BoxDto = {
 	id: number;
 	name: string;
 	hue: number;
+	/** Fixed at creation; the Box only ever holds this currency. */
+	currency: string;
 	icon: string | null;
 	description: string | null;
 	displayOrder: number;

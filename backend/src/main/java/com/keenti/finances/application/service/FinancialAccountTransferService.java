@@ -43,7 +43,9 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
                 "Activate Financial Account tracking before recording a Transfer", Response.Status.CONFLICT);
         }
         validateTransfer(transfer);
-        FinancialAccountTransfer created = transferRepository.save(transfer);
+        FinancialAccountTransfer created = transferRepository.save(new FinancialAccountTransfer(
+            null, transfer.sourceAccountId(), transfer.destinationAccountId(), transfer.amount(),
+            resolvedDestinationAmount(transfer), transfer.transferDate(), transfer.notes(), null));
         reallocatePaymentDestination(created.destinationAccountId());
         return created;
     }
@@ -56,7 +58,8 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         validateTransfer(transfer, existing.sourceAccountId(), existing.destinationAccountId());
         FinancialAccountTransfer updated = transferRepository.update(new FinancialAccountTransfer(id,
             transfer.sourceAccountId(), transfer.destinationAccountId(), transfer.amount(),
-            transfer.transferDate(), transfer.notes(), existing.createdAt()));
+            resolvedDestinationAmount(transfer), transfer.transferDate(), transfer.notes(),
+            existing.createdAt()));
         reallocatePaymentDestination(existing.destinationAccountId());
         if (!existing.destinationAccountId().equals(updated.destinationAccountId())) {
             reallocatePaymentDestination(updated.destinationAccountId());
@@ -117,6 +120,41 @@ public class FinancialAccountTransferService implements FinancialAccountTransfer
         }
 
         validateAccountIds(transfer.sourceAccountId(), transfer.destinationAccountId(), relatedAccountIds);
+
+        BigDecimal destinationAmount = resolvedDestinationAmount(transfer);
+        if (destinationAmount.compareTo(BigDecimal.ZERO) <= 0
+                || destinationAmount.stripTrailingZeros().scale() > 2) {
+            throw new BadRequestException(
+                "Transfer destination amount must be positive with at most two decimal places");
+        }
+        if (sameCurrency(transfer) && destinationAmount.compareTo(transfer.amount()) != 0) {
+            throw new BadRequestException(
+                "A Transfer between Accounts in the same currency moves one amount");
+        }
+    }
+
+    /**
+     * The amount that arrived: as given, or the source amount when omitted and
+     * both Accounts share a currency. An exchange has no default — only the
+     * User's statement knows what arrived (ADR-0024).
+     */
+    private BigDecimal resolvedDestinationAmount(FinancialAccountTransfer transfer) {
+        if (transfer.destinationAmount() != null) {
+            return transfer.destinationAmount();
+        }
+        if (!sameCurrency(transfer)) {
+            throw new BadRequestException(
+                "A Transfer between currencies needs the amount that arrived in the destination Account");
+        }
+        return transfer.amount();
+    }
+
+    private boolean sameCurrency(FinancialAccountTransfer transfer) {
+        String source = financialAccountRepository.findById(transfer.sourceAccountId()).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + transfer.sourceAccountId())).getCurrency();
+        String destination = financialAccountRepository.findById(transfer.destinationAccountId()).orElseThrow(() ->
+            new NotFoundException("Financial Account not found: " + transfer.destinationAccountId())).getCurrency();
+        return source.equals(destination);
     }
 
     private void validateAccountIds(Long firstAccountId, Long secondAccountId, Long... relatedAccountIds) {

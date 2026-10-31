@@ -8,6 +8,7 @@ public record FinancialAccountResponse(
     Long id,
     String name,
     String kind,
+    String currency,
     int hue,
     BigDecimal openingBalance,
     LocalDate openingDate,

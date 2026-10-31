@@ -13,5 +13,5 @@ public interface FundingTriggerUseCase {
     FundingTrigger update(Long boxId, Long triggerId, FundingTrigger trigger);
     FundingTrigger setEnabled(Long boxId, Long triggerId, boolean enabled);
     void delete(Long boxId, Long triggerId);
-    FundingSuggestionSet suggestions(Long categoryId, BigDecimal ingressAmount);
+    FundingSuggestionSet suggestions(Long categoryId, BigDecimal ingressAmount, String currency);
 }

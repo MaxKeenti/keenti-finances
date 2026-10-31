@@ -23,6 +23,9 @@ const subscriptionSchema = z.object({
 	id: z.coerce.number().optional(),
 	name: z.string().min(1, m.validation_name_required()),
 	cost: z.coerce.number().positive(m.validation_cost_positive()),
+	// Member shares and Payment Records are in it; the backend freezes it once
+	// a Payment Record exists (ADR-0024).
+	currency: z.string().regex(/^[A-Z]{3}$/, m.error_currency_invalid()),
 	billingCycle: z.enum(['MONTHLY', 'YEARLY']),
 	type: z.enum(['PERSONAL', 'SHARED']),
 	categoryId: z.union([z.coerce.number(), z.literal('')]).optional(),
@@ -108,6 +111,7 @@ export const load: PageServerLoad = async ({ fetch, cookies, parent }) => {
 		{
 			name: '',
 			cost: 0,
+			currency: preferences.primaryCurrency,
 			billingCycle: 'MONTHLY' as const,
 			type: 'PERSONAL' as const,
 			categoryId: '' as '',
@@ -141,6 +145,7 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					name: form.data.name,
 					cost: form.data.cost,
+					currency: form.data.currency,
 					billingCycle: form.data.billingCycle,
 					type: form.data.type,
 					categoryId,
@@ -191,6 +196,7 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					name: form.data.name,
 					cost: form.data.cost,
+					currency: form.data.currency,
 					billingCycle: form.data.billingCycle,
 					type: form.data.type,
 					categoryId,

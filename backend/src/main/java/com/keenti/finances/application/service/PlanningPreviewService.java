@@ -75,12 +75,16 @@ public class PlanningPreviewService implements PlanningPreviewUseCase {
     @Inject BoxPlanRepository boxPlanRepository;
     @Inject SavingGoalUseCase savingGoalUseCase;
     @Inject SpendingBudgetUseCase spendingBudgetUseCase;
+    @Inject NetBalanceReader netBalanceReader;
 
     /** The one captured instant; replaceable in unit tests. */
     Supplier<Instant> clock = Instant::now;
 
     @Override
     public Result preview(Request request) {
+        // Every figure below is in one currency: the baseline, the Boxes, the
+        // receipts and the statements (ADR-0024).
+        String currency = netBalanceReader.viewingCurrency(request.currency());
         Instant capturedAt = clock.get();
         String zone = zone();
         Window window = PlanningPreviewCalculator.window(capturedAt, zone);
@@ -103,10 +107,11 @@ public class PlanningPreviewService implements PlanningPreviewUseCase {
         firstIndex.keySet().stream().filter(key -> key.id() > 0).forEach(lookups::add);
 
         ProjectionSnapshot projection = guarded("projection",
-            () -> reader.readProjection(lookups), ProjectionSnapshot.UNREADABLE);
-        Timing timing = guarded("timing", () -> reader.readTiming(window),
+            () -> reader.readProjection(lookups, currency), ProjectionSnapshot.UNREADABLE);
+        Timing timing = guarded("timing", () -> reader.readTiming(window, currency),
             Timing.withoutData(TimingStatus.UNAVAILABLE, TimingReasonCode.READ_FAILED));
-        List<UndatedDebt> undatedDebts = guarded("undated-debts", reader::readUndatedDebts, null);
+        List<UndatedDebt> undatedDebts = guarded("undated-debts",
+            () -> reader.readUndatedDebts(currency), null);
 
         Baseline source = projection.baseline();
         List<Receipt> receipts = new ArrayList<>();
@@ -176,7 +181,7 @@ public class PlanningPreviewService implements PlanningPreviewUseCase {
 
         LOG.infof("planning.preview status=%s timing=%s costs=%d receipts=%d",
             status, timing.status(), request.items().size(), selections.size());
-        return new Result(capturedAt, window == null ? null : zone, window, source,
+        return new Result(currency, capturedAt, window == null ? null : zone, window, source,
             calculated.baseline(), projected, status, List.copyOf(missing), List.copyOf(included),
             timing, undatedDebts, List.copyOf(notes));
     }

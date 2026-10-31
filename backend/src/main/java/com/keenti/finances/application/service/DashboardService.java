@@ -1,10 +1,9 @@
 package com.keenti.finances.application.service;
 
+import com.keenti.finances.domain.model.BoxBalanceSummary;
 import com.keenti.finances.domain.model.DashboardSummary;
 import com.keenti.finances.domain.model.MonthSummary;
 import com.keenti.finances.domain.port.in.DashboardUseCase;
-import com.keenti.finances.domain.port.out.BoxRepository;
-import com.keenti.finances.domain.port.out.FinancialAccountRepository;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -21,21 +20,15 @@ public class DashboardService implements DashboardUseCase {
     TransactionRepository transactionRepository;
 
     @Inject
-    BoxRepository boxRepository;
-
-    @Inject
-    FinancialAccountRepository financialAccountRepository;
+    NetBalanceReader netBalanceReader;
 
     @Override
-    public DashboardSummary getSummary(int year) {
-        LOG.infof("dashboard.aggregation year=%d", year);
+    public DashboardSummary getSummary(int year, String requestedCurrency) {
+        String currency = netBalanceReader.viewingCurrency(requestedCurrency);
+        LOG.infof("dashboard.aggregation year=%d currency=%s", year, currency);
 
-        List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year);
-        BigDecimal netBalance = financialAccountRepository.isTrackingActive()
-            ? financialAccountRepository.getTotalBalance()
-            : transactionRepository.getNetBalance();
-        BigDecimal inBoxes = boxRepository.getTotalBalance();
-        BigDecimal availableToSpend = netBalance.subtract(inBoxes);
+        List<MonthSummary> monthly = transactionRepository.findMonthlySummary(year, currency);
+        BoxBalanceSummary headline = netBalanceReader.summary(currency);
 
         BigDecimal totalIngress = monthly.stream()
                 .map(MonthSummary::getIngress)
@@ -44,10 +37,11 @@ public class DashboardService implements DashboardUseCase {
                 .map(MonthSummary::getEgress)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LOG.infof("dashboard.aggregation year=%d months=%d totalIngress=%s totalEgress=%s netBalance=%s inBoxes=%s availableToSpend=%s",
-                year, monthly.size(), totalIngress, totalEgress, netBalance, inBoxes, availableToSpend);
+        LOG.infof("dashboard.aggregation year=%d currency=%s months=%d totalIngress=%s totalEgress=%s netBalance=%s inBoxes=%s availableToSpend=%s",
+                year, currency, monthly.size(), totalIngress, totalEgress, headline.netBalance(),
+                headline.inBoxes(), headline.availableToSpend());
 
-        return new DashboardSummary(year, netBalance, inBoxes, availableToSpend,
-                totalIngress, totalEgress, monthly);
+        return new DashboardSummary(year, currency, headline.netBalance(), headline.inBoxes(),
+                headline.availableToSpend(), totalIngress, totalEgress, monthly);
     }
 }

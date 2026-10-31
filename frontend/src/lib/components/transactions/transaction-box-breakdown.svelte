@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
-	import { mxnFormatter } from '$lib/formatting';
+	import { moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import {
 		allocationTotal,
@@ -16,6 +16,7 @@
 		boxDistributions = [],
 		availableToSpendAmount,
 		locale,
+		currency,
 		showEmpty = false,
 	}: {
 		direction: TransactionDirection;
@@ -24,10 +25,12 @@
 		boxDistributions?: BoxDistributionDto[];
 		availableToSpendAmount?: number;
 		locale: string;
+		/** Every amount this component shows or edits is in this currency. */
+		currency: string;
 		showEmpty?: boolean;
 	} = $props();
 
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const freeAmount = $derived(
 		typeof availableToSpendAmount === 'number'
 			? availableToSpendAmount

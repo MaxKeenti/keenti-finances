@@ -7,6 +7,7 @@ public record BulkPaymentResponse(
     Long contactId,
     String contactName,
     String direction,
+    String currency,
     BigDecimal totalAmount,
     BigDecimal totalApplied,
     BigDecimal totalUnused,

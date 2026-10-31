@@ -1,11 +1,13 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.AccountTrackingStatus;
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.model.FinancialAccount;
 import com.keenti.finances.domain.port.in.FinancialAccountUseCase;
 import com.keenti.finances.domain.port.out.CreditStatementRepository;
 import com.keenti.finances.domain.port.out.CreditMsiPlanRepository;
 import com.keenti.finances.domain.port.out.FinancialAccountRepository;
+import com.keenti.finances.domain.port.out.PrimaryCurrencyProvider;
 import com.keenti.finances.domain.port.out.TransactionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -41,13 +43,17 @@ public class FinancialAccountService implements FinancialAccountUseCase {
     @Inject
     CreditMsiPlanRepository creditMsiPlanRepository;
 
+    @Inject
+    PrimaryCurrencyProvider primaryCurrencyProvider;
+
     @Override
     public AccountTrackingStatus status() {
         Optional<LocalDate> activationDate = financialAccountRepository.getTrackingActivationDate();
         return new AccountTrackingStatus(
             activationDate.isPresent(), financialAccountRepository.isTrackingSetupRequired(),
             activationDate.orElse(null),
-            transactionRepository.getNetBalance(), financialAccountRepository.getTotalBalance());
+            transactionRepository.getNetBalance(Currencies.DEFAULT),
+            financialAccountRepository.getTotalBalance(Currencies.DEFAULT));
     }
 
     @Override
@@ -79,20 +85,26 @@ public class FinancialAccountService implements FinancialAccountUseCase {
 
         BigDecimal openingTotal = BigDecimal.ZERO;
         Set<String> normalizedNames = new HashSet<>();
-        for (FinancialAccount account : accounts) {
+        List<FinancialAccount> resolved = accounts.stream().map(this::withResolvedCurrency).toList();
+        for (FinancialAccount account : resolved) {
             validate(account, activationDate);
             if (!normalizedNames.add(account.getName().toLowerCase(java.util.Locale.ROOT))) {
                 throw new ClientErrorException("Financial Account names must be unique", Response.Status.CONFLICT);
             }
-            openingTotal = openingTotal.add(account.getOpeningBalance());
+            // Every legacy Transaction is MXN, so only MXN openings reconcile
+            // against them. Other currencies introduce money Keenti never
+            // recorded and are unconstrained (ADR-0024).
+            if (Currencies.DEFAULT.equals(account.getCurrency())) {
+                openingTotal = openingTotal.add(account.getOpeningBalance());
+            }
         }
 
-        BigDecimal transactionNetBalance = transactionRepository.getNetBalance();
+        BigDecimal transactionNetBalance = transactionRepository.getNetBalance(Currencies.DEFAULT);
         if (openingTotal.compareTo(transactionNetBalance) != 0) {
-            throw new BadRequestException("Financial Account opening balances must equal the current Net Balance");
+            throw new BadRequestException("MXN Financial Account opening balances must equal the current Net Balance");
         }
 
-        List<FinancialAccount> created = accounts.stream()
+        List<FinancialAccount> created = resolved.stream()
             .map(account -> financialAccountRepository.save(account))
             .toList();
         financialAccountRepository.activateTracking(activationDate);
@@ -101,7 +113,8 @@ public class FinancialAccountService implements FinancialAccountUseCase {
 
     @Override
     @Transactional
-    public FinancialAccount create(FinancialAccount account) {
+    public FinancialAccount create(FinancialAccount requested) {
+        FinancialAccount account = withResolvedCurrency(requested);
         if (!financialAccountRepository.isTrackingActive()) {
             throw new ClientErrorException(
                 "Activate Financial Account tracking before creating an Account", Response.Status.CONFLICT);
@@ -163,6 +176,20 @@ public class FinancialAccountService implements FinancialAccountUseCase {
         return restored;
     }
 
+    /** A requested Account without a currency takes the Primary Currency. */
+    private FinancialAccount withResolvedCurrency(FinancialAccount account) {
+        if (account == null) {
+            return null;
+        }
+        String currency = Currencies.normalize(account.getCurrency());
+        if (currency == null) {
+            currency = primaryCurrencyProvider.primaryCurrency();
+        }
+        return new FinancialAccount(account.getId(), account.getName(), account.getKind(), currency,
+            account.getHue(), account.getOpeningBalance(), account.getOpeningDate(), account.getBalance(),
+            account.isArchived(), account.getCreatedAt(), account.getUpdatedAt(), account.getVersion());
+    }
+
     private void validate(FinancialAccount account, LocalDate expectedOpeningDate) {
         if (account == null || account.getName() == null || account.getName().isBlank()) {
             throw new BadRequestException("Financial Account name is required");
@@ -172,6 +199,9 @@ public class FinancialAccountService implements FinancialAccountUseCase {
         }
         if (!VALID_KINDS.contains(account.getKind())) {
             throw new BadRequestException("Invalid Financial Account kind");
+        }
+        if (!Currencies.isSupported(account.getCurrency())) {
+            throw new BadRequestException("Unsupported currency: " + account.getCurrency());
         }
         if (account.getHue() < 0 || account.getHue() > 359) {
             throw new BadRequestException("Financial Account hue must be between 0 and 359");

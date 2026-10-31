@@ -14,7 +14,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { NativeSelect } from '$lib/components/native-select';
 	import { NativeDatePicker } from '$lib/components/native-date-picker';
-	import { formatDateOnly, mxnFormatter, dateInTimeZone } from '$lib/formatting';
+	import { formatDateOnly, moneyFormatter, dateInTimeZone } from '$lib/formatting';
 	import { debtDirection } from '$lib/debts';
 	import { BoxAllocationEditor } from '$lib/components/transactions';
 	import { SectionUnavailable } from '$lib/components/section-status';
@@ -51,7 +51,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const fmt = $derived(mxnFormatter(data.preferences.locale));
+	const fmt = $derived(moneyFormatter(data.preferences.locale, data.debt.currency));
 
 	const statusBadgeVariant: Record<string, 'warning' | 'success'> = {
 		ACTIVE: 'warning',
@@ -277,7 +277,7 @@
 						<Form.Field form={sf} name="amount">
 							<Form.Control>
 								{#snippet children({ props })}
-									<Form.Label>{m.common_amount_mxn()}</Form.Label>
+									<Form.Label>{m.common_amount_in({ currency: data.debt.currency })}</Form.Label>
 									<Input
 										{...props}
 										type="number"
@@ -373,6 +373,7 @@
 								transactionDate={$form.paymentDate}
 								{today}
 								availableBefore={availableBalance.availableToSpend}
+								currency={data.debt.currency}
 								locale={data.preferences.locale}
 								categoryName={data.categories.find((category) => category.id === $form.categoryId)?.name ?? null}
 								disabled={isPaid}

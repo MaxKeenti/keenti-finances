@@ -4,7 +4,8 @@ import { zod4 } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import { dateInTimeZone } from '$lib/formatting';
 import { getSession } from '$lib/server/workos-session';
-import { parseBoxPlanSummaries } from '$lib/server/payloads';
+import { parseBalanceSummary, parseBoxPlanSummaries } from '$lib/server/payloads';
+import { loadSection } from '$lib/server/section-load';
 import { m } from '$lib/paraglide/messages.js';
 import type { BoxDto, BoxMovementDto } from '$lib/types/boxes';
 import {
@@ -159,6 +160,14 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, url, parent
 		error(502, m.error_backend_unreachable());
 	}
 
+	// Deposits are capped by Available to Spend in the Box's own currency, so
+	// the headline figures on this page are read in that currency (ADR-0024).
+	const balanceSummary = await loadSection(
+		fetch,
+		`${BACKEND}/api/boxes/summary?currency=${encodeURIComponent(box.currency ?? 'MXN')}`,
+		{ parse: parseBalanceSummary, headers: headers(cookies), label: `boxes/${id}/summary` },
+	);
+
 	const form = await superValidate(
 		{
 			kind: 'DEPOSIT' as const,
@@ -180,8 +189,11 @@ export const load: PageServerLoad = async ({ params, fetch, cookies, url, parent
 		planDetail,
 		planLoadFailed,
 		viewingHistorical: planDetail ? !isActivePlan(planDetail) : false,
+		balanceSummary,
+		// Box Movements carry no exchange rate: only Boxes in this Box's
+		// currency can receive a transfer from it.
 		transferTargets: activeBoxes
-			.filter((candidate) => candidate.id !== id && !candidate.archived)
+			.filter((candidate) => candidate.id !== id && !candidate.archived && (candidate.currency ?? 'MXN') === (box.currency ?? 'MXN'))
 			.toSorted((a, b) => a.displayOrder - b.displayOrder),
 		form,
 		today,

@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { scaleLinear } from 'd3-scale';
 	import * as Card from '$lib/components/ui/card';
-	import { compactAmountFormatter, mxnFormatter } from '$lib/formatting';
+	import { compactAmountFormatter, moneyFormatter } from '$lib/formatting';
 	import { m } from '$lib/paraglide/messages.js';
 	import ChartFrame from './chart-frame.svelte';
 
 	type MonthlySummary = { month: number; ingress: number; egress: number };
 
-	let { monthly, year, locale }: { monthly: MonthlySummary[]; year: number; locale: string } = $props();
+	let {
+		monthly,
+		year,
+		locale,
+		currency,
+	}: { monthly: MonthlySummary[]; year: number; locale: string; currency: string } = $props();
 
 	const height = 240;
 	const padding = { top: 8, right: 8, bottom: 28, left: 52 };
@@ -15,7 +20,7 @@
 		m.month_jan, m.month_feb, m.month_mar, m.month_apr, m.month_may, m.month_jun,
 		m.month_jul, m.month_aug, m.month_sep, m.month_oct, m.month_nov, m.month_dec,
 	];
-	const fmt = $derived(mxnFormatter(locale));
+	const fmt = $derived(moneyFormatter(locale, currency));
 	const axisFmt = $derived(compactAmountFormatter(locale));
 	const empty = $derived(monthly.every((item) => item.ingress === 0 && item.egress === 0));
 	const nets = $derived(monthly.map((item) => item.ingress - item.egress));

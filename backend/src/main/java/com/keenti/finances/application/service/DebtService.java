@@ -1,6 +1,7 @@
 package com.keenti.finances.application.service;
 
 import com.keenti.finances.domain.model.BoxFunding;
+import com.keenti.finances.domain.model.Currencies;
 import com.keenti.finances.domain.model.Debt;
 import com.keenti.finances.domain.model.DebtPayment;
 import com.keenti.finances.domain.model.TrashItem;
@@ -9,6 +10,7 @@ import com.keenti.finances.domain.port.in.DebtUseCase;
 import com.keenti.finances.domain.port.in.TransactionUseCase;
 import com.keenti.finances.domain.port.out.DebtPaymentRepository;
 import com.keenti.finances.domain.port.out.DebtRepository;
+import com.keenti.finances.domain.port.out.PrimaryCurrencyProvider;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -42,6 +44,9 @@ public class DebtService implements DebtUseCase {
     @Inject
     TransactionUseCase transactionUseCase;
 
+    @Inject
+    PrimaryCurrencyProvider primaryCurrencyProvider;
+
     @Override
     public List<Debt> list() {
         List<Debt> debts = debtRepository.findAll();
@@ -58,8 +63,11 @@ public class DebtService implements DebtUseCase {
 
     @Override
     @Transactional
-    public Debt create(Debt debt) {
-        validateDirection(debt.getDirection());
+    public Debt create(Debt requested) {
+        validateDirection(requested.getDirection());
+        Debt debt = new Debt(null, requested.getContactId(), requested.getDirection(),
+            resolveCurrency(requested.getCurrency()), requested.getDescription(),
+            requested.getTotalAmount(), requested.getStatus(), requested.getCreatedAt());
         Debt created = debtRepository.save(debt);
         LOG.infof("debt.create id=%d contactId=%d direction=%s amount=%s",
             created.getId(), created.getContactId(), created.getDirection(), created.getTotalAmount());
@@ -72,6 +80,17 @@ public class DebtService implements DebtUseCase {
         Debt existing = debtRepository.findById(id).orElseThrow(() ->
             new NotFoundException("Debt not found: " + id));
         validateDirection(debt.getDirection());
+        String currency = debt.getCurrency() == null
+            ? existing.getCurrency()
+            : resolveCurrency(debt.getCurrency());
+
+        // Recorded payments moved money in the Debt's currency, so it is
+        // frozen with them, exactly like the Direction (ADR-0024).
+        if (!existing.getCurrency().equals(currency)
+                && !debtPaymentRepository.findByDebtId(id).isEmpty()) {
+            throw new BadRequestException(
+                "Cannot change the currency of a debt with recorded payments: " + id);
+        }
 
         // Flipping the Direction would contradict Transactions that already
         // moved money the other way (ADR-0005), and those are not reversed here.
@@ -83,10 +102,21 @@ public class DebtService implements DebtUseCase {
         }
 
         Debt updated = debtRepository.update(new Debt(
-            id, debt.getContactId(), debt.getDirection(), debt.getDescription(), debt.getTotalAmount(),
-            debt.getStatus(), debt.getCreatedAt()));
+            id, debt.getContactId(), debt.getDirection(), currency, debt.getDescription(),
+            debt.getTotalAmount(), debt.getStatus(), debt.getCreatedAt()));
         LOG.infof("debt.update id=%d direction=%s", id, updated.getDirection());
         return updated;
+    }
+
+    private String resolveCurrency(String requested) {
+        String currency = Currencies.normalize(requested);
+        if (currency == null) {
+            currency = primaryCurrencyProvider.primaryCurrency();
+        }
+        if (!Currencies.isSupported(currency)) {
+            throw new BadRequestException("Unsupported currency: " + requested);
+        }
+        return currency;
     }
 
     private void validateDirection(String direction) {
@@ -162,11 +192,13 @@ public class DebtService implements DebtUseCase {
 
         // ADR-0005, extended per ADR-0023: the Transaction takes the Debt's own
         // Direction, so settling what the User owes moves money out rather than in.
+        // The payment's Financial Account must hold the Debt's currency; the
+        // Transaction use case rejects any other (ADR-0024).
         Transaction tx = transactionUseCase.create(new Transaction(
             null, amount, debt.getDirection(),
             "Debt payment: " + debt.getDescription(),
             paymentDate, categoryId, debt.getContactId(), null, accountId,
-            funding, List.of()));
+            debt.getCurrency(), funding, List.of()));
 
         DebtPayment payment = debtPaymentRepository.save(new DebtPayment(
             null, debtId, amount, paymentDate, tx.getId(), notes, null));
@@ -174,8 +206,8 @@ public class DebtService implements DebtUseCase {
         BigDecimal newRemaining = remaining.subtract(amount);
         if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
             debtRepository.update(new Debt(
-                debt.getId(), debt.getContactId(), debt.getDirection(), debt.getDescription(),
-                debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
+                debt.getId(), debt.getContactId(), debt.getDirection(), debt.getCurrency(),
+                debt.getDescription(), debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
             LOG.infof("debt.status.paid id=%d", debtId);
         }
 
@@ -202,18 +234,32 @@ public class DebtService implements DebtUseCase {
 
     @Override
     @Transactional
-    public BulkPaymentResult bulkPayment(Long contactId, String direction, BigDecimal totalAmount,
-                                          LocalDate paymentDate, Long categoryId, Long accountId,
-                                          String notes) {
+    public BulkPaymentResult bulkPayment(Long contactId, String direction, String requestedCurrency,
+                                          BigDecimal totalAmount, LocalDate paymentDate,
+                                          Long categoryId, Long accountId, String notes) {
         validateDirection(direction);
-        // One lump sum settles one side of the relationship. Debts in the other
-        // direction are a separate balance and are never netted against it here.
-        List<Debt> activeDebts =
+        // One lump sum settles one side of the relationship, in one currency.
+        // Debts in the other direction or another currency are separate
+        // balances and are never netted against it here (ADR-0023, ADR-0024).
+        List<Debt> sameSide =
             debtRepository.findActiveByContactIdOrderByCreatedAt(contactId, direction);
+        String currency = Currencies.normalize(requestedCurrency);
+        if (currency == null) {
+            List<String> held = sameSide.stream().map(Debt::getCurrency).distinct().toList();
+            if (held.size() > 1) {
+                throw new BadRequestException(
+                    "This contact has debts in several currencies; choose which one to settle");
+            }
+            currency = held.isEmpty() ? primaryCurrencyProvider.primaryCurrency() : held.get(0);
+        }
+        String settledCurrency = currency;
+        List<Debt> activeDebts = sameSide.stream()
+            .filter(debt -> settledCurrency.equals(debt.getCurrency()))
+            .toList();
 
         if (activeDebts.isEmpty()) {
             throw new BadRequestException(
-                "No active " + direction + " debts found for contact: " + contactId);
+                "No active " + direction + " " + settledCurrency + " debts found for contact: " + contactId);
         }
 
         BigDecimal remaining = totalAmount;
@@ -231,7 +277,7 @@ public class DebtService implements DebtUseCase {
                 null, apply, debt.getDirection(),
                 "Bulk payment: " + debt.getDescription(),
                 paymentDate, categoryId, contactId, null, accountId,
-                List.of(), List.of()));
+                settledCurrency, List.of(), List.of()));
 
             debtPaymentRepository.save(new DebtPayment(
                 null, debt.getId(), apply, paymentDate, tx.getId(), notes, null));
@@ -241,8 +287,8 @@ public class DebtService implements DebtUseCase {
             if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
                 newStatus = "PAID";
                 debtRepository.update(new Debt(
-                    debt.getId(), debt.getContactId(), debt.getDirection(), debt.getDescription(),
-                    debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
+                    debt.getId(), debt.getContactId(), debt.getDirection(), debt.getCurrency(),
+                    debt.getDescription(), debt.getTotalAmount(), "PAID", debt.getCreatedAt()));
                 LOG.infof("bulk.payment.debt.paid debtId=%d", debt.getId());
             }
 
@@ -254,6 +300,7 @@ public class DebtService implements DebtUseCase {
         LOG.infof("bulk.payment contactId=%d direction=%s totalAmount=%s applied=%s unused=%s debtsProcessed=%d",
             contactId, direction, totalAmount, totalApplied, remaining, items.size());
 
-        return new BulkPaymentResult(contactId, direction, totalAmount, totalApplied, remaining, items);
+        return new BulkPaymentResult(contactId, direction, settledCurrency, totalAmount, totalApplied,
+            remaining, items);
     }
 }
